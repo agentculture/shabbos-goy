@@ -21,17 +21,18 @@ import pytest
 from shabbos_goy.actuators import sensibo as sensibo_module
 from shabbos_goy.actuators.sensibo import _read_argv, _set_argv, power, status
 
-POD_ID = "pod-fixture-1"
+POD_ID = "podfixture1"
 
 
 # --- argv builders: enumerate the closed set --------------------------------
 
 
-def _all_flags(argv: list[str]) -> set[str]:
-    return {tok for tok in argv if tok.startswith("--")}
+def _all_dash_prefixed_tokens(argv: list[str]) -> set[str]:
+    """Every token anywhere in argv that starts with '-' — including the pod id slot."""
+    return {tok for tok in argv if tok.startswith("-")}
 
 
-# The only flags this adapter is ever allowed to build.
+# The only flags this adapter is ever allowed to build, at ANY position.
 _ALLOWED_FLAGS = {"--power", "--apply", "--json"}
 
 
@@ -39,7 +40,10 @@ def test_set_argv_enumerated_only_uses_closed_flag_set() -> None:
     for power_on in (True, False):
         for apply in (True, False):
             argv = _set_argv(POD_ID, power_on=power_on, apply=apply)
-            assert _all_flags(argv) <= _ALLOWED_FLAGS
+            # every '-'-prefixed token in the WHOLE argv (pod id slot included)
+            # must be one of the allowed flags -- this is what actually rules
+            # out a hostile pod id smuggling in a flag.
+            assert _all_dash_prefixed_tokens(argv) <= _ALLOWED_FLAGS
             assert argv[0] == sensibo_module.SENSIBO_EXECUTABLE
             assert argv[1] == "set"
             assert argv[2] == POD_ID
@@ -55,13 +59,100 @@ def test_set_argv_enumerated_only_uses_closed_flag_set() -> None:
 
 def test_read_argv_enumerated_only_uses_closed_flag_set() -> None:
     argv = _read_argv(POD_ID)
-    assert _all_flags(argv) <= _ALLOWED_FLAGS
+    assert _all_dash_prefixed_tokens(argv) <= _ALLOWED_FLAGS
     assert "--apply" not in argv
     assert argv == [sensibo_module.SENSIBO_EXECUTABLE, "read", POD_ID, "--json"]
 
 
 def test_read_argv_never_contains_apply() -> None:
     assert "--apply" not in _read_argv(POD_ID)
+
+
+# --- pod id validation: argv injection is rejected before any subprocess ----
+
+
+_HOSTILE_POD_IDS = [
+    "--apply",
+    "--mode",
+    "-h",
+    "",
+    " abc",
+    "a b",
+    "a;b",
+    "../x",
+    "a" * 65,  # over the 64-char cap
+    "podid=x",
+    None,
+    123,
+]
+
+
+@pytest.mark.parametrize("hostile_pod_id", _HOSTILE_POD_IDS)
+def test_set_argv_rejects_hostile_pod_ids(hostile_pod_id: object) -> None:
+    with pytest.raises(ValueError):
+        _set_argv(hostile_pod_id, power_on=True, apply=False)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("hostile_pod_id", _HOSTILE_POD_IDS)
+def test_read_argv_rejects_hostile_pod_ids(hostile_pod_id: object) -> None:
+    with pytest.raises(ValueError):
+        _read_argv(hostile_pod_id)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("hostile_pod_id", _HOSTILE_POD_IDS)
+def test_power_rejects_hostile_pod_id_before_starting_any_process(
+    hostile_pod_id: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log_path = _install_fake_sensibo(
+        tmp_path, monkeypatch, responses=[{"applied": False, "changes": {}}]
+    )
+
+    with pytest.raises(ValueError):
+        power(hostile_pod_id, True)  # type: ignore[arg-type]
+
+    assert _read_calls(log_path) == []  # no process was ever started
+
+
+@pytest.mark.parametrize("hostile_pod_id", _HOSTILE_POD_IDS)
+def test_status_rejects_hostile_pod_id_before_starting_any_process(
+    hostile_pod_id: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log_path = _install_fake_sensibo(
+        tmp_path,
+        monkeypatch,
+        responses=[
+            {"applied": False, "changes": {}},
+            {"readings": {}},
+        ],
+    )
+
+    with pytest.raises(ValueError):
+        status(hostile_pod_id)  # type: ignore[arg-type]
+
+    assert _read_calls(log_path) == []  # no process was ever started
+
+
+def test_valid_alphanumeric_pod_id_up_to_64_chars_is_accepted() -> None:
+    long_id = "a" * 64
+    argv = _set_argv(long_id, power_on=True, apply=False)
+    assert long_id in argv
+
+
+# --- `on` must be strictly a bool, not a truthy string ----------------------
+
+
+@pytest.mark.parametrize("bad_on", ["on", "off", "true", "1", 1, 0, None, [], {}])
+def test_power_rejects_non_bool_on(
+    bad_on: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log_path = _install_fake_sensibo(
+        tmp_path, monkeypatch, responses=[{"applied": False, "changes": {}}]
+    )
+
+    with pytest.raises(ValueError):
+        power(POD_ID, bad_on)  # type: ignore[arg-type]
+
+    assert _read_calls(log_path) == []  # no process was ever started
 
 
 # --- fake sensibo executable on PATH ----------------------------------------
@@ -237,6 +328,30 @@ def test_status_never_passes_apply(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     calls = _read_calls(log_path)
     for call in calls:
         assert "--apply" not in call
+
+
+def test_status_raises_and_never_runs_a_process_if_set_argv_would_contain_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Force the load-bearing guard to trip: simulate `_set_argv` misbehaving
+    # (e.g. a future edit that lets --apply slip in) and prove status() would
+    # refuse to run anything rather than silently writing. This exercises the
+    # explicit `raise RuntimeError(...)` guard, not the `assert` it replaced
+    # (asserts vanish under `python -O`, which would silently drop this
+    # guarantee).
+    log_path = _install_fake_sensibo(
+        tmp_path, monkeypatch, responses=[{"applied": False, "changes": {}}]
+    )
+
+    def _bad_set_argv(pod_id: str, *, power_on: bool, apply: bool) -> list[str]:
+        return [sensibo_module.SENSIBO_EXECUTABLE, "set", pod_id, "--apply", "--json"]
+
+    monkeypatch.setattr(sensibo_module, "_set_argv", _bad_set_argv)
+
+    with pytest.raises(RuntimeError):
+        status(POD_ID)
+
+    assert _read_calls(log_path) == []  # guard fires before any subprocess runs
 
 
 def test_status_derives_off_from_dry_run_diff_from_value(

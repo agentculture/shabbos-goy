@@ -27,10 +27,36 @@ module at all, so that risk does not exist here by construction.
 from __future__ import annotations
 
 import json
+import re
 import subprocess  # nosec B404 - argv-locked, no shell, see module docstring
 from typing import Any, Literal
 
 SENSIBO_EXECUTABLE = "sensibo"
+
+# Sensibo pod ids are short alphanumerics. Enforcing this here — before any
+# argv is built, in the one place both builders route through — is what
+# actually makes "the only sensibo flags are --power, --apply and --json"
+# true: without it, a pod id of "--apply" or "--mode" (sourced from a config
+# file, a dashboard, or a CLI argument) would itself become a sensibo flag.
+_POD_ID_RE = re.compile(r"^[A-Za-z0-9]{1,64}$")
+
+
+def _validate_pod_id(pod_id: object) -> str:
+    """Return ``pod_id`` unchanged if it is a safe argv token; raise otherwise."""
+    if not isinstance(pod_id, str) or not _POD_ID_RE.match(pod_id):
+        raise ValueError(
+            f"invalid sensibo pod id: {pod_id!r} "
+            "(must match ^[A-Za-z0-9]{1,64}$ — no flags, whitespace, or path characters)"
+        )
+    return pod_id
+
+
+def _validate_power_on(on: object) -> bool:
+    """Return ``on`` unchanged if it is strictly a bool; raise otherwise."""
+    if not isinstance(on, bool):
+        raise ValueError(f"invalid power value: {on!r} (must be a bool, not a truthy string)")
+    return on
+
 
 # Above sensibo-cli's own single-retry ceiling: sensibo/api/client.py caps any
 # one 429 backoff sleep (computed exponential backoff, or a server-sent
@@ -47,10 +73,11 @@ PowerState = Literal["on", "off", "unknown"]
 
 def _set_argv(pod_id: str, *, power_on: bool, apply: bool) -> list[str]:
     """Build the argv for a ``sensibo set`` call. Only flags: --power, --apply, --json."""
+    safe_pod_id = _validate_pod_id(pod_id)
     argv = [
         SENSIBO_EXECUTABLE,
         "set",
-        pod_id,
+        safe_pod_id,
         "--power",
         "on" if power_on else "off",
     ]
@@ -62,7 +89,8 @@ def _set_argv(pod_id: str, *, power_on: bool, apply: bool) -> list[str]:
 
 def _read_argv(pod_id: str) -> list[str]:
     """Build the argv for a ``sensibo read`` call. Only flag: --json."""
-    return [SENSIBO_EXECUTABLE, "read", pod_id, "--json"]
+    safe_pod_id = _validate_pod_id(pod_id)
+    return [SENSIBO_EXECUTABLE, "read", safe_pod_id, "--json"]
 
 
 # -- subprocess plumbing ------------------------------------------------------
@@ -101,7 +129,8 @@ def power(pod_id: str, on: bool, *, apply: bool = False) -> dict[str, Any]:
     Any non-zero exit (or a subprocess that never returns) is treated as
     "did not act" — never assumed to have succeeded.
     """
-    argv = _set_argv(pod_id, power_on=on, apply=apply)
+    safe_on = _validate_power_on(on)
+    argv = _set_argv(pod_id, power_on=safe_on, apply=apply)
     proc = _run(argv)
     payload = _parse_json(proc)
     if payload is None:
@@ -132,7 +161,11 @@ def status(pod_id: str) -> dict[str, Any]:
     result: dict[str, Any] = {"power": "unknown", "temperature": None, "humidity": None}
 
     set_argv = _set_argv(pod_id, power_on=True, apply=False)
-    assert "--apply" not in set_argv  # nosec B101 - load-bearing invariant, not a stub
+    if "--apply" in set_argv:
+        # Load-bearing: status() must never write. An assert would vanish
+        # under `python -O`, silently dropping this guarantee, so this is an
+        # explicit, always-on check instead.
+        raise RuntimeError("status() built an argv containing --apply; refusing to run it")
 
     set_payload = _parse_json(_run(set_argv))
     if set_payload is not None:
