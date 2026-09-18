@@ -264,6 +264,16 @@ class DashboardServer:
         self._control_log: BoundedRing[LogRecord] = BoundedRing(control_log_capacity)
         self._ac_cache: Optional[tuple[float, dict[str, Any]]] = None
         self._lock = threading.Lock()
+        # The control log is appended to by POST handlers and read by every
+        # state poll, on different server threads: both go through this lock,
+        # so a poll can never iterate a deque that is being appended to.
+        self._control_log_lock = threading.Lock()
+        # "Check the limits -> call the adapter -> record it" is one atomic
+        # step, shared with the voice path. The pipeline owns the lock (both
+        # paths spend the same limiter); a pipeline without one -- a stand-in
+        # in a test -- gets this local fallback instead.
+        action_lock = getattr(pipeline, "action_lock", None)
+        self._action_lock = action_lock if action_lock is not None else threading.RLock()
         self._httpd: Any = None
         self._thread: Optional[threading.Thread] = None
         self.bind_result = BindResult(ok=False, reason="not_started")
@@ -488,7 +498,7 @@ class DashboardServer:
                 {"reason": record.reason} for record in records if record.verdict == VERDICT_ERROR
             ],
             "log": [_record_dict(record) for record in records],
-            "controls": [_record_dict(record) for record in self._control_log],
+            "controls": [_record_dict(record) for record in self._control_records()],
             "limits": {
                 "pending_delayed": len(getattr(self.pipeline, "delay_timer", ())),
                 # A count only: a refusal record keys on the real pod id.
@@ -543,6 +553,11 @@ class DashboardServer:
 
     # -- controls ----------------------------------------------------------
 
+    def _control_records(self) -> list[LogRecord]:
+        """A snapshot of the control log, taken under the lock POSTs append under."""
+        with self._control_log_lock:
+            return list(self._control_log)
+
     def _log_control(self, intent: str, verdict: str, action: str, target: str, reason: str = ""):
         record = LogRecord(
             klass=CONTROL_KLASS,
@@ -552,7 +567,8 @@ class DashboardServer:
             reason=reason,
             target=target,
         )
-        self._control_log.append(record)
+        with self._control_log_lock:
+            self._control_log.append(record)
         return record
 
     def _refuse(self, intent: str, verdict: str, action: str, target: str) -> dict[str, Any]:
@@ -596,51 +612,63 @@ class DashboardServer:
         overheard utterance), and so is the 'already in state' check: a
         button press is explicit, and refusing it because a cloud read failed
         would make the UI useless exactly when it is needed.
+
+        The limit check, the adapter call and the limiter's record are one
+        atomic step under the pipeline's ``action_lock``: two presses, or a
+        press racing a voice action, must not both pass the same daily cap.
+        And, exactly as on the voice path, the limiter is charged only for
+        something that happened -- an actuation or a dry run, never a call
+        that failed to act.
         """
         action = planned.name
         if not self.config.is_whitelisted(planned.tool, planned.key):
             return self._refuse(intent, VERDICT_NOT_WHITELISTED, action, planned.alias)
 
-        allowed, _reason = self.pipeline.rate_limiter.check(
-            planned.key, direction=power_direction(planned), operator=True
-        )
-        if not allowed:
-            return self._refuse(intent, VERDICT_RATE_LIMITED, action, planned.alias)
+        with self._action_lock:
+            allowed, _reason = self.pipeline.rate_limiter.check(
+                planned.key, direction=power_direction(planned), operator=True
+            )
+            if not allowed:
+                return self._refuse(intent, VERDICT_RATE_LIMITED, action, planned.alias)
 
-        adapter = (
-            self.controls.ac_power if planned.tool == TOOL_SENSIBO else self.controls.volume_step
-        )
-        if adapter is None:
-            return self._refuse(intent, VERDICT_NO_ADAPTER, action, planned.alias)
+            adapter = (
+                self.controls.ac_power
+                if planned.tool == TOOL_SENSIBO
+                else self.controls.volume_step
+            )
+            if adapter is None:
+                return self._refuse(intent, VERDICT_NO_ADAPTER, action, planned.alias)
 
-        # The listener's own ``--apply`` is the ceiling: a caller may ask for
-        # a dry run on an applying listener, never the other way round.
-        apply = self.controls.apply if apply is None else (self.controls.apply and bool(apply))
-        try:
-            if planned.tool == TOOL_SENSIBO:
-                result = adapter(planned.key, planned.value == "on", apply=apply)
-                acted = bool(isinstance(result, Mapping) and result.get("acted"))
-                verdict = VERDICT_ACTED if acted else VERDICT_DRY_RUN
-            elif not apply:
-                # A volume step has no dry-run form of its own: not calling
-                # the adapter IS the dry run.
-                verdict = VERDICT_DRY_RUN
-            else:
-                adapter(1 if planned.value == "up" else -1)
-                verdict = VERDICT_ACTED
-        except Exception as exc:  # noqa: BLE001 - the message may quote a pod id
-            reason = type(exc).__name__
-            self._log_control(intent, VERDICT_ERROR, action, planned.alias, reason)
-            return {
-                "ok": False,
-                "verdict": VERDICT_ERROR,
-                "action": action,
-                "target": planned.alias,
-                "reason": reason,
-            }
+            # The listener's own ``--apply`` is the ceiling: a caller may ask
+            # for a dry run on an applying listener, never the other way round.
+            apply = self.controls.apply if apply is None else (self.controls.apply and bool(apply))
+            acted = True
+            try:
+                if planned.tool == TOOL_SENSIBO:
+                    result = adapter(planned.key, planned.value == "on", apply=apply)
+                    acted = bool(isinstance(result, Mapping) and result.get("acted"))
+                    verdict = VERDICT_ACTED if acted else VERDICT_DRY_RUN
+                elif not apply:
+                    # A volume step has no dry-run form of its own: not calling
+                    # the adapter IS the dry run.
+                    verdict = VERDICT_DRY_RUN
+                else:
+                    adapter(1 if planned.value == "up" else -1)
+                    verdict = VERDICT_ACTED
+            except Exception as exc:  # noqa: BLE001 - the message may quote a pod id
+                reason = type(exc).__name__
+                self._log_control(intent, VERDICT_ERROR, action, planned.alias, reason)
+                return {
+                    "ok": False,
+                    "verdict": VERDICT_ERROR,
+                    "action": action,
+                    "target": planned.alias,
+                    "reason": reason,
+                }
 
-        self.pipeline.rate_limiter.record(planned.key, direction=power_direction(planned))
-        self._log_control(intent, verdict, action, planned.alias)
+            if acted or not apply:
+                self.pipeline.rate_limiter.record(planned.key, direction=power_direction(planned))
+            self._log_control(intent, verdict, action, planned.alias)
         return {
             "ok": True,
             "verdict": verdict,

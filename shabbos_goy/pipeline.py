@@ -40,7 +40,9 @@ Three deliberate choices worth stating:
   oracle.
 * **The rolling context survives a reconnect** (deviation d3). A lost
   connection resets the *joiner* --- a half-turn must never be acted on ---
-  but the :class:`~shabbos_goy.decider.ContextWindow` is only context, not a
+  and the audio timeline with it, since the next session numbers its
+  ``at_ms`` from wherever it likes; but the
+  :class:`~shabbos_goy.decider.ContextWindow` is only context, not a
   queued action, and dropping it would make the first utterance after a
   blip harder to read, not safer. It is memory-only and empty in a freshly
   constructed pipeline, which is what "gone on restart" means here.
@@ -61,6 +63,7 @@ from __future__ import annotations
 
 import subprocess  # nosec B404 - only a default argument, never invoked here
 import sys
+import threading
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Optional
 
@@ -291,6 +294,43 @@ def _limits_config(config: Config) -> LimitsConfig:
         return FALLBACK_LIMITS
 
 
+def _context_window(config: Config, clock: Clock) -> ContextWindow:
+    """A :class:`ContextWindow` built from the configured bounds.
+
+    Each bound is taken from ``Config``'s own accessor, which already returns
+    ``None`` for a missing, wrong-typed or out-of-range value; ``None`` means
+    "use the window's default". A config object that does not answer at all
+    (or answers with something the window rejects) also falls back to the
+    defaults rather than breaking construction.
+    """
+    kwargs: dict[str, Any] = {"clock": clock}
+    try:
+        max_items = config.context_max_items
+        max_age = config.context_max_age_seconds
+        max_chars = config.context_max_render_chars
+    except Exception:  # noqa: BLE001 - a broken accessor must not stop the listener
+        return ContextWindow(clock=clock)
+    if isinstance(max_items, int) and not isinstance(max_items, bool):
+        kwargs["max_items"] = max_items
+    if isinstance(max_age, (int, float)) and not isinstance(max_age, bool):
+        kwargs["max_age_seconds"] = float(max_age)
+    if isinstance(max_chars, int) and not isinstance(max_chars, bool):
+        kwargs["max_render_chars"] = max_chars
+    try:
+        return ContextWindow(**kwargs)
+    except (TypeError, ValueError):
+        return ContextWindow(clock=clock)
+
+
+def _ring_sizes(config: Config) -> Mapping[str, Any]:
+    """``config.ring_sizes`` if it is a mapping, else an empty one."""
+    try:
+        value = config.ring_sizes
+    except Exception:  # noqa: BLE001 - a broken accessor must not stop the listener
+        return {}
+    return value if isinstance(value, Mapping) else {}
+
+
 def _strict_delay_seconds(config: Config) -> float:
     value = config.strict_mode_delay_seconds
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
@@ -388,12 +428,18 @@ class Pipeline:
             if delay_timer is not None
             else DelayTimer(_strict_delay_seconds(config), clock)
         )
-        self.context = context if context is not None else ContextWindow(clock=clock)
+        self.context = context if context is not None else _context_window(config, clock)
+        # One re-entrant lock over "check the limits -> call the adapter ->
+        # record it". The voice path and the dashboard's control path share
+        # it (the dashboard reaches for ``pipeline.action_lock``), so two
+        # threads can never both pass the same interval or daily-cap check
+        # and then actuate one after the other.
+        self.action_lock = threading.RLock()
 
         capacity = recent_capacity
         if capacity is None:
             capacity = _positive_int(
-                config.ring_sizes.get("transcript_buffer"), DEFAULT_RECENT_CAPACITY
+                _ring_sizes(config).get("transcript_buffer"), DEFAULT_RECENT_CAPACITY
             )
         self._recent: BoundedRing[RecentUtterance] = BoundedRing(capacity)
         self._records: BoundedRing[LogRecord] = BoundedRing(log_capacity)
@@ -469,6 +515,12 @@ class Pipeline:
         if kind in _RESET_KINDS:
             self.joiner.reset()
             self._chain_suppressed = False
+            # The next session brings its own audio timeline, which may start
+            # anywhere -- lobes gives one session per connection, with no
+            # resume. Keeping the old (higher) ``at_ms`` would poll the new
+            # session's first chain past its deadline before its transcript
+            # arrived, and the joiner would drop that transcript as an orphan.
+            self._audio_ms = None
             return
         wire_type = data.get("type") or ""
         if not wire_type:
@@ -636,6 +688,10 @@ class Pipeline:
         Runs in full both when an action is first proposed and again when a
         delayed one comes due --- the world may have moved in between, and
         every gate must still hold at the moment of acting.
+
+        From the rate-limit check to the limiter's record this holds
+        :attr:`action_lock`, so the dashboard's control path (which takes the
+        same lock) cannot slip an actuation in between them.
         """
         if not self._config.is_whitelisted(planned.tool, planned.key):
             self._log_refusal(klass, intent, VERDICT_NOT_WHITELISTED, planned.alias)
@@ -648,53 +704,69 @@ class Pipeline:
                 self._log_refusal(klass, intent, VERDICT_INVALID_ARGUMENTS, planned.alias)
                 return
 
-        allowed, _reason = self.rate_limiter.check(planned.key, direction=power_direction(planned))
-        if not allowed:
-            # The limiter's refusal record keys on the real pod id; the log
-            # line gets the alias.
-            self._log_refusal(klass, intent, VERDICT_RATE_LIMITED, planned.alias)
-            return
+        with self.action_lock:
+            allowed, _reason = self.rate_limiter.check(
+                planned.key, direction=power_direction(planned)
+            )
+            if not allowed:
+                # The limiter's refusal record keys on the real pod id; the log
+                # line gets the alias.
+                self._log_refusal(klass, intent, VERDICT_RATE_LIMITED, planned.alias)
+                return
 
-        if planned.tool == TOOL_SENSIBO:
-            current = (ac_state or {}).get("power")
-            if current == planned.value:
+            if planned.tool == TOOL_SENSIBO:
+                current = (ac_state or {}).get("power")
+                if current == planned.value:
+                    self._record(
+                        LogRecord(
+                            klass=klass,
+                            intent=intent,
+                            verdict=VERDICT_ALREADY_IN_STATE,
+                            action=ACTION_NONE,
+                            target=planned.alias,
+                        )
+                    )
+                    return
+                if current not in ("on", "off"):
+                    self._log_refusal(klass, intent, VERDICT_STATE_UNKNOWN, planned.alias)
+                    return
+
+            if mode == "strict" and not delayed:
+                self.delay_timer.schedule(planned)
                 self._record(
                     LogRecord(
                         klass=klass,
                         intent=intent,
-                        verdict=VERDICT_ALREADY_IN_STATE,
-                        action=ACTION_NONE,
+                        verdict=VERDICT_DELAYED,
+                        action=planned.name,
                         target=planned.alias,
                     )
                 )
                 return
-            if current not in ("on", "off"):
-                self._log_refusal(klass, intent, VERDICT_STATE_UNKNOWN, planned.alias)
-                return
 
-        if mode == "strict" and not delayed:
-            self.delay_timer.schedule(planned)
-            self._record(
-                LogRecord(
-                    klass=klass,
-                    intent=intent,
-                    verdict=VERDICT_DELAYED,
-                    action=planned.name,
-                    target=planned.alias,
-                )
-            )
-            return
-
-        self._execute(klass, intent, planned)
+            self._execute(klass, intent, planned)
 
     def _execute(self, klass: str, intent: str, planned: PlannedAction) -> None:
+        """Call the adapter and record what actually happened.
+
+        The limiter is charged for a real actuation, and for a dry run (so a
+        dry-run session behaves exactly like a live one, limits included). It
+        is NOT charged when an applying call failed to act --- a subprocess
+        that timed out, exited non-zero or printed unparsable JSON all report
+        ``acted: False``, and nothing that never happened may spend the
+        compressor interval or the daily cap.
+
+        The caller holds :attr:`action_lock` across this, so the record lands
+        before any other thread's limit check runs.
+        """
         if planned.tool == TOOL_SENSIBO:
             if self._ac_power is None:
                 self._log_refusal(klass, intent, VERDICT_NO_ADAPTER, planned.alias)
                 return
             result = self._ac_power(planned.key, planned.value == "on", apply=self._apply)
-            self.rate_limiter.record(planned.key, direction=power_direction(planned))
             acted = bool(isinstance(result, Mapping) and result.get("acted"))
+            if acted or not self._apply:
+                self.rate_limiter.record(planned.key, direction=power_direction(planned))
             self._record(
                 LogRecord(
                     klass=klass,
