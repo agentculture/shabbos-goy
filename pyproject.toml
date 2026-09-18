@@ -73,4 +73,12 @@ skips = ["B101", "B404", "B603"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+# The golden set's LIVE run needs the box (a real lobes gateway + the senses
+# model), so it is never part of the default suite or of CI: -m "not golden"
+# deselects it here, while `pytest -m golden` (a command-line -m overrides
+# addopts) selects it — where it still skips with a named reason unless the
+# environment points at a real gateway. See tests/golden/README.md (d4).
+addopts = "-ra -m \"not golden\""
+markers = [
+    "golden: the live golden-set run against the real model on the box; excluded from the default run and from CI",
+]
