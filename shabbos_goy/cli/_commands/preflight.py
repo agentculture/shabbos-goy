@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Mapping, Optional
 
+from shabbos_goy import grant_inject
 from shabbos_goy.audio import pipewire
 from shabbos_goy.cli._commands._domain import next_strict_window_payload
 from shabbos_goy.cli._errors import EXIT_ENV_ERROR, EXIT_SUCCESS
@@ -303,6 +304,8 @@ def run_preflight(
 def cmd_preflight(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     config = load_config(path=getattr(args, "config", None))
+    # The lobes key may live in the operator's `grant` store: re-exec under it if so.
+    grant_inject.ensure_lobes_key(config)
     now = datetime.now(timezone.utc)
     checks = run_preflight(env=os.environ, config=config, now=now, runner=subprocess.run)
     healthy = all(c.passed for c in checks)

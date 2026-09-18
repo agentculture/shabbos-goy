@@ -15,6 +15,7 @@ import argparse
 import os
 from datetime import datetime, timezone
 
+from shabbos_goy import grant_inject
 from shabbos_goy.cli._errors import EXIT_ENV_ERROR, EXIT_USER_ERROR, CliError
 from shabbos_goy.cli._output import emit_result
 from shabbos_goy.config import load_config
@@ -71,6 +72,8 @@ def _build_decider(args: argparse.Namespace):
 def cmd_classify(args: argparse.Namespace) -> int:
     json_mode = bool(getattr(args, "json", False))
     config = load_config(path=getattr(args, "config", None))
+    # The lobes key may live in the operator's `grant` store: re-exec under it if so.
+    grant_inject.ensure_lobes_key(config)
     mode = _resolve_mode(args, config)
     decider = _build_decider(args)
 

@@ -35,6 +35,7 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+from shabbos_goy import grant_inject
 from shabbos_goy.actuators import sensibo
 from shabbos_goy.audio import pipewire
 from shabbos_goy.cli._errors import EXIT_SUCCESS, EXIT_USER_ERROR, CliError
@@ -198,6 +199,8 @@ def cmd_listen(args: argparse.Namespace) -> int:
         return EXIT_SUCCESS if ok else EXIT_USER_ERROR
 
     config = load_config(path=getattr(args, "config", None))
+    # The lobes key may live in the operator's `grant` store: re-exec under it if so.
+    grant_inject.ensure_lobes_key(config)
     decider = _build_decider(args)
     source = _build_source(args, config)
     volume_step, volume_get = _volume_adapters(config)

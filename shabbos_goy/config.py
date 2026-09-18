@@ -227,6 +227,21 @@ class Config:
         return _fraction(self.raw.get("min_confidence")) if self.ok else None
 
     @property
+    def grant_lobes_secret(self) -> str | None:
+        """The ``grant`` secret NAME that holds the lobes gateway key, or ``None``.
+
+        ``{"grant": {"lobes_api_key": "LOBES_GATEWAY_API_KEY"}}``: see
+        :mod:`shabbos_goy.grant_inject`. Validated like the Sensibo one.
+        """
+        if not self.ok:
+            return None
+        block = self.raw.get("grant")
+        name = block.get("lobes_api_key") if isinstance(block, dict) else None
+        if isinstance(name, str) and _GRANT_NAME_RE.match(name):
+            return name
+        return None
+
+    @property
     def grant_sensibo_secret(self) -> str | None:
         """The ``grant`` secret NAME that holds the Sensibo key, or ``None``.
 
