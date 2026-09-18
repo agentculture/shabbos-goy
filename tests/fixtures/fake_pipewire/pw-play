@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Fake ``pw-play`` for tests — never touches a real speaker.
+
+Drains stdin (whatever PCM a caller writes) and exits 0 once it sees EOF, so
+``start_playback`` tests can assert the subprocess actually ran with the
+expected argv and accepted piped input, with no real hardware and no real
+audio played.
+"""
+
+from __future__ import annotations
+
+import sys
+
+
+def main() -> int:
+    sys.stdin.buffer.read()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
