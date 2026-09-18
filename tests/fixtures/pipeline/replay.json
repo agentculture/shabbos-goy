@@ -1,0 +1,13 @@
+{
+  "חם פה": {"class": "remark", "intent": "cool", "confidence": 0.9},
+  "הלוואי שהיה קר": {"class": "wish", "intent": "cool", "confidence": 0.88},
+  "קר לי": {"class": "remark", "intent": "warm", "confidence": 0.9},
+  "רועש פה מדי": {"class": "remark", "intent": "quieter", "confidence": 0.9},
+  "קשה לשמוע": {"class": "discomfort", "intent": "louder", "confidence": 0.85},
+  "תוריד את הקול": {"class": "imperative", "intent": "quieter", "confidence": 0.95},
+  "תדליק את המזגן": {"class": "imperative", "intent": "cool", "confidence": 0.95},
+  "מה מצב המזגן": {"class": "request", "intent": "status", "confidence": 0.9},
+  "חם פה קצת": {"class": "remark", "intent": "cool", "confidence": 0.5},
+  "מה שלומך": {"class": "unrelated", "intent": "none", "confidence": 0.9},
+  "חם פה MARKER7QX": {"class": "remark", "intent": "cool", "confidence": 0.9}
+}
