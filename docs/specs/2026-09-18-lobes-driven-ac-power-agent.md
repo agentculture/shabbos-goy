@@ -36,8 +36,8 @@
   - honesty: one PR updates README.md, CLAUDE.md, AGENTS.override.md, AGENTS.colleague.md and QWEN.md together (QWEN.md's '--mode cool --target 24' example removed) and adds docs/halacha-open-questions.md with no endorsement-sounding copy
 - volume control: weekday mode accepts direct spoken volume commands; Shabbat/Yom Kippur mode changes volume only on inferred hints; CLI/config always available beforehand
   - honesty: tests: weekday + 'תנמיך את הווליום' changes volume; strict mode + the same utterance changes nothing; strict mode + a loudness remark lowers it; volume steps are bounded by config
-- mode = zmanim-automatic plus a manual CLI override that can only make the mode stricter: it may force Shabbat/Yom Kippur mode on at any time but can never switch strict mode off inside a zmanim window
-  - honesty: tests: inside a zmanim window 'mode set weekday' is refused and the mode stays strict; outside a window 'mode set shabbat' forces strict; the override is stored in config set before the day, not as runtime state that a reboot could lose into a laxer mode
+- mode = zmanim-automatic plus a manual override available equally from the CLI and the dashboard; either may force strict mode on or switch it off, even inside a zmanim window; the override is held in memory only, so the zmanim-computed mode returns after any restart
+  - honesty: tests: inside a simulated zmanim window both the CLI and the dashboard can set weekday mode and can force strict mode, through one shared policy function; after a process restart the mode is the zmanim-computed one and no file holds the override
 - weekday mode obeys direct commands and hints, with the same power-only whitelist and the same ears-only lobes session; the classifier verdict plus the current mode decide whether a class may act
   - honesty: a single mode x class policy table drives the gate and is asserted cell by cell; weekday imperative/request/rebuke/hint act, strict mode acts on hints only; an untrusted clock selects the strict column
 - AC power state is read via the zero-write dry-run 'sensibo set --power' diff until sensibo-cli exposes acState upstream
@@ -63,6 +63,16 @@
   - honesty: a test forces an exception inside the utterance handler with a marker transcript and asserts the marker appears in neither stdout nor stderr
 - \[challenge/time\] zmanim are computed in UTC from latitude/longitude and converted with an explicit configured timezone: the host is Asia/Jerusalem but a python:3.12-slim container defaults to UTC, and Israel leaves DST on 2026-10-25; candle-lighting offset (18/40 min) and the tzeit definition are config, with test vectors on both sides of a DST change
   - honesty: zmanim test vectors cover at least 3 locations and dates on both sides of the 2026-10-25 DST change, agree with a published source to within 2 minutes, and pass with the process TZ set to UTC
+- \[challenge/adjacent-systems\] the lobes wire contract test in this repo is built from the shapes in lobes-cli site/src/scripts/event-fixtures.ts (cited, not imported: every EventType and ErrorCode, the ears-only turn, reason `max_turn`), and the client treats unknown event types and error codes as ignorable-and-logged rather than fatal; the listener keeps streaming mic audio during its own playback and only discards the overlapping transcripts (it never mutes the mic automatically, matching lobes' no-mic-mute rule)
+  - honesty: a test replays every cited fixture event through the client: ears-only events produce transcripts, all response.\* and tool events are ignored without action, every error code is handled by name, an invented event type does not crash the loop; a test asserts audio frames keep flowing while TTS playback is active
+- the agent has a web app dashboard, modelled on the lobes realtime web app as reference: a debug tool and control surface with bug context, accessible over the network via Tailscale
+  - honesty: the dashboard is served by stdlib only (dependencies stay \[\]), shows mode + next window, connection state, AC status, recent utterances with class/intent/gate verdict/action/timings and errors, and its controls drive the same whitelist and adapters as voice (AC power on/off, volume, force strict mode, preflight), so nothing the whitelist forbids is reachable from it
+- \[dashboard/security\] the dashboard listens only on the host's Tailscale address, never 0.0.0.0 or the LAN; it shows no secret (keys, gateway host credentials); state-changing endpoints are POST-only and reject cross-origin requests, so a web page opened on a tailnet device cannot switch the AC
+  - honesty: tests: the server refuses to start on 0.0.0.0 or a non-tailnet address unless config explicitly says so; a GET never changes state; a POST with a foreign Origin is refused; no response body contains the API key or gateway key (marker test)
+- \[dashboard/resilience\] the dashboard can never stop the agent listening or acting: if its address is not up yet at boot (tailscaled later than Docker) or the server crashes, the listener carries on and the dashboard bind is retried
+  - honesty: tests: with the dashboard address unavailable the listener still classifies and acts and the bind is retried; an exception in a dashboard handler does not stop the listener loop
+- \[dashboard/mode\] a mode set from the dashboard is held in memory only: after a restart or power cut the agent returns to the mode computed from zmanim (strict inside a window), so an override can never silently outlive a reboot into a laxer mode
+  - honesty: a test sets weekday mode from the dashboard inside a simulated window, restarts the process, and finds strict mode; no file holds the dashboard-set mode
 
 ## Honesty conditions
 
@@ -75,6 +85,8 @@
 - the README Status text matches the code on disk at merge time: nothing described as shipped is still planned
 - the benchmark uses ASR-transcribed audio (not typed text) for the headline number, the corpus and thresholds are committed, and a regression that makes any command fixture act in strict mode fails CI
 - README states plainly that weekday mode obeys anyone in earshot and that the whitelist is the control
+- a test feeds marker transcripts through the listener with the dashboard enabled: the marker is returned by the dashboard's recent-utterances endpoint, appears in neither stdout, stderr nor any file under the container's writable paths, the ring never exceeds its configured size, and it is empty after a restart
+- docs/halacha-open-questions.md lists the dashboard-on-Shabbat question and the README wording contains no claim that the dashboard is permitted on Shabbat
 
 ## Success signals
 
@@ -87,6 +99,8 @@
 - lobes host, `GATEWAY_API_KEY` and `SENSIBO_API_KEY` live only in env/private config; scripts/scan-secrets.py does not catch ws:// URLs or non-JSON files, so this is by discipline (or the scanner is extended)
 - in Shabbat/Yom Kippur mode imperatives, requests and rebukes never act, are never queued, and nothing is asked back; logs carry classified intent + action only, never audio or transcript text
 - \[challenge/security\] on weekdays anyone within earshot can switch AC power; this is accepted because the whitelist is power-only, and is the reason the whitelist must stay narrow when actuators are added
+- \[dashboard/privacy\] transcript text lives only in a bounded in-memory ring (trimmed per c29) that feeds the dashboard; it is never written to disk, never logged to stdout/stderr, and is gone on restart; the no-transcript-text rule for logs (c16, c37) is unchanged
+- \[dashboard/halacha\] whether using the dashboard on Shabbat/Yom Tov is permitted is the user's question for their rav; it is listed in docs/halacha-open-questions.md and the README describes the dashboard as an operator tool, not as a Shabbat-compatible feature
 
 ## Non-goals
 
@@ -161,6 +175,9 @@
   - seeds: `c41`
 - `s30` — `challenge pass / migration + concurrency lenses`: no stored data to migrate (stateless by design). Concurrency: mic-feeder, reader and actuation threads share the join buffer and the rate limiter; NOT examined in code because none exists yet; to be carried as a plan risk
 - `s31` — `challenge pass / unexamined surfaces`: not examined: Jetson Orin deployment, BlueTTS/Chatterbox voice quality at low volume, Sensibo API behaviour under real rate limiting, real-world classifier accuracy on children's or accented speech, physical speaker placement vs AEC
+- `s32` — `lobes-cli site/ (README.md, proxy/gateway-proxy.mjs, src/scripts/event-fixtures.ts, realtime-events.ts, no-mic-mute.test.ts)`: local-only Astro test harness for /v1/realtime, never deployed; uses the BROWSER's mic (laptop, secure-context only) so it does not contend for the reSpeaker but is a second lobes session; a Node proxy injects the bearer key because browsers cannot set the header; event-fixtures.ts carries one payload for every EventType and ErrorCode shaped like `_session.py` `event_to_dict`(), including an ears-only turn and `max_turn`; lobes forbids AUTOMATIC mic muting on playback (no-mic-mute gate) because hardware owns AEC
+- `s33` — `challenge pass / dashboard: tailscale status + sensibo-cli README (sensibo web :8323) + spec c16/c18/c37`: host is on a tailnet with 3 devices incl. a phone; sensibo-cli is the mesh precedent for a stdlib web dashboard; controls-always-on and transcripts-always-visible are user decisions (c47, c48) that narrow the invariant to speech and move transcript text into memory only; NOT examined: Tailscale ACLs, tailscaled/Docker boot ordering on this host, browser CSRF behaviour on iOS
+  - seeds: `c50`, `c51`, `c52`, `c53` (rejected), `c54`
 
 ## Decisions
 
@@ -171,6 +188,11 @@
 - audio backend is the host PipeWire session: the container mounts the user's PipeWire socket and uses pw-record / pw-play and PipeWire volume control against the reSpeaker node; wherever earlier claims or honesty conditions say amixer/aplay or /dev/snd, read the PipeWire equivalents (fake pw-\* binaries in tests)
 - Yom Tov days use the strict column by default (Israel vs diaspora second days set in config); Yom Tov-specific leniencies are out of scope
 - in strict mode a hint acts after a configurable delay (default about 15 s) held only in memory and dropped on restart; weekday mode acts immediately
+- dashboard controls work in every mode, including strict mode: the dashboard is an operator tool outside the invariant, so the no-direct-commands invariant covers SPEECH only, and the README must say so plainly
+- the dashboard always shows recent transcript text as bug context, in every mode, from a bounded in-memory ring
+- the dashboard is reachable over Tailscale only, with no extra token: tailnet membership is the authentication, for controls too
+- the dashboard is a true operator override with the same powers as the CLI: it MAY switch strict mode off inside a zmanim window
+- Dashboard is not a model. Dashboard is a UI like the CLI. They are always accessible. The zmanim-computed mode (Shabbat, Yom Kippur) returns regardless of restarts. No one has access to a keyboard and monitor, so leaving the CLI and dashboard open is safe.
 
 ## Hard questions
 

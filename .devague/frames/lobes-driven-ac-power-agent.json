@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-18T17:06:13Z",
-  "updated": "2026-09-18T17:42:05Z",
+  "updated": "2026-09-18T18:16:40Z",
   "claims": [
     {
       "id": "c1",
@@ -349,13 +349,19 @@
     {
       "id": "c18",
       "kind": "requirement",
-      "text": "mode = zmanim-automatic plus a manual CLI override that can only make the mode stricter: it may force Shabbat/Yom Kippur mode on at any time but can never switch strict mode off inside a zmanim window",
+      "text": "mode = zmanim-automatic plus a manual override available equally from the CLI and the dashboard; either may force strict mode on or switch it off, even inside a zmanim window; the override is held in memory only, so the zmanim-computed mode returns after any restart",
       "origin": "user",
       "status": "confirmed",
       "honesty_conditions": [
         {
           "id": "h15",
           "text": "tests: inside a zmanim window 'mode set weekday' is refused and the mode stays strict; outside a window 'mode set shabbat' forces strict; the override is stored in config set before the day, not as runtime state that a reboot could lose into a laxer mode",
+          "status": "rejected",
+          "instruction": ""
+        },
+        {
+          "id": "h41",
+          "text": "tests: inside a simulated zmanim window both the CLI and the dashboard can set weekday mode and can force strict mode, through one shared policy function; after a process restart the mode is the zmanim-computed one and no file holds the override",
           "status": "confirmed",
           "instruction": ""
         }
@@ -363,7 +369,13 @@
       "hard_questions": [],
       "links": [],
       "instruction": "",
-      "revisions": []
+      "revisions": [
+        {
+          "text": "mode = zmanim-automatic plus a manual CLI override that can only make the mode stricter: it may force Shabbat/Yom Kippur mode on at any time but can never switch strict mode off inside a zmanim window",
+          "kind": "requirement",
+          "reason": "user decision 2026-09-18: CLI and dashboard are equal operator UIs (c57); parity: both may loosen"
+        }
+      ]
     },
     {
       "id": "c19",
@@ -795,6 +807,229 @@
       "links": [],
       "instruction": "",
       "revisions": []
+    },
+    {
+      "id": "c45",
+      "kind": "requirement",
+      "text": "[challenge/adjacent-systems] the lobes wire contract test in this repo is built from the shapes in lobes-cli site/src/scripts/event-fixtures.ts (cited, not imported: every EventType and ErrorCode, the ears-only turn, reason max_turn), and the client treats unknown event types and error codes as ignorable-and-logged rather than fatal; the listener keeps streaming mic audio during its own playback and only discards the overlapping transcripts (it never mutes the mic automatically, matching lobes' no-mic-mute rule)",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h33",
+          "text": "a test replays every cited fixture event through the client: ears-only events produce transcripts, all response.* and tool events are ignored without action, every error code is handled by name, an invented event type does not crash the loop; a test asserts audio frames keep flowing while TTS playback is active",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c46",
+      "kind": "requirement",
+      "text": "the agent has a web app dashboard, modelled on the lobes realtime web app as reference: a debug tool and control surface with bug context, accessible over the network via Tailscale",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h34",
+          "text": "the dashboard is served by stdlib only (dependencies stay []), shows mode + next window, connection state, AC status, recent utterances with class/intent/gate verdict/action/timings and errors, and its controls drive the same whitelist and adapters as voice (AC power on/off, volume, force strict mode, preflight), so nothing the whitelist forbids is reachable from it",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c47",
+      "kind": "decision",
+      "text": "dashboard controls work in every mode, including strict mode: the dashboard is an operator tool outside the invariant, so the no-direct-commands invariant covers SPEECH only, and the README must say so plainly",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c48",
+      "kind": "decision",
+      "text": "the dashboard always shows recent transcript text as bug context, in every mode, from a bounded in-memory ring",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c49",
+      "kind": "decision",
+      "text": "the dashboard is reachable over Tailscale only, with no extra token: tailnet membership is the authentication, for controls too",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c50",
+      "kind": "boundary",
+      "text": "[dashboard/privacy] transcript text lives only in a bounded in-memory ring (trimmed per c29) that feeds the dashboard; it is never written to disk, never logged to stdout/stderr, and is gone on restart; the no-transcript-text rule for logs (c16, c37) is unchanged",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h35",
+          "text": "a test feeds marker transcripts through the listener with the dashboard enabled: the marker is returned by the dashboard's recent-utterances endpoint, appears in neither stdout, stderr nor any file under the container's writable paths, the ring never exceeds its configured size, and it is empty after a restart",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c51",
+      "kind": "requirement",
+      "text": "[dashboard/security] the dashboard listens only on the host's Tailscale address, never 0.0.0.0 or the LAN; it shows no secret (keys, gateway host credentials); state-changing endpoints are POST-only and reject cross-origin requests, so a web page opened on a tailnet device cannot switch the AC",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h36",
+          "text": "tests: the server refuses to start on 0.0.0.0 or a non-tailnet address unless config explicitly says so; a GET never changes state; a POST with a foreign Origin is refused; no response body contains the API key or gateway key (marker test)",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c52",
+      "kind": "requirement",
+      "text": "[dashboard/resilience] the dashboard can never stop the agent listening or acting: if its address is not up yet at boot (tailscaled later than Docker) or the server crashes, the listener carries on and the dashboard bind is retried",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h37",
+          "text": "tests: with the dashboard address unavailable the listener still classifies and acts and the bind is retried; an exception in a dashboard handler does not stop the listener loop",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c53",
+      "kind": "boundary",
+      "text": "[dashboard/mode] the dashboard can force strict mode on but, like the CLI override (c18), cannot switch strict mode off inside a zmanim window",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [
+        {
+          "id": "h38",
+          "text": "a test inside a simulated zmanim window: the dashboard's mode endpoint accepts 'strict' and refuses 'weekday', with the same policy function the CLI uses",
+          "status": "rejected",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c54",
+      "kind": "boundary",
+      "text": "[dashboard/halacha] whether using the dashboard on Shabbat/Yom Tov is permitted is the user's question for their rav; it is listed in docs/halacha-open-questions.md and the README describes the dashboard as an operator tool, not as a Shabbat-compatible feature",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h39",
+          "text": "docs/halacha-open-questions.md lists the dashboard-on-Shabbat question and the README wording contains no claim that the dashboard is permitted on Shabbat",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c55",
+      "kind": "decision",
+      "text": "the dashboard is a true operator override with the same powers as the CLI: it MAY switch strict mode off inside a zmanim window",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": [
+        {
+          "text": "the dashboard is a true operator override: it MAY switch strict mode off inside a zmanim window; the stricter-only rule (c18) applies to the CLI 'mode set' override, not to the dashboard. A dashboard-set mode is held in memory only, so a restart returns to the mode computed from zmanim",
+          "kind": "decision",
+          "reason": "strip the agent-authored clause; keep only what the user chose"
+        },
+        {
+          "text": "the dashboard is a true operator override: it MAY switch strict mode off inside a zmanim window; the stricter-only rule (c18) applies to the CLI 'mode set' override, not to the dashboard",
+          "kind": "decision",
+          "reason": "parity decision: c18 no longer stricter-only"
+        }
+      ]
+    },
+    {
+      "id": "c56",
+      "kind": "requirement",
+      "text": "[dashboard/mode] a mode set from the dashboard is held in memory only: after a restart or power cut the agent returns to the mode computed from zmanim (strict inside a window), so an override can never silently outlive a reboot into a laxer mode",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h40",
+          "text": "a test sets weekday mode from the dashboard inside a simulated window, restarts the process, and finds strict mode; no file holds the dashboard-set mode",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c57",
+      "kind": "decision",
+      "text": "Dashboard is not a model. Dashboard is a UI like the CLI. They are always accessible. The zmanim-computed mode (Shabbat, Yom Kippur) returns regardless of restarts. No one has access to a keyboard and monitor, so leaving the CLI and dashboard open is safe.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
     }
   ],
   "open_vagueness": [
@@ -1105,6 +1340,24 @@
       "surface": "challenge pass / unexamined surfaces",
       "finding": "not examined: Jetson Orin deployment, BlueTTS/Chatterbox voice quality at low volume, Sensibo API behaviour under real rate limiting, real-world classifier accuracy on children's or accented speech, physical speaker placement vs AEC",
       "seeds": []
+    },
+    {
+      "id": "s32",
+      "surface": "lobes-cli site/ (README.md, proxy/gateway-proxy.mjs, src/scripts/event-fixtures.ts, realtime-events.ts, no-mic-mute.test.ts)",
+      "finding": "local-only Astro test harness for /v1/realtime, never deployed; uses the BROWSER's mic (laptop, secure-context only) so it does not contend for the reSpeaker but is a second lobes session; a Node proxy injects the bearer key because browsers cannot set the header; event-fixtures.ts carries one payload for every EventType and ErrorCode shaped like _session.py event_to_dict(), including an ears-only turn and max_turn; lobes forbids AUTOMATIC mic muting on playback (no-mic-mute gate) because hardware owns AEC",
+      "seeds": []
+    },
+    {
+      "id": "s33",
+      "surface": "challenge pass / dashboard: tailscale status + sensibo-cli README (sensibo web :8323) + spec c16/c18/c37",
+      "finding": "host is on a tailnet with 3 devices incl. a phone; sensibo-cli is the mesh precedent for a stdlib web dashboard; controls-always-on and transcripts-always-visible are user decisions (c47, c48) that narrow the invariant to speech and move transcript text into memory only; NOT examined: Tailscale ACLs, tailscaled/Docker boot ordering on this host, browser CSRF behaviour on iOS",
+      "seeds": [
+        "c50",
+        "c51",
+        "c52",
+        "c53",
+        "c54"
+      ]
     }
   ],
   "lapses": [
@@ -1115,6 +1368,17 @@
       "skipped_check": "route agent-worded honesty conditions through --origin llm + user confirm",
       "refs": [
         "h22 on c29"
+      ],
+      "origin": "llm",
+      "status": "approved"
+    },
+    {
+      "id": "l2",
+      "code": "provenance-missing",
+      "what": "decision c55 was captured as user-origin with an extra clause I authored (dashboard-set mode is in-memory only; restart returns to the zmanim-computed mode) that the user never chose; same pattern as l1, repeated within the hour",
+      "skipped_check": "user-origin captures carry only the user's chosen wording; agent additions go in a separate --origin llm claim",
+      "refs": [
+        "c55"
       ],
       "origin": "llm",
       "status": "approved"
