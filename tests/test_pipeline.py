@@ -752,3 +752,15 @@ def test_a_hot_remark_soon_after_a_power_off_waits_for_the_compressor() -> None:
     clock.advance(130)  # 250 s after the power-off
     feed(pipeline, HOT)
     assert ac.state == "on"
+
+
+def test_the_record_of_released_delayed_actions_stays_bounded() -> None:
+    """Found in review: the released-set grew by one per delayed action, forever."""
+    pipeline, _ac, _volume, _speaker, clock = make_pipeline(mode="strict", apply=False)
+    for _ in range(300):
+        feed(pipeline, HOT)
+        clock.advance(20)  # past the 15 s delay: the action is released
+        pipeline.poll()
+        clock.advance(90000)  # more than a day: past every interval and the daily cap
+    assert len(pipeline.delay_timer) <= 64
+    assert len(pipeline._released) <= 64

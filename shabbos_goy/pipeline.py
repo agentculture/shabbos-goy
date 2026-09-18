@@ -738,12 +738,17 @@ class Pipeline:
     def _release_due(self) -> None:
         """Run any strict-mode delayed action whose delay has elapsed.
 
-        Each pending action is released at most once, and is re-gated from
-        scratch (mode, class, whitelist, limits, current state) before it
-        runs. A restart drops every pending action, since the timer is
-        memory-only.
+        Each pending action is released at most once, and is re-gated (mode and
+        clock trust, whitelist, limits, current state) before it runs. The
+        utterance's class is NOT re-checked: only hint classes are ever
+        scheduled, and hints may act in every mode. A restart drops every
+        pending action, since the timer is memory-only.
         """
-        for pending in self.delay_timer.due():
+        due = self.delay_timer.due()
+        # Forget releases the timer has already evicted: this record is then
+        # bounded by the timer's ring, not by the listener's lifetime.
+        self._released.intersection_update(due)
+        for pending in due:
             if pending in self._released:
                 continue
             self._released.add(pending)
