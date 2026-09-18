@@ -400,3 +400,26 @@ def test_start_playback_missing_binary_raises_audio_backend_error(tmp_path) -> N
     env["PATH"] = str(tmp_path)
     with pytest.raises(pw.AudioBackendError):
         pw.start_playback("respeaker-sink", env=env)
+
+
+@pytest.mark.parametrize("hostile", ["", "-h", "--target", "--help", "a b", "node\tname", "x\n"])
+def test_option_shaped_targets_are_refused_by_every_argv_builder(hostile: str) -> None:
+    """Wave-1 close-out hardening: a node name can never become an option."""
+    from shabbos_goy.audio import pipewire as pw
+
+    for build in (
+        lambda: pw.build_capture_argv(hostile),
+        lambda: pw.build_playback_argv(hostile),
+        lambda: pw.build_get_volume_argv(hostile),
+        lambda: pw.build_set_volume_argv(hostile, 0.3),
+        lambda: pw.build_set_mute_argv(hostile, True),
+    ):
+        with pytest.raises(ValueError):
+            build()
+
+
+def test_well_known_alias_and_plain_names_are_still_accepted() -> None:
+    from shabbos_goy.audio import pipewire as pw
+
+    assert "@DEFAULT_AUDIO_SINK@" in pw.build_get_volume_argv("@DEFAULT_AUDIO_SINK@")
+    assert "42" in pw.build_set_mute_argv(42, False)

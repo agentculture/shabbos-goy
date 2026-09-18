@@ -16,14 +16,18 @@
     }
   },
   "rate_limits": {
-    "actions_per_hour": 4,
-    "min_seconds_between_actions": 300
+    "min_interval_seconds": 600,
+    "daily_cap": 12,
+    "retry_window_seconds": 300,
+    "retry_max_attempts": 5
   },
-  "strict_mode_delay_seconds": 30,
+  "strict_mode_delay_seconds": 15,
   "volume": {
-    "level": 40,
-    "min": 10,
-    "max": 70
+    "level": 0.0,
+    "muted": true,
+    "min": 0.0,
+    "max": 0.7,
+    "step": 0.1
   },
   "join_gap_ms": 500,
   "ring_sizes": {

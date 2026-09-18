@@ -118,6 +118,19 @@ def validate_device_pair(
         raise DeviceMismatchError(mic_id, speaker_id)
 
 
+def _safe_target(device: object) -> str:
+    """A node name, id or ``@ALIAS@`` that can never be read as an option.
+
+    Node names come from the operator's private config, never from speech, but
+    the argv builders are the one choke point, so refuse option-shaped values
+    here: empty, leading ``-``, or containing whitespace / control characters.
+    """
+    target = str(device)
+    if not target or target.startswith("-") or any(ch.isspace() for ch in target):
+        raise ValueError(f"unsafe PipeWire target: {target!r}")
+    return target
+
+
 def build_capture_argv(
     device: str, rate: int = CAPTURE_SAMPLE_RATE_DEFAULT, channels: int = 1
 ) -> list[str]:
@@ -130,7 +143,7 @@ def build_capture_argv(
     return [
         "pw-record",
         "--target",
-        str(device),
+        _safe_target(device),
         "--rate",
         str(rate),
         "--channels",
@@ -148,7 +161,7 @@ def build_playback_argv(
     return [
         "pw-play",
         "--target",
-        str(device),
+        _safe_target(device),
         "--rate",
         str(rate),
         "--channels",
@@ -259,15 +272,15 @@ class VolumeState:
 
 
 def build_get_volume_argv(target: str) -> list[str]:
-    return ["wpctl", "get-volume", str(target)]
+    return ["wpctl", "get-volume", _safe_target(target)]
 
 
 def build_set_volume_argv(target: str, level: float) -> list[str]:
-    return ["wpctl", "set-volume", str(target), f"{level:.2f}"]
+    return ["wpctl", "set-volume", _safe_target(target), f"{level:.2f}"]
 
 
 def build_set_mute_argv(target: str, muted: bool) -> list[str]:
-    return ["wpctl", "set-mute", str(target), "1" if muted else "0"]
+    return ["wpctl", "set-mute", _safe_target(target), "1" if muted else "0"]
 
 
 _VOLUME_LINE_RE = re.compile(r"Volume:\s*([0-9]*\.?[0-9]+)\s*(\[MUTED\])?", re.IGNORECASE)

@@ -210,9 +210,14 @@ def test_config_carries_the_full_documented_shape(tmp_path):
     assert cfg.candle_lighting_offset_minutes == 18
     assert cfg.tzeit_definition == "3_medium_stars"
     assert cfg.region == "israel"
-    assert cfg.rate_limits == {"actions_per_hour": 4, "min_seconds_between_actions": 300}
-    assert cfg.strict_mode_delay_seconds == 30
-    assert cfg.volume == {"level": 40, "min": 10, "max": 70}
+    assert cfg.rate_limits == {
+        "min_interval_seconds": 600,
+        "daily_cap": 12,
+        "retry_window_seconds": 300,
+        "retry_max_attempts": 5,
+    }
+    assert cfg.strict_mode_delay_seconds == 15
+    assert cfg.volume == {"level": 0.0, "muted": True, "min": 0.0, "max": 0.7, "step": 0.1}
     assert cfg.join_gap_ms == 500
     assert cfg.ring_sizes == {"transcript_buffer": 20, "action_log": 200}
     assert cfg.dashboard_bind_address == "127.0.0.1:8787"
@@ -224,3 +229,19 @@ def test_example_fixture_has_no_real_secrets_or_hosts():
     pods = data["whitelist"]["sensibo"]["pods"]
     assert all(pod.startswith("<") and pod.endswith(">") for pod in pods)
     assert data["dashboard_bind_address"].split(":")[0] in {"127.0.0.1", "localhost"}
+
+
+def test_example_rate_limits_feed_the_limits_module_unchanged() -> None:
+    """The example config's keys are exactly what LimitsConfig.from_dict reads,
+    and the strict-mode delay matches the decided default of about 15 s."""
+    from shabbos_goy.config import load_config as _load
+    from shabbos_goy.limits import LimitsConfig
+
+    cfg = _load(path=FIXTURE)
+    assert cfg.ok
+    limits = LimitsConfig.from_dict(
+        {**cfg.rate_limits, "strict_delay_seconds": cfg.strict_mode_delay_seconds}
+    )
+    assert limits.daily_cap == 12
+    assert limits.min_interval_seconds == 600.0
+    assert limits.strict_delay_seconds == 15.0
