@@ -1,0 +1,134 @@
+# lobes-driven AC power agent
+
+> shabbos-goy listens through the lobes Hebrew realtime session (ears-only), and in Shabbat / Yom Kippur mode switches the AC power on or off only when it infers the wish from indirect speech; it can report AC status, stays quiet by default with an adjustable own-volume, and survives reboots unattended
+
+## Audience
+
+- an observant household (first: the operator's own home on the DGX Spark) that wants the AC handled on Shabbat/Yom Kippur without addressing a device, and the operator who sets everything up beforehand; secondary: mesh agents/maintainers who drive the CLI
+  - instruction: README and 'shabbos-goy learn' name both readers; every setup step is doable before candle lighting
+
+## Before → After
+
+- Before: the repo is a CLI scaffold with no domain code; on Shabbat the household either leaves the AC fixed for 25 hours or relies on a timer, and nothing can react to how the room actually feels
+  - instruction: README Status section is rewritten when the MVP lands
+- After: a Compose service listens ambiently through lobes; a Hebrew remark that the room is hot powers the AC on and a remark that it is cold powers it off, with nobody addressing the device; commands are dropped in strict mode and obeyed on weekdays; after a power cut it resumes the right mode with no human touch
+  - instruction: demonstrate end to end with fixtures ('classify', dry-run 'listen --script') and once live with --apply on the real pod
+
+## Requirements
+
+- AC actuation is POWER ON/OFF ONLY via `sensibo set <pod> --power on|off [--apply] --json`; the adapter builds an argv that can never contain --mode/--target/--fan/--swing (tested), because sensibo-cli set.py:116-131 uses the single-field PATCH acStates/on only when exactly one field differs and a full-state POST otherwise
+  - honesty: a test enumerates every argv the adapter can produce and asserts the only sensibo flags are --power on|off, --apply and --json; tool arguments other than power are rejected by validation before any subprocess starts
+- the whitelist is JSON config (zero runtime deps; pyyaml is dev-only per pyproject.toml) listing tools + Sensibo pod ids; for now the only representable tool arguments are power=on|off
+  - honesty: deleting a tool or pod id from the JSON whitelist makes 'actions' stop listing it and makes the gate refuse it, with no code change; a malformed whitelist fails closed (nothing acts)
+- the lobes client is ears-only and stdlib-only: copy the WebSocket layer of lobes-cli scripts/realtime-smoke.py (handshake, masking, framing, PING->PONG), stream PCM16 incl. silence on its own thread, never send response.create or declare tools, ignore empty-text transcripts
+  - honesty: a wire-level test against a fake WebSocket server proves the client answers PING with PONG, never emits response.create or session.update tools, and drops empty-text transcripts
+- resilience is client-side: lobes sessions have no resume (docs/realtime-pipeline.md:597-609) and uvicorn drops peers that miss a pong (~20s), so the listener reconnects with backoff, treats any disconnect as a lost turn (nothing acts on it), and holds no state across restarts
+  - honesty: a test kills the fake server mid-turn: the client reconnects with capped backoff, the interrupted turn produces no action, and no file is written that a restart could replay
+- a transcript joiner re-joins pause-split sentences using `speech_stopped`.`at_ms` -> next `speech_started`.`at_ms` gaps (Spark runs `VAD_SILENCE_MS`=500, no per-session VAD override exists in `_session.py` `parse_session_config`); a half sentence never acts
+  - honesty: fixtures with a split sentence (gap below the join threshold) classify as one utterance; a dangling half ('הלוואי ש') never acts, including when the second half never arrives or arrives after a reconnect
+- own-voice output is a thin amixer/aplay adapter in this repo against ALSA card name 'Array' (reSpeaker XVF3800, same card for capture+playback so AEC has its reference); volume persists via config re-applied at boot; default is silent/near-silent; /v1/audio/speech has no volume parameter so gain is applied locally
+  - honesty: volume get/set/mute target the card by name 'Array', the configured level is re-applied at start-up, the default configuration speaks nothing, and the adapter is exercised in tests through a fake amixer/aplay
+- Docker Compose service copies climate-cli house style (python:3.12-slim, non-root uid 1000, restart: unless-stopped, json-file 10m x 3, ro config bind mount from ~/.config/shabbos-goy, gitignored env file + .example) and newly establishes: /dev/snd + `group_add` audio, pip-pinned sensibo-cli in the image, reaching the lobes gateway on host port 8001 via host.docker.internal/host-gateway, and a healthcheck proving transcripts/keepalive are live
+  - honesty: docker compose config validates in CI; the image runs as non-root, contains a pinned sensibo-cli, has json-file rotation and restart: unless-stopped; the healthcheck goes unhealthy when no pong/transcript activity has been seen within its window
+- new verbs (classify, zmanim, actions, listen, plus ac/volume/mode nouns) follow the scaffold contract: register(sub), `parser_class`=type(p) on nested subparsers, an overview sub-verb per noun, --json everywhere, explain catalog entries, actuating verbs dry-run unless --apply; catalog `_ROOT` and learn text get a domain rewrite
+  - honesty: teken cli doctor . --strict passes; every new verb and noun has an explain catalog entry and --json; a test walks the parser and fails on a verb without a catalog entry; actuating verbs change nothing without --apply
+- the domain story changes are propagated to README.md, CLAUDE.md, AGENTS.override.md, AGENTS.colleague.md and QWEN.md together, and docs/halacha-open-questions.md is created (it does not exist yet)
+  - honesty: one PR updates README.md, CLAUDE.md, AGENTS.override.md, AGENTS.colleague.md and QWEN.md together (QWEN.md's '--mode cool --target 24' example removed) and adds docs/halacha-open-questions.md with no endorsement-sounding copy
+- volume control: weekday mode accepts direct spoken volume commands; Shabbat/Yom Kippur mode changes volume only on inferred hints; CLI/config always available beforehand
+  - honesty: tests: weekday + 'תנמיך את הווליום' changes volume; strict mode + the same utterance changes nothing; strict mode + a loudness remark lowers it; volume steps are bounded by config
+- mode = zmanim-automatic plus a manual CLI override that can only make the mode stricter: it may force Shabbat/Yom Kippur mode on at any time but can never switch strict mode off inside a zmanim window
+  - honesty: tests: inside a zmanim window 'mode set weekday' is refused and the mode stays strict; outside a window 'mode set shabbat' forces strict; the override is stored in config set before the day, not as runtime state that a reboot could lose into a laxer mode
+- weekday mode obeys direct commands and hints, with the same power-only whitelist and the same ears-only lobes session; the classifier verdict plus the current mode decide whether a class may act
+  - honesty: a single mode x class policy table drives the gate and is asserted cell by cell; weekday imperative/request/rebuke/hint act, strict mode acts on hints only; an untrusted clock selects the strict column
+- AC power state is read via the zero-write dry-run 'sensibo set --power' diff until sensibo-cli exposes acState upstream
+  - honesty: the status reader only ever runs sensibo without --apply (asserted on argv), parses 'changes' to derive on/off, reports 'unknown' on any non-zero exit, and is isolated behind one function so sensibo-cli#15 can replace it
+- the agent runs 25h+ straight and hears a lot; it must survive accumulated context by compaction/trimming rather than keeping everything: any context it holds (transcript join buffer, event log, and the context of any model in the loop) is bounded and trimmed, and long history is not important to keep
+  - instruction: soak test: feed a synthetic 25h+ stream of events through the listener loop and assert buffers/context stay under a fixed bound and behaviour is unchanged at the end
+  - honesty: nothing the agent holds grows with session length: after a simulated 25h+ stream, memory/context size is under a fixed configured bound, old context has been trimmed or compacted, and classification of a fresh hint still works
+
+## Honesty conditions
+
+- the full path transcript -> joiner -> classifier -> mode gate -> whitelist -> sensibo argv runs in tests with no microphone, no lobes server and no Sensibo account
+- no commit in this repo touches ../lobes-cli, no tool declarations are sent to lobes, and the README deployment checklist tells the operator to unset `TTS_DEBUG_TEXT`
+- scan-secrets (extended to ws/wss and non-JSON config, or an equivalent test) fails on a tracked non-localhost realtime URL; lobes host and both keys are read only from env/private config
+- table-driven tests over the fixture corpus assert strict mode yields no action for imperative/request/rebuke, no queued or persisted pending action exists anywhere, no code path speaks a question, and log lines contain class + action but never transcript text
+- every step a household member experiences needs no interaction with the device during the day; every operator step (location, whitelist, pod id, volume, keys) is documented as done before candle lighting
+- the after-state is shown by a recorded dry-run drill from fixtures and one live --apply run on the operator's pod, and the reboot claim by an actual host reboot with the container coming back in the correct mode
+- the README Status text matches the code on disk at merge time: nothing described as shipped is still planned
+- the benchmark uses ASR-transcribed audio (not typed text) for the headline number, the corpus and thresholds are committed, and a regression that makes any command fixture act in strict mode fails CI
+
+## Success signals
+
+- on the fixture corpus, transcribed through lobes batch Whisper, strict mode acts on 0 of the imperative/request/rebuke fixtures (>= 60 such fixtures, false-positive rate 0%) while acting on >= 70% of hint fixtures; the listener reconnects within 60 s of a lobes restart and the container returns to the correct mode after a host reboot with 0 human actions
+  - instruction: a pytest-marked benchmark reads the corpus + cached ASR transcripts and asserts the FP count == 0; reconnect and reboot are checked by a scripted drill recorded in docs/
+
+## Scope / boundaries
+
+- lobes-cli is not modified: no tools declared to the session, no VAD override requested, BlueTTS weights never redistributed or defaulted; `TTS_DEBUG_TEXT` must be turned off on the Spark by the operator before household use (HANDOFF.md:149 records it ON)
+- lobes host, `GATEWAY_API_KEY` and `SENSIBO_API_KEY` live only in env/private config; scripts/scan-secrets.py does not catch ws:// URLs or non-JSON files, so this is by discipline (or the scanner is extended)
+- in Shabbat/Yom Kippur mode imperatives, requests and rebukes never act, are never queued, and nothing is asked back; logs carry classified intent + action only, never audio or transcript text
+
+## Non-goals
+
+- do not depend on microphone-cli, harmonics-cli or media-cli for volume or TTS playback: microphone-cli is capture-only by design (README non-scope), harmonics-cli plays only its own synthesized motifs, media-cli is an empty scaffold
+
+## Assumptions
+
+- AC status = room temperature/humidity from `sensibo read <pod> --json` (measurements present) PLUS power state, which sensibo-cli does not expose today (read/devices/query/MCP `read_location` carry no acState); power state needs an upstream sensibo-cli change or the zero-write dry-run `set --power <guess>` diff as a stopgap
+- mode is computed statelessly from clock + stdlib zmanim at boot (host has docker enabled at boot and NTPSynchronized=yes at survey time); an untrusted clock or missing location fails toward strict mode and not acting
+
+## Scope exploration
+
+- `s1` — `sensibo-cli sensibo/cli/_commands/set.py:37-131 + sensibo/api/client.py:346-362`: --power alone yields requested=={on:bool}; one differing field -> PATCH /pods/{id}/acStates/on (mode/target untouched), >=2 fields -> full POST acStates. Dry-run default; applied JSON carries method + read-back `result_ac_state` (tests/`test_cli_set.py`)
+  - seeds: `c2`, `c3`
+- `s2` — `sensibo-cli read/devices/query/MCP (live 'sensibo read --json', _fleet.py _readings_of, collect/collector.py)`: status paths return measurements only (temperature, humidity, ...) and never acState.on/mode/target; only set.py `_current_ac_state` reads acState, so power state is visible only through a dry-run set diff. A subagent's live dry-run set was blocked by the session permission layer and not retried
+  - seeds: `c4`
+- `s3` — `sensibo-cli error + pacing contract (_client.py:21-39, set.py:158-167, client.py throttle/backoff)`: exit 0/1/2; set.py and `_client.py` disagree on 401/403 (1 vs 2) so consumers treat any non-zero as did-not-act; 1.5s min interval, 15s timeout, 429 backoff up to 120s per sleep bounds our subprocess timeout
+  - seeds: `c2`
+- `s4` — `lobes-cli docs/contracts/realtime-tool-calling.md + docs/realtime-pipeline.md (branch spec/hebrew-realtime)`: ears-only events: session.created, `speech_started`{`at_ms`,`item_id`}, `speech_stopped`{`at_ms`,`item_id`,reason silence|`max_turn`}, transcription.completed{`item_id`,text}, error{code}; low-confidence -> empty text; no resume, teardown on any disconnect; pong required (~20s pings); 401/426/404 refusals before upgrade; keyless GET /health
+  - seeds: `c5`, `c6`
+- `s5` — `lobes-cli scripts/realtime-smoke.py:104-649 + scripts/realtime-he-accept.py`: stdlib RFC6455 client (handshake, mask, `read_frame`, EventReader auto-PONG) designed as a droppable single file; he-accept adds arecord/aplay plughw capture, continuous mic feeder thread, `validate_device_pair` (same card for mic+speaker), --script-mode --wav, named exit codes
+  - seeds: `c5`
+- `s6` — `lobes-cli lobes/realtime/_settings.py + _session.py:770 parse_session_config`: VAD knobs are deployment-wide env (code default `VAD_SILENCE_MS`=600, Spark tuned to 500); per-session overrides exist only for `system_prompt`/language/audio format, so pause re-joining is the client's job
+  - seeds: `c7`, `c11`
+- `s7` — `lobes-cli batch audio (lobes/realtime/app.py:112-165, audio_facade.py)`: POST /v1/audio/speech {input, voice?, `response_format` wav|pcm, speed?} -> 24 kHz 16-bit mono, no volume/gain field; POST /v1/audio/transcriptions multipart file+language is the fixtures benchmark path
+  - seeds: `c8`
+- `s8` — `microphone-cli, harmonics-cli, media-cli (READMEs, pyproject, --help)`: microphone-cli v0.9.0 is capture-only (README excludes playback; has DoA/AEC/mic gain, not on PATH); harmonics 0.7.0 on PATH plays only synthesized motifs; media-cli README says 'Status: scaffold', no device code
+  - seeds: `c9`, `c8`
+- `s9` — `host audio (arecord -l / aplay -l)`: reSpeaker XVF3800 is ALSA card 'Array' (index 1 today) for both capture and playback; card 0 is NVIDIA HDMI; address by name
+  - seeds: `c8`, `c10`
+- `s10` — `climate-cli Dockerfile + docker-compose.yml`: python:3.12-slim, pip install, uid/gid 1000 non-root, restart unless-stopped, json-file 10m x3, `env_file` docker/weather.env (+.example), ro bind ~/.config/climate-cli; has NO sensibo relationship and no /dev/snd precedent
+  - seeds: `c10`
+- `s11` — `lobes-cli deployments + live docker ps + systemctl/timedatectl`: gateway publishes 0.0.0.0:8001->8000 (no host networking, no shared external network); key env var `GATEWAY_API_KEY` in the deployment .env; stdlib services healthcheck with a python urllib one-liner; docker enabled+active; NTPSynchronized=yes
+  - seeds: `c10`, `c15`
+- `s12` — `lobes-cli licence + debug notes (docs/hebrew-realtime.md BlueTTS, _vocalize.py:41, plans/2026-09-18-hebrew-realtime-HANDOFF.md:149)`: BlueTTS weights declare no licence; Chatterbox is Apache-2.0; `TTS_DEBUG_TEXT`=1 recorded ON in the Spark .env with 'turn off before household use'
+  - seeds: `c11`
+- `s13` — `shabbos-goy scripts/scan-secrets.py:179-199`: endpoint check covers only http(s) URLs under url/host/endpoint keys in JSON-parseable files; ws://host:8001 in any tracked file passes silently
+  - seeds: `c12`
+- `s14` — `shabbos-goy cli/__init__.py:64-119, _commands/cli.py:30-43, _output.py, _errors.py, explain/catalog.py:12-135, tests/`: register(sub) contract; nested nouns must pass `parser_class`=type(p); handlers raise CliError (0/1/2); catalog `_ROOT` and learn `_TEXT` are template prose; no test forces catalog coverage for new verbs; bandit already skips B404/B603; coverage gate 60; teken rubric wants an overview verb per noun (inferred from cli.py:3-4, rubric source not read)
+  - seeds: `c13`
+- `s15` — `shabbos-goy pyproject.toml + uv pip list`: dependencies=\[\] , python>=3.12, pyyaml dev-only, line length 100; no hdate/zmanim/astral/pyluach installed
+  - seeds: `c3`, `c15`
+- `s16` — `shabbos-goy README.md, CLAUDE.md, AGENTS.override.md, AGENTS.colleague.md, QWEN.md, docs/`: all five restate the domain story independently (QWEN.md even shows 'sensibo set --mode cool --target 24'); ac/volume/mode verbs appear nowhere; docs/halacha-open-questions.md does not exist
+  - seeds: `c14`
+- `s17` — `issue #1 (guildmaster brief + lobes comment)`: invariants: no wake word, no confirmation, imperatives dropped not queued, classifier FP rate on ASR-transcribed audio is the headline metric, neutral speech only, intent+action logging only
+  - seeds: `c16`
+- `s18` — `agentculture/sensibo-cli#15 (filed 2026-09-18)`: upstream ask for acState on a read path (read --json / status verb); until it lands the dry-run set --power diff is the stopgap
+  - seeds: `c20`
+
+## Decisions
+
+- zmanim and the Yom Kippur date are computed in pure stdlib (NOAA sunset maths + Hebrew-calendar conversion) verified against published test vectors; dependencies stay \[\]
+- hint mapping: hot remark/wish -> AC power ON; cold remark/discomfort -> AC power OFF; unit assumed to stay in cool mode; if already in the requested state do nothing and say nothing
+- spoken AC status only on weekdays when asked; never in Shabbat/Yom Kippur mode; 'shabbos-goy ac status' always works
+- weekday mode: imperative, request and rebuke all act as commands; strict mode drops all three
+
+## Hard questions
+
+- risk: classifier approach is undecided (rules/lexicon vs a local LLM vs hybrid); a rules-first classifier is testable and deterministic but may miss colloquial/Yeshivish phrasing, which costs recall not safety
+
+## Open parks
+
+- [unknown_nonblocking] fixture corpus audio: who records the Hebrew utterances (operator voice vs TTS-synthesised) for the ASR-transcribed benchmark
+- [out_of_scope] additional actuators (lights, hot plate) and temperature/mode control
+- [follow_up] Yom Tov support and any Yom Kippur-specific behavioural difference beyond the calendar window
