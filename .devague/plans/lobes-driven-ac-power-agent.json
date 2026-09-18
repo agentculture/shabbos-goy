@@ -5,7 +5,7 @@
   "schema_version": 5,
   "status": "exported",
   "created": "2026-09-18T18:20:50Z",
-  "updated": "2026-09-18T18:23:06Z",
+  "updated": "2026-09-18T19:12:44Z",
   "targets": [
     {
       "id": "c1",
@@ -886,7 +886,10 @@
       "status": "confirmed",
       "acceptance_criteria": [
         "a script or pytest marker transcribes corpus audio through lobes POST /v1/audio/transcriptions and caches transcripts under tests/fixtures/asr/; the default test run uses the cache and needs no server",
-        "CI asserts strict mode acts on 0 of at least 60 ASR-transcribed command fixtures and reports hint recall against the 70 percent threshold; thresholds live in a committed file"
+        "CI asserts strict mode acts on 0 of at least 60 ASR-transcribed command fixtures and reports hint recall against the 70 percent threshold; thresholds live in a committed file",
+        "a local golden set lives under tests/golden/: golden.jsonl gives every case an id, the Hebrew text, the expected class set, expected intent and the expected act/no-act decision in strict and weekday mode, including multi-segment cases (a pause-split hint, a hint followed by a command) that exercise the joiner",
+        "one stdlib script drives the REAL lobes models from that set: synth (POST /v1/audio/speech), record (operator voice through PipeWire), transcribe (POST /v1/audio/transcriptions), stream (WAV through the live /v1/realtime session using this repo's own lobes client and joiner) and report (classify, gate, compare); report exits non-zero on any strict-mode action for a command or negative case",
+        "audio never enters git (tests/golden/audio/ is gitignored; operator recordings stay on the box); transcript caches are committed per audio source so the default pytest run re-checks the golden decisions with no server, and live checks run only under an explicit marker with the lobes URL and key in the environment"
       ],
       "deps": [
         "t10"

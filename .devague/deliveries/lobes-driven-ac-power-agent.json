@@ -1,0 +1,79 @@
+{
+  "plan_slug": "lobes-driven-ac-power-agent",
+  "schema_version": 2,
+  "created": "2026-09-18T19:31:33Z",
+  "updated": "2026-09-18T19:31:33Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "the decider is Gemma directly: each utterance plus a rolling context goes to the lobes senses role (Gemma-4-26B-A4B), which returns a structured decision (class, intent, confidence); this repo's code treats it as untrusted input and still enforces policy.may_act, whitelist, power-only argument validation, rate limits and the strict-mode delay; if senses is down, slow or malformed the agent does nothing",
+      "task_ref": "t12",
+      "reason": "user decision 2026-09-18: the product must not rest on a pre-set group of phrasings; an agent has to decide",
+      "affects": [
+        "t13",
+        "t14",
+        "t18",
+        "c1",
+        "c16",
+        "c19",
+        "c5"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "risky",
+      "seq": 1
+    },
+    {
+      "id": "d2",
+      "what": "the rule/lexicon classifier built in t10 is removed from the runtime and kept only as a test oracle and as the seed corpus of the golden set; the guarantee that a spoken command never acts in strict mode is no longer proven deterministically but evidenced by the golden set run against the real model (temperature 0, zero strict-mode actions on command fixtures as a hard threshold)",
+      "task_ref": "t10",
+      "reason": "user decision 2026-09-18: chose to remove the rules from the runtime, re-affirmed after the consequence was spelled out",
+      "affects": [
+        "t12",
+        "c16",
+        "h13",
+        "c34",
+        "h27",
+        "c28",
+        "h21"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "risky",
+      "seq": 2
+    },
+    {
+      "id": "d3",
+      "what": "the agent carries a trimmed rolling context window (recent utterances, current mode and AC state) into each model call, in memory only, gone on restart; this is the intended meaning of the 25h requirement",
+      "task_ref": "t12",
+      "reason": "user clarification 2026-09-18: c29 was about an agent's accumulated context, which the first spec reading reduced to buffer bounds",
+      "affects": [
+        "t6",
+        "c29",
+        "h22"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 3
+    },
+    {
+      "id": "d4",
+      "what": "t17 becomes a local golden set: a committed manifest of utterances with expected class, intent and would-act; TTS-only audio kept local (gitignored, regenerable); two entrances, audio through the full path and text sent directly to Gemma, run against the real model on the box under a pytest marker that never runs in CI; default CI runs use a fake decider replaying recorded decisions",
+      "task_ref": "t17",
+      "reason": "user request 2026-09-18: a golden set for local tests so integration is tested on the real model",
+      "affects": [
+        "c28",
+        "h21",
+        "h1"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 4
+    }
+  ],
+  "evidence": [],
+  "deltas": [],
+  "supersessions": []
+}
