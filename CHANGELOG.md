@@ -17,6 +17,25 @@ imported. `pyyaml`, `pytest` and `teken` remain dev-only.
 
 ### Added
 
+- **`grant` key injection.** Config may name `grant` secrets
+  (`{"grant": {"sensibo_api_key": …, "lobes_api_key": …}}`). The Sensibo key is
+  injected per `sensibo` call by a closed `grant run --inject` prefix around
+  the locked argv and never enters this process; the lobes key is obtained by
+  re-exec under `grant`. `grant` is called as a subprocess, so runtime
+  dependencies stay empty.
+- **Prompt `p2`.** The model returns `{class, state, need, confidence}`: what
+  it heard and what would serve the speaker, as comparatives. This code maps
+  `need` to the intent and refuses a hint whose `state` and `need` disagree.
+  Found live: the previous prompt labelled one cold phrasing `cool` in about
+  1 identical run in 12, which would switch the AC on for a cold person.
+- **Asymmetric power limits.** Power off after a 60 s debounce, power on
+  240 s after the last off, a daily cap; operator controls bypass the
+  intervals but not the cap. Found live: a symmetric 10-minute lockout refused
+  two correctly heard cold remarks.
+- Golden set: 295 rows, and acting with an intent the row forbids is its own
+  release-blocking threshold (`wrong_actions_max = 0`).
+- `tests/conftest.py`: no test can see the host's config or re-exec under
+  `grant`.
 - `docs/halacha-open-questions.md` — the questions this project deliberately
   does not answer, recorded as questions: what the device is halachically
   (non-Jew, timer, *grama*, none of these), speaking near an always-listening

@@ -219,13 +219,24 @@ doing it during the day would be the thing this project exists to avoid.
    (`tests/fixtures/config.example.json` is the full shape, with placeholder
    values). It holds the location and timezone, the candle-lighting offset,
    the tzeit definition, Israel or diaspora, the whitelist (which tools, which
-   Sensibo pod ids, which arguments), the rate limits, the strict-mode delay,
+   Sensibo pod ids, which arguments), the rate limits (power **off** needs
+   only a 60 s debounce, power **on** waits 240 s after the last off so the
+   compressor is not short-cycled, plus a daily cap; the CLI and dashboard
+   bypass the intervals but not the cap), the strict-mode delay,
    the volume bounds and the dashboard bind address.
 2. **Set the secrets in the environment**, never in a tracked file:
    `SHABBOS_GOY_LOBES_URL` and `SHABBOS_GOY_LOBES_API_KEY` (or lobes' own
    `GATEWAY_API_KEY`) for the speech stack and the `senses` role, and
    `SENSIBO_API_KEY` for the AC. There is no default host, port or key
-   anywhere in this package.
+   anywhere in this package. **Or keep both keys in
+   [`grant`](https://github.com/agentculture/grant)**, the per-user secrets
+   manager, and name the secrets in the config:
+   `{"grant": {"sensibo_api_key": "SENSIBO_API_KEY", "lobes_api_key": "LOBES_GATEWAY_API_KEY"}}`.
+   The Sensibo key is then injected into each `sensibo` child process and
+   never enters this one; the lobes key is obtained by the process
+   re-executing itself under `grant run --inject`, so it lives only in the
+   listener's environment and in no file. A key already in the environment
+   always wins. `preflight` checks `grant` for the secret's metadata only.
 3. **Unset `TTS_DEBUG_TEXT` on the lobes box.** It logs spoken text and is on
    for development. Turn it off before household use.
 4. **Set the volume.** The default is silent. In strict mode the agent says
