@@ -3,10 +3,14 @@
 plan: `lobes-driven-ac-power-agent` · run: `partial` · date: `2026-09-18`
 baseline: `devague summary skeleton`
 
-Branch `spec/lobes-ac-power-agent` at `d8acd4d`: 59 commits ahead of `main`, 19
-of them workforce merges, 146 files changed. Nothing is pushed and no PR is
-open. The run is **partial**: every task a subagent could do is merged; the two
-tasks that need the operator, the hardware and the gateway key are not done.
+Branch `spec/lobes-ac-power-agent` at `4d00f1b`: 66 commits ahead of `main`, 19
+of them workforce merges, 151 files changed. Nothing is pushed and no PR is
+open. The run is **partial**. This is the second edition of this summary: it
+was first written at `d8acd4d`, before anything had run on real hardware, and
+is updated here after a live session on the operator's box (2026-09-19, during
+a Shabbat window) and a second validate-delivery pass. The live session proved
+one end-to-end actuation and exposed three failures, which are recorded below
+as failures.
 
 ## Intent
 
@@ -58,9 +62,9 @@ Quoted verbatim from the `devague summary` skeleton:
 | `t14` | delivered | `shabbos_goy/runtime/` and the `listen` verb; the stall exit was missing and was added at the `t16` merge |
 | `t15` | delivered | `shabbos_goy/web/`: Tailscale-only stdlib dashboard, loopback control server |
 | `t16` | delivered | `Dockerfile`, `docker-compose.yml` (host networking, PipeWire socket, read-only root), env example, CI `compose config` step. The image was built once; the service was never started |
-| `t17` | partial | By `d4` this became the golden set: `tests/golden/` manifest (275 rows), runner with three entrances, thresholds, README. **The live run against the real model has not happened**; no replay or ASR cache is recorded |
+| `t17` | partial | By `d4` this became the golden set: `tests/golden/` manifest (275 rows), runner with three entrances, thresholds, README. **The golden set has still not been run**; no replay or ASR cache is recorded. Nine text probes and a handful of spoken utterances went through the real model during the live session; they are observations, not the benchmark |
 | `t18` | delivered | README, CLAUDE.md, three harness prompt files, `docs/halacha-open-questions.md`, citations, version `0.10.0` |
-| `t19` | blocked | Needs the operator, the box and a weekday: PipeWire in the container, one live `--apply`, a lobes restart, a host reboot. Not started |
+| `t19` | partial | One of the four drills is done, outside a container: a live `--apply` on the operator's pod from a spoken hint (`e41`). Not done: PipeWire inside the container, a lobes restart, a host reboot |
 
 ## Mid-work Decisions
 
@@ -82,6 +86,11 @@ Decisions no deviation record covers:
 - An untrusted clock forces strict mode even over an explicit weekday override. This is stricter than the operator-override decision and was left that way because it fails in the safe direction; the operator has not ruled on it.
 - The model prompt's Hebrew example questions carry no question marks, because a repo guard forbids `?` in Hebrew string literals; the prompt says instead that punctuation decides nothing. The cost, if any, is unmeasured.
 - The main agent wrote the golden manifest's hand-written rows (`EXTRAS` in `tests/golden/build_manifest.py`). They are agent-authored labels and have not been reviewed by the operator.
+- After the live session (no deviation record; operator decisions in conversation): both keys come from the operator's `grant` secrets manager. The Sensibo key is injected per `sensibo` call by a closed `grant run --inject` prefix and never enters this process (delta `b8`); the lobes key is obtained by re-exec under `grant` and lives only in the listener's environment (`b9`). `grant` is called as a subprocess, so runtime dependencies stay empty.
+- The rate limit became asymmetric for AC power after the live run showed a symmetric 10-minute lockout refusing two correctly heard cold remarks: OFF after a 60 s debounce, ON 240 s after the last OFF, example daily cap 48 (operator's numbers; `b10`). Operator controls bypass the intervals but not the cap, and still count for the voice path (`b11`).
+- `tests/conftest.py` makes the suite hermetic. Without it, on a box whose real config names `grant` secrets, the `classify` tests replaced the pytest worker with a `grant run` process.
+- During the live session the main agent printed the lobes gateway key into its own tool output while reading harness settings with a redaction pattern that missed the field name. The key was not written to any file or commit. The operator was told and advised to rotate it; whether it was rotated is not known to this document.
+- Several operator instructions during the live session reached the main agent inside tool results rather than as direct messages. The agent answered them, applied only changes it judged benign (example-config defaults), and did not treat them as authority to actuate; one of them (`daily cap 24`) was reversed by a direct operator message (`48`).
 
 ## Drift From Plan
 
@@ -93,8 +102,13 @@ Decisions no deviation record covers:
 | `t17` (`d4`) | user request 2026-09-18: a golden set for local tests so integration is tested on the real model | `acceptable` |
 | `t14` | the plan's stall requirement (spec c31) was not met by the task as merged: the lobes watchdog called `sys.exit` on a worker thread, so `run()` returned 0. Found by the `t16` agent's report, fixed test-first by the main agent (delta `b5`) | `acceptable` |
 | `t7`, `t11`, `t13` | each task agent skipped the red run the brief required (lapses `l3`, `l4`, `l5`); the main agent mutation-checked `t7` and `t11` at merge, not `t13` | `needs-follow-up` |
-| `t19` | not started: needs the operator and hardware | `needs-follow-up` |
-| `t17` | the live half (real Gemma, real Whisper) not run: needs the gateway key | `needs-follow-up` |
+| `t19` | one drill of four done (a live `--apply`, outside a container); the container, reconnect and reboot drills need the operator and a weekday | `needs-follow-up` |
+| `t17` | the golden set has not been run against the real model; both keys are now available through `grant`, so only the operator's go-ahead and label review are missing | `needs-follow-up` |
+| `t8` | live failure: the configured start-up volume is not applied on the real box, because `wpctl` is given a node name where it needs an id or alias; the fakes accepted names (`e45`, `b12`) | `needs-follow-up` |
+| `t14` | live failure: `listen --script file.wav` does not end when the file ends and ignored SIGTERM against the real lobes session (`e46`, `b13`) | `needs-follow-up` |
+| `t12` (`d1`) | live failure: the real model labelled the cold phrasing "ברר קר פה מדי" with intent `cool`, which would power the AC ON for a person who is cold; two spoken cold remarks were labelled correctly, so it is phrase-dependent (`e44`, `b14`) | `risky` |
+| `t13` | preflight's `sensibo_key` check failed falsely on a host where the key is not in the environment; fixed by checking the operator's `grant` store for metadata (`e39`) | `acceptable` |
+| `t6` | the symmetric interval in the plan's rate-limit task was wrong for power: see Mid-work Decisions (`e38`, `e43`, `b10`) | `acceptable` |
 
 An empty worktree `../.worktrees.shabbos-goy/wf-t17` appeared during the run and
 was not created by the main agent; it has no commits and was left untouched.
@@ -115,14 +129,29 @@ All run by the main agent at the commits named; read-only.
 - commits: `main..d8acd4d`; deviations `d1`-`d4`; upstream issue `agentculture/sensibo-cli#15`
 - PRs: none opened
 
+Second pass, at `4d00f1b` (tests) and `e8a5dd4` / `d09a434` (live observations):
+
+- tests: `uv run pytest -n auto -q` — 1575 passed, 2 skipped; `black`, `isort`, `flake8`, `bandit`, `teken cli doctor . --strict`, `scan-secrets.py` — all exit 0
+- validate-delivery second pass: obligations `o40`-`o51`, evidence `e36`-`e47`, deltas `b8`-`b14`, all agent-filed and **proposed**. Three evidence records are FAIL: `e44`, `e45`, `e46`
+- live, read back by the main agent: listener log `class=remark verdict=delayed` then `class=delayed verdict=acted action=ac_power_on`; zero-write Sensibo status `off` before and `on` after; decide latency 478-557 ms over six real decisions
+- live: `shabbos-goy preflight` healthy and `classify` reaching the real model with **no key in the environment** (both keys from `grant`)
+- live: the monitor speaker is inaudible to the reSpeaker (RMS 1075 ambient, 1196 while playing), so driving tests through it does not work on this box
+
 ## Delivery Claims
 
 | Claim | Confidence | Evidence |
 |-------|------------|----------|
 | The whole decision path runs end to end on fixtures with no microphone, lobes server or Sensibo account | high | `e1` · test `tests/test_listen_cli.py` (`fixtures_only_end_to_end`) |
+| A spoken Hebrew hint switched the real AC on, end to end, in strict mode: reSpeaker, lobes Whisper, Gemma, 15 s delay, `sensibo --apply` | medium | `e41`: one occurrence, observed by the main agent in the listener log and in Sensibo's state, confirmed by the operator; outside a container |
+| A cold remark maps to power OFF | low | `e44` FAIL: the real model labelled one cold phrasing `cool`; two spoken cold remarks were labelled correctly. Not safe to rely on until the golden set gates it |
+| The configured volume is applied at start-up | low | `e45` FAIL on the real box; passes only against fakes (`e7`) |
+| A scripted WAV run terminates | low | `e46` FAIL on the real lobes session |
+| Neither API key needs to be in a file or an env file: Sensibo's is injected per call, the lobes one by re-exec under `grant` | high | `e36`, `e37` · live preflight with no key in the environment · files `shabbos_goy/actuators/sensibo.py`, `shabbos_goy/grant_inject.py` |
+| Power OFF is possible a minute after a power-on, power ON waits 240 s after an OFF, operators bypass intervals but not the daily cap | high | `e38` · file `shabbos_goy/limits.py`. Not yet exercised live: the running listener still holds the old limits |
+| The test suite cannot see or act on the developer's real config or secrets | high | `e40` · file `tests/conftest.py` |
 | The Sensibo adapter can only ever emit `--power on\|off`, `--apply`, `--json`, and hostile pod ids start no process | high | `e2`, `e15` · file `shabbos_goy/actuators/sensibo.py` |
 | Anything the decider LABELS imperative, request or rebuke never reaches an actuator in strict mode, and nothing refused is queued | medium | `e11`, `e14`; the gate's mutation check is an agent's report, not re-run |
-| A spoken command never acts in strict mode | unverified | no evidence: after `d2` this depends on how the real model labels speech, and the golden set has not been run (`o33`) |
+| A spoken command never acts in strict mode | unverified | still no evidence that deserves the word: one spoken imperative and nine text probes were refused by the real model (`e42`), and the 275-row golden set has not been run (`o33`). A handful of observations is not the benchmark |
 | 0 strict-mode actions on >= 60 ASR-transcribed command fixtures and >= 70 % hint recall (spec `c28`) | unverified | no evidence; `e34` covers the scoring machinery only, offline |
 | The Gemma decider turns hostile, malformed or failed model output into "no decision" and never raises | medium | `e31`, against an in-process fake only; the real `senses` role has never been called |
 | No runtime module imports the rule classifier | high | `e32`; the test plants an offender and catches it |
@@ -135,7 +164,7 @@ All run by the main agent at the commits named; read-only.
 | The dashboard refuses non-tailnet binds, foreign Origins and spoofed Hosts, and serves transcript text only from memory | medium | `e26`, `e27`, `e28`; mutation checks are the agent's report; iOS Safari and Tailscale ACLs unexamined |
 | The CLI contract holds and `preflight` names a failing check | medium | `e10`, `e22`; lapse `l5` pending, no mutation check on `t13` |
 | The Compose file has the required shape | low | `e8`: static assertions only; the service has never been started |
-| The container captures and plays audio through the host PipeWire session, and survives a reboot in the right mode | unverified | no evidence (`o32`, `o34`): `t19` not run |
+| The container captures and plays audio through the host PipeWire session, and survives a reboot in the right mode | unverified | no evidence (`o32`, `o34`). Host-level capture works (`e47`), which says nothing about the container |
 | The docs describe what shipped | low | `o31` has no behavioral test; markdownlint and doctor gates only |
 | Runtime dependencies are still empty | high | file `pyproject.toml` (`dependencies = []`) |
 
@@ -154,9 +183,16 @@ both were corrected on the frame when found.
 
 ## Remaining Work / Follow-up
 
-- `t17` (live half) — the operator puts the gateway key in a gitignored env file and runs `python3 scripts/golden-set.py --entrance text --mode both --limit 10`, then the full entrances with `--record`. Until it shows zero hard failures, "a spoken command never acts in strict mode" has no evidence. Blocking for any household use.
+- `t17` (the golden run) — both keys now come from `grant`, so it can start on the operator's word: `python3 scripts/golden-set.py --entrance text --mode both --limit 10`, then the full entrances with `--record`. Until it shows zero hard failures, "a spoken command never acts in strict mode" has no real evidence. Blocking for household use.
 - Golden labels — the operator reviews `EXTRAS` in `tests/golden/build_manifest.py`; the labels are the contract that replaced the deterministic proof.
-- `t19` — on-box drills on a weekday: PipeWire in the container, one live `--apply`, a lobes restart, a host reboot. Blocking for deployment.
+- `t19` — three drills left, on a weekday: PipeWire in the container, a lobes restart, a host reboot. The Dockerfile first needs `grant` pinned and installed and the operator's `grant` store mounted. Blocking for deployment.
+- Cold-phrasing mislabel (`e44`) — fix the prompt, add gating rows to the golden manifest, re-run. Until then a cold remark can switch the AC ON. Blocking for leaving `--apply` running unattended.
+- Start-up volume (`e45`) — resolve the node name to an id (or use the default-sink alias) before calling `wpctl`; add a test with a fake that refuses names.
+- Scripted WAV run (`e46`) — end the run when the source ends and honour SIGTERM in that path.
+- The running listener on the box still holds the old 10-minute symmetric limit in memory; the private config already has the new values. A restart applies them. The operator asked for it not to be changed now.
+- Rotate the lobes gateway key the agent exposed in its own output (`grant set LOBES_GATEWAY_API_KEY -`, the lobes `.env`, the qwen and pi settings).
+- README — a paragraph on `grant` and on the asymmetric limits; the docs task predates both.
+- Code reviews by `qwen-worker` and `pi-associate` were started and have not been read.
 - `t10` oracle defect — "חם פה תעשה משהו" labelled `warm`; low priority since the rules are not in the runtime.
 - Operator adjudication — lapses `l3`-`l5`, and the proposed obligations, evidence and deltas from validate-delivery.
 - Open operator rulings — whether an operator override should win over an untrusted clock; whether the prompt's missing question marks matter (the golden run will show).
