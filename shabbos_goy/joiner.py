@@ -12,12 +12,27 @@ This module is a **pure state machine**. It holds no thread, spawns no
 timer, and never sleeps. It reacts only to:
 
 - events handed to :meth:`TranscriptJoiner.handle_event`, and
-- an **injected clock**: the caller periodically calls
-  :meth:`TranscriptJoiner.poll` with the current time (in the same
-  ``at_ms`` units as the boundary events), and the joiner decides then
-  whether a pending buffer has waited long enough with no continuation to
-  flush it. Tests drive this directly with arbitrary ``now_ms`` values, so
-  no real sleeping is ever required.
+- an **injected clock**, in two places:
+
+  - a **receive clock** (constructor's ``clock``: a zero-arg callable
+    returning milliseconds, default ``time.monotonic`` based) that the
+    joiner samples itself, once, whenever a boundary event is handled --
+    its *local receive time*. This is what a gap is computed from
+    whenever the wire's own ``at_ms`` is missing on either side of the
+    gap (see below): ``lobes/realtime/_session.py`` declares boundary
+    events' ``at_ms`` as ``int | None = None``, so a missing ``at_ms`` is
+    a legitimate wire shape, not an error, and must never be treated as
+    "the gap is large" -- that would split one sentence's two ASR halves
+    into two utterances, and a standalone second half can mean the
+    *opposite* of what the speaker intended (e.g. "הלוואי ש" + "היה קר"
+    -> the standalone remark "היה קר").
+  - the caller periodically calling :meth:`TranscriptJoiner.poll`, either
+    with an explicit ``now_ms`` (for ``at_ms``-driven timeouts) or with no
+    argument at all, in which case the joiner reads its own injected
+    receive clock. Either way, the joiner decides then whether a pending
+    chain has waited long enough with no continuation to close it. Tests
+    drive both forms directly (an explicit ``now_ms``, or a hand-advanced
+    fake receive clock), so no real sleeping is ever required.
 
 Event names follow the real lobes/OpenAI-Realtime contract
 (``lobes-cli``'s ``docs/contracts/realtime-tool-calling.md``, section 4):
@@ -37,25 +52,37 @@ types above, for callers (and tests) that don't carry the full lobes
 envelope (and, for those, transcripts are matched FIFO to the oldest
 still-untexted segment instead of by ``item_id``).
 
-Join rule (acceptance criterion 1): when a ``speech_started`` event's
-``at_ms`` arrives less than ``gap_threshold_ms`` after the *previous*
-``speech_stopped.at_ms``, the two segments are treated as one continued
-utterance. Their texts are joined **in segment order** (the order the
-segments started in, not the order their transcripts happened to arrive)
-with a single space, and the callback fires once with the full text.
+Join rule (acceptance criterion 1): a ``speech_started`` continues the
+previous chain (its text joins the prior segments' rather than starting a
+new utterance) when the gap since the previous ``speech_stopped`` is below
+``gap_threshold_ms``. That gap is computed:
+
+- from ``at_ms`` -- ``speech_started.at_ms - speech_stopped.at_ms`` --
+  **only when both events carried an** ``at_ms``;
+- otherwise, from the joiner's own local receive timestamps for those same
+  two events (sampled from the injected receive clock when each event was
+  handled). This covers ``at_ms`` missing on *either* side: both events
+  missing it, or only one of them (e.g. the stop had ``at_ms`` but the
+  next start did not -- the wire can mix the two within one session).
+
+Segments joined this way have their texts concatenated **in segment
+order** (the order the segments started in, not the order their
+transcripts happened to arrive) with a single space, and the callback
+fires once with the full text.
 
 Safety rule -- nothing but a complete, gap-closed utterance is ever
 emitted (acceptance criterion 2). Every path that ends a chain of
 segments is one of exactly three:
 
 1. the gap timeout elapsing via :meth:`poll` with no continuation having
-   started;
-2. a new segment starting after a gap at or above ``gap_threshold_ms``
-   (the session itself already ended that turn); or
+   started -- on whichever timeline (``at_ms`` or local receive time) the
+   pending ``speech_stopped`` used to set its deadline;
+2. a new segment starting after a gap (computed as above) at or above
+   ``gap_threshold_ms`` (the session itself already ended that turn); or
 3. a reconnect -- a ``speech_started.at_ms`` *smaller* than the previous
-   ``speech_stopped.at_ms`` (the speech session's clock restarted, so a
-   short/negative "gap" would otherwise look like a continuation) or an
-   explicit :meth:`reset` call.
+   ``speech_stopped.at_ms`` -- **only evaluated when both carried an**
+   ``at_ms``, since a missing ``at_ms`` is normal wire behaviour, not a
+   reconnect signal -- or an explicit :meth:`reset` call.
 
 Path 3 is different from the other two: a reconnect means the turn that
 was in progress got cut off mid-sentence (lobes: "one session per
@@ -81,6 +108,7 @@ flushed, discarded, or reset) is orphaned and dropped.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
@@ -99,6 +127,10 @@ _TRANSCRIPT_TYPES = frozenset(
 )
 
 
+def _default_clock() -> float:
+    return time.monotonic() * 1000.0
+
+
 @dataclass
 class _Segment:
     item_id: object
@@ -111,12 +143,13 @@ class TranscriptJoiner:
     Parameters
     ----------
     gap_threshold_ms:
-        The maximum silence gap (in the same units as event ``at_ms``,
-        milliseconds) between one segment's ``speech_stopped`` and the
-        next segment's ``speech_started`` that still counts as one
-        continued utterance. Must match (or be looser than) the speech
-        session's own silence-based turn-ending window, since a gap at or
-        above it means the session itself already ended the turn.
+        The maximum silence gap (in milliseconds, on whichever timeline --
+        ``at_ms`` or local receive time -- the gap ends up computed on)
+        between one segment's ``speech_stopped`` and the next segment's
+        ``speech_started`` that still counts as one continued utterance.
+        Must match (or be looser than) the speech session's own
+        silence-based turn-ending window, since a gap at or above it means
+        the session itself already ended the turn.
     on_utterance:
         Called with the joined (or single, un-joined) utterance text
         exactly once per completed, non-discarded chain. This stands in
@@ -129,6 +162,13 @@ class TranscriptJoiner:
         the whole in-progress utterance (see module docstring) rather
         than emitting a truncated fragment, and counts it in
         :attr:`dropped_overflow`.
+    clock:
+        Zero-arg callable returning the current time in milliseconds,
+        used ONLY as a local *receive clock* -- sampled once whenever a
+        boundary event is handled -- to compute gaps and timeouts when the
+        wire's own ``at_ms`` is missing on either side. Defaults to a
+        ``time.monotonic``-based clock. Tests inject a fake, hand-advanced
+        one instead of sleeping.
     """
 
     def __init__(
@@ -136,6 +176,7 @@ class TranscriptJoiner:
         gap_threshold_ms: int = _DEFAULT_GAP_THRESHOLD_MS,
         on_utterance: Optional[Callable[[str], None]] = None,
         max_buffer_chars: int = _DEFAULT_MAX_BUFFER_CHARS,
+        clock: Callable[[], float] = _default_clock,
     ) -> None:
         if gap_threshold_ms <= 0:
             raise ValueError("gap_threshold_ms must be positive")
@@ -144,13 +185,21 @@ class TranscriptJoiner:
         self._gap_threshold_ms = gap_threshold_ms
         self._on_utterance = on_utterance
         self._max_buffer_chars = max_buffer_chars
+        self._clock = clock
 
         self._segments: List[_Segment] = []
         self._overflowed = False
         self._last_stopped_at_ms: Optional[int] = None
-        # The at_ms deadline at/after which a poll() must close a pending
-        # chain if no qualifying continuation has arrived by then.
+        # Local receive-time stamp of the last speech_stopped, sampled
+        # from the injected clock -- tracked unconditionally (even when
+        # at_ms is also present) so a *later* event missing at_ms can
+        # still fall back to it.
+        self._last_stopped_local_ms: Optional[float] = None
+        # Exactly one of these two is set while a chain is pending,
+        # matching whichever timeline the pending speech_stopped's gap
+        # timeout was computed on.
         self._flush_due_at_ms: Optional[int] = None
+        self._flush_due_local_ms: Optional[float] = None
         self._auto_item_seq = 0
 
         #: Count of utterances discarded whole because they would have
@@ -173,16 +222,29 @@ class TranscriptJoiner:
             self._on_transcript(event.get("item_id"), event.get("text") or "")
         # Unknown event types are ignored by design (forward-compatible).
 
-    def poll(self, now_ms: int) -> None:
+    def poll(self, now_ms: Optional[int] = None) -> None:
         """Give the joiner the current time (an injected clock).
 
         If a buffered chain has been waiting for a continuation for at
         least ``gap_threshold_ms`` with none arriving, close it now (and
         emit it, unless it was already discarded for overflow). Safe to
         call at any cadence, including when nothing is buffered.
+
+        ``now_ms``, when given, is compared against an ``at_ms``-timeline
+        deadline (the pending ``speech_stopped`` carried an ``at_ms``).
+        When the pending deadline is on the local receive-time timeline
+        instead (the ``speech_stopped`` had no ``at_ms``), ``now_ms`` is
+        used if given, otherwise the joiner samples its own injected
+        receive clock.
         """
-        if self._flush_due_at_ms is not None and now_ms >= self._flush_due_at_ms:
-            self._close_chain(emit=True)
+        if self._flush_due_at_ms is not None:
+            if now_ms is not None and now_ms >= self._flush_due_at_ms:
+                self._close_chain(emit=True)
+            return
+        if self._flush_due_local_ms is not None:
+            effective_now = now_ms if now_ms is not None else self._clock()
+            if effective_now >= self._flush_due_local_ms:
+                self._close_chain(emit=True)
 
     def reset(self) -> None:
         """Discard whatever is buffered without emitting it.
@@ -195,7 +257,11 @@ class TranscriptJoiner:
         self._discard_reconnect()
 
     def _on_speech_started(self, at_ms: Optional[int], item_id: object) -> None:
+        local_now = self._clock()
         if self._last_stopped_at_ms is not None and at_ms is not None:
+            # Both sides carry at_ms: use it, including reconnect
+            # detection (a regression is only meaningful on this
+            # timeline).
             gap = at_ms - self._last_stopped_at_ms
             if gap < 0:
                 # Reconnect: the session's clock restarted. Never treat
@@ -205,7 +271,21 @@ class TranscriptJoiner:
                 # A genuine long pause: the session itself already ended
                 # that turn. Close (and emit) the prior chain.
                 self._close_chain(emit=True)
+        elif self._last_stopped_local_ms is not None:
+            # at_ms missing on one or both sides: fall back to local
+            # receive-time gap. A missing at_ms is a legitimate wire shape
+            # (lobes/realtime/_session.py: `at_ms: int | None = None`), so
+            # this must never be treated as "the gap is large" by
+            # default -- only an actually-long receive-time gap closes
+            # the chain. No reconnect check here: a monotonic receive
+            # clock cannot regress the way a restarted session's at_ms
+            # can, and the reconnect rule applies only when both sides
+            # carried at_ms.
+            local_gap = local_now - self._last_stopped_local_ms
+            if local_gap >= self._gap_threshold_ms:
+                self._close_chain(emit=True)
         self._flush_due_at_ms = None
+        self._flush_due_local_ms = None
         self._auto_item_seq += 1
         effective_item_id = item_id if item_id is not None else f"_auto_{self._auto_item_seq}"
         if not self._overflowed:
@@ -214,14 +294,19 @@ class TranscriptJoiner:
         # don't bother tracking further segments until the chain closes.
 
     def _on_speech_stopped(self, at_ms: Optional[int]) -> None:
+        local_now = self._clock()
         self._last_stopped_at_ms = at_ms
+        self._last_stopped_local_ms = local_now
         if at_ms is not None:
             self._flush_due_at_ms = at_ms + self._gap_threshold_ms
+            self._flush_due_local_ms = None
         else:
-            # No timestamp to reason about a gap from: close now rather
-            # than buffer indefinitely with no way to time out.
+            # No at_ms to reason about a gap/timeout from: use the local
+            # receive clock instead of closing immediately -- a missing
+            # at_ms must never look like "the continuation never arrives
+            # in time" any sooner than a real timeout does.
             self._flush_due_at_ms = None
-            self._close_chain(emit=True)
+            self._flush_due_local_ms = local_now + self._gap_threshold_ms
 
     def _on_transcript(self, item_id: object, text: str) -> None:
         if not text:
@@ -267,7 +352,9 @@ class TranscriptJoiner:
         self._segments = []
         self._overflowed = False
         self._last_stopped_at_ms = None
+        self._last_stopped_local_ms = None
         self._flush_due_at_ms = None
+        self._flush_due_local_ms = None
         if was_overflowed:
             return  # already discarded; never emit any part of it
         if emit and text and self._on_utterance is not None:

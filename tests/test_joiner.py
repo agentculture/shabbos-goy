@@ -25,6 +25,16 @@ joined utterance carrying the full text for a split hint, and that it
 NEVER emits any part of a discarded (overflow or reconnect/reset)
 utterance -- a fragment reaching that callback is exactly the failure this
 module exists to prevent.
+
+``lobes/realtime/_session.py`` declares boundary events' ``at_ms`` as
+``int | None = None``, so a missing ``at_ms`` is a legitimate wire shape,
+not an error. A dedicated block of tests below (using a hand-advanced fake
+receive clock injected as the joiner's ``clock``) proves that a missing
+``at_ms`` never gets treated as "the gap is large": a short *receive-time*
+gap still joins, a genuinely long one still separates, a dangling half
+still only flushes on the receive-clock's own timeout, and a mixed
+at_ms/no-at_ms pair still falls back to receive time correctly. None of
+these ever sleep for real -- the fake clock's value is advanced by hand.
 """
 
 from __future__ import annotations
@@ -34,14 +44,33 @@ from shabbos_goy.joiner import TranscriptJoiner
 GAP_MS = 500
 
 
-def _joiner(threshold_ms: int = GAP_MS, max_buffer_chars: int = 4096):
+def _joiner(threshold_ms: int = GAP_MS, max_buffer_chars: int = 4096, clock=None):
     utterances: list[str] = []
+    kwargs = {}
+    if clock is not None:
+        kwargs["clock"] = clock
     joiner = TranscriptJoiner(
         gap_threshold_ms=threshold_ms,
         on_utterance=utterances.append,
         max_buffer_chars=max_buffer_chars,
+        **kwargs,
     )
     return joiner, utterances
+
+
+class _FakeClock:
+    """A hand-advanced stand-in for the joiner's injected receive clock.
+
+    Tests set ``.value`` directly (no real sleeping, ever) before feeding
+    each event, then call ``joiner.poll()`` with no argument so the
+    joiner samples this fake clock instead of a real one.
+    """
+
+    def __init__(self, start: float = 0.0) -> None:
+        self.value = start
+
+    def __call__(self) -> float:
+        return self.value
 
 
 def test_split_hint_classifies_as_one_utterance() -> None:
@@ -265,6 +294,112 @@ def test_late_transcript_after_next_speech_started_still_joins_in_order() -> Non
 
     # Joined in segment (start) order -- "חם" then "פה" -- despite item_1's
     # text arriving after item_2's speech_started.
+    assert utterances == ["חם פה"]
+
+
+def test_split_hint_with_at_ms_none_and_short_receive_gap_joins() -> None:
+    """(a) All events carry at_ms=None; a short RECEIVE-time gap still
+    joins into one utterance -- a missing at_ms must never look like a
+    large gap by default."""
+    clock = _FakeClock(start=0.0)
+    joiner, utterances = _joiner(clock=clock)
+
+    clock.value = 0
+    joiner.handle_event({"type": "speech_started", "at_ms": None})
+    clock.value = 100
+    joiner.handle_event({"type": "speech_stopped", "at_ms": None})
+    joiner.handle_event({"type": "transcription.completed", "text": "הלוואי ש"})
+
+    # Received 50ms after the stop (< 500ms threshold) -> continuation.
+    clock.value = 150
+    joiner.handle_event({"type": "speech_started", "at_ms": None})
+    clock.value = 550
+    joiner.handle_event({"type": "speech_stopped", "at_ms": None})
+    joiner.handle_event({"type": "transcription.completed", "text": "היה קר"})
+
+    clock.value = 1_051  # 550 + 500 + 1: well past the receive-time timeout
+    joiner.poll()  # no argument -> samples the injected (fake) receive clock
+
+    assert utterances == ["הלוואי ש היה קר"]
+
+
+def test_split_hint_with_at_ms_none_and_long_receive_gap_separates() -> None:
+    """(b) Same, but the RECEIVE-time gap is long -> two utterances, never
+    one wrongly-joined (or wrongly-standalone-second-half) remark."""
+    clock = _FakeClock(start=0.0)
+    joiner, utterances = _joiner(clock=clock)
+
+    clock.value = 0
+    joiner.handle_event({"type": "speech_started", "at_ms": None})
+    clock.value = 100
+    joiner.handle_event({"type": "speech_stopped", "at_ms": None})
+    joiner.handle_event({"type": "transcription.completed", "text": "חם פה"})
+
+    # Received 2000ms after the stop -- well over the 500ms threshold.
+    clock.value = 2_100
+    joiner.handle_event({"type": "speech_started", "at_ms": None})
+    clock.value = 2_500
+    joiner.handle_event({"type": "speech_stopped", "at_ms": None})
+    joiner.handle_event({"type": "transcription.completed", "text": "קר פה"})
+
+    clock.value = 3_001  # past the second segment's own receive-time timeout
+    joiner.poll()
+
+    assert utterances == ["חם פה", "קר פה"]
+
+
+def test_dangling_half_with_at_ms_none_flushes_once_on_receive_timeout() -> None:
+    """(c) A dangling half whose continuation never arrives, with
+    at_ms=None throughout, is emitted only once the RECEIVE clock (not
+    at_ms) has timed out -- and exactly once, never again afterwards."""
+    clock = _FakeClock(start=0.0)
+    joiner, utterances = _joiner(clock=clock)
+
+    clock.value = 0
+    joiner.handle_event({"type": "speech_started", "at_ms": None})
+    clock.value = 100
+    joiner.handle_event({"type": "speech_stopped", "at_ms": None})
+    joiner.handle_event({"type": "transcription.completed", "text": "תדליק"})
+
+    # Before the receive-time threshold elapses: no flush yet.
+    clock.value = 100 + GAP_MS - 1
+    joiner.poll()
+    assert utterances == []
+
+    # Once it elapses: flush exactly once.
+    clock.value = 100 + GAP_MS + 1
+    joiner.poll()
+    assert utterances == ["תדליק"]
+
+    # Further polling (clock advanced arbitrarily far) never re-emits it.
+    clock.value = 100 + GAP_MS + 100_000
+    joiner.poll()
+    assert utterances == ["תדליק"]
+
+
+def test_mixed_at_ms_present_then_missing_falls_back_to_receive_time() -> None:
+    """(d) speech_stopped carries at_ms, the NEXT speech_started does not
+    -> the joiner must fall back to receive time for that gap (not treat
+    the missing at_ms as a large/unknown gap), and still join."""
+    clock = _FakeClock(start=1_000.0)
+    joiner, utterances = _joiner(clock=clock)
+
+    joiner.handle_event({"type": "speech_started", "at_ms": 0})
+    clock.value = 1_100
+    joiner.handle_event({"type": "speech_stopped", "at_ms": 400})
+    joiner.handle_event({"type": "transcription.completed", "text": "חם"})
+
+    # This speech_started has NO at_ms; only 50ms of receive time elapsed
+    # since the stop -- well under the threshold -- so it must still join.
+    clock.value = 1_150
+    joiner.handle_event({"type": "speech_started", "at_ms": None})
+    clock.value = 1_200
+    joiner.handle_event({"type": "speech_stopped", "at_ms": None})
+    joiner.handle_event({"type": "transcription.completed", "text": "פה"})
+
+    clock.value = 1_200 + GAP_MS + 1
+    joiner.poll()
+
     assert utterances == ["חם פה"]
 
 
