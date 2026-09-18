@@ -107,3 +107,32 @@ def test_classify_gemma_round_trip(monkeypatch, capsys: pytest.CaptureFixture[st
         assert len(server.requests) == 1
         assert server.requests[0].path == "/v1/chat/completions"
         assert server.requests[0].headers.get("authorization") == "Bearer test-key"
+
+
+def test_would_act_is_false_when_the_label_carries_nothing_to_do(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Found live: 'it is pleasant now' printed would_act: True with intent none.
+
+    The gate allows the CLASS, but with intent none the pipeline does nothing,
+    and with status it only speaks on a weekday. The verb must say what would
+    actually happen, because it is the primary test surface.
+    """
+    replay = tmp_path / "replay.json"
+    replay.write_text(
+        json.dumps(
+            {
+                "נעים פה עכשיו": {"class": "remark", "intent": "none", "confidence": 0.9},
+                "המזגן דולק": {"class": "remark", "intent": "status", "confidence": 0.9},
+            }
+        ),
+        "utf-8",
+    )
+    for text in ("נעים פה עכשיו", "המזגן דולק"):
+        rc = main(
+            ["classify", text, "--decider", "replay", "--replay-file", str(replay)]
+            + ["--mode", "strict", "--json"]
+        )
+        assert rc == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["would_act"] is False

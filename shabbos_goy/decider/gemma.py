@@ -53,7 +53,33 @@ DEFAULT_MAX_TOKENS = 64
 #: A label is tens of bytes. Anything past this is not an answer.
 DEFAULT_MAX_BODY_BYTES = 64 * 1024
 
-_ALLOWED_KEYS = frozenset({"class", "intent", "confidence"})
+_ALLOWED_KEYS = frozenset({"class", "state", "need", "confidence"})
+
+#: What the model is asked for (prompt p2). It reports what it HEARD and what
+#: would serve the speaker; it is never asked for this repo's intent names,
+#: because "cool"/"warm" read like adjectives and a cold complaint was seen to
+#: come back as intent "cool" in about 1 identical run in 12.
+STATES = ("hot", "cold", "loud", "quiet", "none")
+NEED_TO_INTENT = {
+    "colder": "cool",
+    "warmer": "warm",
+    "quieter": "quieter",
+    "louder": "louder",
+    "status": "status",
+    "none": "none",
+}
+#: For a hint, the state the speaker described fixes the only need that makes
+#: sense. Anything else is the model contradicting itself: do nothing.
+_STATE_TO_NEED = {
+    "hot": "colder",
+    "cold": "warmer",
+    "loud": "quieter",
+    "quiet": "louder",
+    "none": "none",
+}
+_HINT_CLASSES = frozenset({"remark", "wish", "discomfort"})
+if not set(NEED_TO_INTENT.values()) <= set(INTENTS):  # pragma: no cover - import-time guard
+    raise RuntimeError("NEED_TO_INTENT maps to an intent the decider does not know")
 
 _RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "json_schema",
@@ -64,10 +90,11 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
             "type": "object",
             "properties": {
                 "class": {"type": "string", "enum": list(CLASSES)},
-                "intent": {"type": "string", "enum": list(INTENTS)},
+                "state": {"type": "string", "enum": list(STATES)},
+                "need": {"type": "string", "enum": list(NEED_TO_INTENT)},
                 "confidence": {"type": "number", "minimum": 0, "maximum": 1},
             },
-            "required": ["class", "intent", "confidence"],
+            "required": ["class", "state", "need", "confidence"],
             "additionalProperties": False,
         },
     },
@@ -302,17 +329,24 @@ class GemmaDecider:
             return no_decision("bad_payload", source=self.source)
         if set(payload) - _ALLOWED_KEYS:
             # An action list, a tool call, a chain of thought: anything the
-            # model added beyond the three fields invalidates the answer.
+            # model added beyond the four fields invalidates the answer.
             return no_decision("extra_keys", source=self.source)
         if not _ALLOWED_KEYS <= set(payload):
             return no_decision("missing_field", source=self.source)
         klass = payload["class"]
-        intent = payload["intent"]
+        state = payload["state"]
+        need = payload["need"]
         confidence = payload["confidence"]
         if not isinstance(klass, str) or klass not in CLASSES:
             return no_decision("bad_class", source=self.source)
-        if not isinstance(intent, str) or intent not in INTENTS:
-            return no_decision("bad_intent", source=self.source)
+        if not isinstance(state, str) or state not in STATES:
+            return no_decision("bad_state", source=self.source)
+        if not isinstance(need, str) or need not in NEED_TO_INTENT:
+            return no_decision("bad_need", source=self.source)
+        if klass in _HINT_CLASSES and _STATE_TO_NEED[state] != need:
+            # "It is cold" answered with "colder": never act on a self-contradiction.
+            return no_decision("state_need_mismatch", source=self.source)
+        intent = NEED_TO_INTENT[need]
         if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
             return no_decision("bad_confidence", source=self.source)
         if not 0.0 <= float(confidence) <= 1.0:

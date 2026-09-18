@@ -79,7 +79,11 @@ def cmd_classify(args: argparse.Namespace) -> int:
 
     context = ContextWindow()
     decision = decider.decide(args.text, context, mode=mode, ac_state=None)
-    would_act = may_act(mode, decision.klass)
+    # What would actually happen, not merely whether the class is allowed: intent
+    # none actuates nothing, and status is only ever SPOKEN, on a weekday.
+    actuating = decision.intent not in ("none", "status")
+    speaks = decision.intent == "status" and mode == "weekday"
+    would_act = may_act(mode, decision.klass) and (actuating or speaks)
 
     payload = {
         "class": decision.klass,

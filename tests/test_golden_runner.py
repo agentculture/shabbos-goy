@@ -927,3 +927,51 @@ def test_the_golden_readme_exists_and_says_a_hard_failure_blocks_a_release():
     readme = (REPO_ROOT / "tests" / "golden" / "README.md").read_text("utf-8")
     assert "HARD" in readme
     assert "release" in readme.lower()
+
+
+# -- acting in the WRONG DIRECTION is a false action, not a missed hint ------
+
+
+def test_a_hint_that_acts_with_the_wrong_intent_is_a_hard_wrong_action():
+    """Found live: a cold complaint labelled 'cool' would switch the AC ON.
+
+    Counting that only against hint recall would let a model that inverts every
+    cold remark pass a 70 % recall threshold.
+    """
+    rows = [row(row_id="cold1", text="קר פה", intent="warm")]
+    results = [result(row_id="cold1", decisions=(decision(klass="discomfort", intent="cool"),))]
+    scored = gr.score(rows, results, mode="strict", entrance="text")
+    assert scored["wrong_actions"] == ["cold1"]
+    assert scored["hint_recall"]["acted_right"] == 0
+
+
+def test_the_right_intent_is_not_a_wrong_action():
+    rows = [row(row_id="cold1", text="קר פה", intent="warm")]
+    results = [result(row_id="cold1", decisions=(decision(klass="discomfort", intent="warm"),))]
+    assert gr.score(rows, results, mode="strict", entrance="text")["wrong_actions"] == []
+
+
+def test_a_row_with_no_checked_intent_cannot_be_a_wrong_action():
+    rows = [row(row_id="x", intent=None)]
+    results = [result(row_id="x", decisions=(decision(intent="warm"),))]
+    assert gr.score(rows, results, mode="strict", entrance="text")["wrong_actions"] == []
+
+
+def test_any_wrong_action_violates_the_thresholds():
+    scored = [
+        {
+            "entrance": "text",
+            "mode": "strict",
+            "hard_false_positives": [],
+            "wrong_actions": ["cold1"],
+            "hint_recall": {"expected": 1, "acted_right": 0, "rate": 1.0},
+            "decider_failure_rate": 0.0,
+        }
+    ]
+    violations = gr.check_thresholds(scored, gr.load_thresholds())
+    assert any("wrong_actions" in v for v in violations)
+    assert gr.exit_code(violations) == gr.EXIT_THRESHOLD
+
+
+def test_the_committed_thresholds_allow_no_wrong_action():
+    assert gr.load_thresholds()["wrong_actions_max"] == 0

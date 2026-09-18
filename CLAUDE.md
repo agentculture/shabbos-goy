@@ -62,7 +62,7 @@ Consequences that every change must respect:
    (deviation d1), so "a command never acts" is no longer a deterministic
    property of a rule cascade. What the code guarantees is that anything
    **labelled** a command is refused. Whether commands get that label is
-   measured by the golden set (`tests/golden/`, 275 rows, three entrances),
+   measured by the golden set (`tests/golden/`, 295 rows, three entrances),
    run against the real model on the box. **Zero strict-mode false positives
    is release-blocking**; a missed hint is cheap. Measure on
    **ASR-transcribed audio**, not only typed text, because ASR errors are the

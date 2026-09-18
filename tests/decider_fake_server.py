@@ -51,9 +51,34 @@ def chat_body(content: str) -> bytes:
     )
 
 
+_INTENT_TO_NEED = {
+    "cool": "colder",
+    "warm": "warmer",
+    "quieter": "quieter",
+    "louder": "louder",
+    "status": "status",
+    "none": "none",
+}
+_NEED_TO_STATE = {"colder": "hot", "warmer": "cold", "quieter": "loud", "louder": "quiet"}
+
+
+def decision_payload(klass: str, intent: str, confidence: float) -> dict:
+    """The wire shape (prompt p2) that the decider maps back to ``intent``.
+
+    Tests speak in this repo's intents; the model speaks in state + need.
+    """
+    need = _INTENT_TO_NEED.get(intent, intent)
+    return {
+        "class": klass,
+        "state": _NEED_TO_STATE.get(need, "none"),
+        "need": need,
+        "confidence": confidence,
+    }
+
+
 def decision_body(klass: str, intent: str, confidence: float) -> bytes:
     """A well-formed completion whose content is one decision object."""
-    return chat_body(json.dumps({"class": klass, "intent": intent, "confidence": confidence}))
+    return chat_body(json.dumps(decision_payload(klass, intent, confidence)))
 
 
 @dataclass

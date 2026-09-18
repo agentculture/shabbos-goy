@@ -63,7 +63,7 @@ together satisfy the two invariants `steward doctor` verifies:
   restart). There is no wake word and no confirmation question. When unsure,
   it does nothing. The refusals are a tested contract in this repo's code; how
   reliably speech gets the right label is measured by the golden set
-  (`tests/golden/`, 275 rows), whose headline number is the false-positive
+  (`tests/golden/`, 295 rows), whose headline number is the false-positive
   rate on commands, measured on ASR-transcribed Hebrew. Zero is
   release-blocking, and that live run has not happened yet.
 - **The CLI and the dashboard are operator UIs** and sit outside the

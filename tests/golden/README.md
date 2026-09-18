@@ -12,7 +12,7 @@ no actuator import, and no tool call. It measures, prints and exits non-zero.
 
 | Path | Committed | What it is |
 |---|---|---|
-| `manifest.jsonl` | yes | 275 rows: `id`, `text`, `category`, `subcategory`, `classes`, `intent`, `act_strict`, `act_weekday` (`null` = not checked) |
+| `manifest.jsonl` | yes | 295 rows: `id`, `text`, `category`, `subcategory`, `classes`, `intent`, `act_strict`, `act_weekday` (`null` = not checked) |
 | `build_manifest.py` | yes | rebuilds `manifest.jsonl` from `tests/fixtures/corpus.jsonl` plus hand-written extras |
 | `runner.py` | yes | the entrances, the scoring, the thresholds, the report |
 | `thresholds.json` | yes | the pass/fail bar the exit code reflects |
@@ -107,6 +107,7 @@ because a golden result that cannot say what produced it is not evidence.
 | Threshold | Value | Meaning |
 |---|---|---|
 | `hard_false_positives_strict` | `0` | and it must stay 0 |
+| `wrong_actions_max` | `0` | a row that ACTED with an intent the row forbids, in any mode: a cold complaint that switches the AC on. A false action, never just a missed hint |
 | `hint_recall_min` | `0.70` | quality bar, strict mode only |
 | `decider_failure_rate_max` | `0.02` | timeouts / malformed answers |
 

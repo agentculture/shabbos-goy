@@ -282,6 +282,7 @@ def score(
     """Score one entrance x mode. HARD failures first, everything else after."""
     by_id = {result.row_id: result for result in results}
     hard_failures: list[str] = []
+    wrong_actions: list[str] = []
     hard_rows = 0
     hint_expected = hint_ok = 0
     weekday_expected = weekday_ok = 0
@@ -319,6 +320,10 @@ def score(
                 hard_failures.append(row.id)
 
         intent_ok = row.intent is None or any(d.intent == row.intent for d in acting)
+        if row.intent is not None and any(d.intent != row.intent for d in acting):
+            # It acted, in a direction the row does not allow: the AC goes ON for
+            # a cold person. That is a false action, never just a missed hint.
+            wrong_actions.append(row.id)
         if row.category == "hint" and row.expects_action(mode):
             hint_expected += 1
             if acting and intent_ok:
@@ -334,6 +339,7 @@ def score(
         "rows": scored_rows,
         "hard_rows": hard_rows,
         "hard_false_positives": hard_failures,
+        "wrong_actions": wrong_actions,
         "hint_recall": {
             "expected": hint_expected,
             "acted_right": hint_ok,
@@ -381,6 +387,12 @@ def check_thresholds(
                 violations.append(
                     f"hard_false_positives({tag})={len(hard)} > {max_hard}: "
                     f"{', '.join(hard[:10])}"
+                )
+            wrong = list(scored.get("wrong_actions") or [])
+            max_wrong = int(thresholds.get("wrong_actions_max", 0))
+            if len(wrong) > max_wrong:
+                violations.append(
+                    f"wrong_actions({tag})={len(wrong)} > {max_wrong}: {', '.join(wrong[:10])}"
                 )
             recall = scored.get("hint_recall") or {}
             if recall.get("expected"):
@@ -447,6 +459,13 @@ def render_table(report: Mapping[str, Any]) -> str:
                 lines.append(f"    HARD  {row_id}")
         else:
             lines.append(f"  HARD failures: 0/{hard_rows} - no HARD failures")
+        wrong = list(scored.get("wrong_actions") or [])
+        if wrong:
+            lines.append(
+                f"  WRONG-DIRECTION actions (acted with an intent the row forbids): {len(wrong)}"
+            )
+            for row_id in wrong:
+                lines.append(f"    - {row_id}")
         recall = scored.get("hint_recall") or {}
         lines.append(
             f"  hint recall: {recall.get('acted_right')}/{recall.get('expected')} "

@@ -39,7 +39,7 @@ Shipped and tested with no microphone, no lobes server and no Sensibo account:
   adapters, the rate limits and the strict-mode delay;
 - the CLI (`classify`, `zmanim`, `actions`, `preflight`, `ac`, `volume`,
   `mode`, `listen`) and the Tailscale-only dashboard;
-- the golden set: 275 committed Hebrew rows with the outcome each expects, and
+- the golden set: 295 committed Hebrew rows with the outcome each expects, and
   the scoring code CI runs offline.
 
 **Not yet verified** (do not read anything below as proven on hardware):
@@ -134,7 +134,7 @@ Two consequences worth stating plainly:
   deterministically.** The code refuses anything *labelled* a command, and
   that refusal is exhaustively tested. Whether commands actually get that
   label is a property of the model and the prompt, and it is **measured**, not
-  assumed — by the golden set (`tests/golden/README.md`): 275 rows through
+  assumed — by the golden set (`tests/golden/README.md`): 295 rows through
   three entrances, with zero strict-mode false positives as a
   release-blocking threshold, re-run whenever the prompt version, the model or
   lobes changes. That live run has not happened yet.
