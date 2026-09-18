@@ -20,31 +20,48 @@ what the repo is and how it is laid out, not who is reading it.
 
 ## What this project is
 
-`shabbos-goy` is a **Hebrew-speaking, speech-to-speech household agent** that
-helps observant Jews on Shabbat and Yom Kippur without the user breaking the
-day. It **never acts on a direct command**. It only infers intent from indirect
-remarks ("הלוואי שהיה קר" / "I wish it was cold" → turn on the AC). The build
-brief is issue #1 on `agentculture/shabbos-goy`.
+`shabbos-goy` is a **Hebrew-speaking household agent** that listens ambiently
+in a room and switches an air conditioner's power. In **strict mode** (Shabbat,
+Yom Kippur and Yom Tov, computed from zmanim) it acts only on intent inferred
+from indirect remarks ("הלוואי שהיה קר" / "I wish it was cold" → AC on) and
+**never on a spoken command**. On a weekday it obeys spoken commands too. The
+build brief is issue #1 on `agentculture/shabbos-goy`; the design of record is
+under `docs/specs/` and `docs/plans/`, which are historical and not edited.
 
-**Status: scaffold only.** The repo was provisioned from
-`culture-agent-template`. The only code on disk is the template's agent-first
-CLI (`whoami`, `learn`, `explain`, `overview`, `doctor`, `cli overview`). The
-domain pieces are **planned, not built**: the Hebrew utterance classifier, the
-zmanim calendar gate, the whitelisted tool calls (AC via the sibling
-`sensibo-cli`), the ears-only client for the lobes Hebrew speech stack, and
-the Docker Compose service that survives reboots. When summarizing, never
-describe planned pieces as existing. `CLAUDE.md` marks each one `(planned)`.
+**Status: built, not yet verified on hardware.** The domain code is on disk —
+the ears-only lobes client, the transcript joiner, the model-backed decider,
+the decision pipeline, the stdlib zmanim mode resolver, the Sensibo and
+PipeWire adapters, the rate limits and delay, the domain CLI verbs
+(`classify`, `zmanim`, `actions`, `preflight`, `ac`, `volume`, `mode`,
+`listen`), the Tailscale-only dashboard and the golden set — with tests that
+need no microphone, no lobes server and no Sensibo account. What has **not**
+happened: the golden set has not been run live against the real model and
+speech stack, and no on-box drill (PipeWire in a container, a live `--apply`,
+a reconnect, a reboot) has been done. When summarizing, keep "built" and
+"verified" apart.
 
 Facts worth getting right when you answer questions about it:
 
-- **The core invariant**: imperatives, requests phrased as questions, and
-  rebukes ("why isn't the AC on?") are **never** acted on, and never queued
-  for later. There is no wake word and no confirmation question. When unsure,
-  it does nothing.
+- **The core invariant is about speech.** In strict mode imperatives, requests
+  phrased as questions, and rebukes ("why isn't the AC on") are **never**
+  acted on and never queued for later. There is no wake word and no
+  confirmation question. When unsure, it does nothing.
+- **The CLI and the dashboard are operator UIs**, outside that invariant: they
+  work in every mode and may force strict mode on or switch it off inside a
+  zmanim window. Overrides are memory-only and do not survive a restart.
+- **A local language model does the labelling** (the lobes `senses` role,
+  Gemma, on the same box). Its answer is untrusted input; this repo's code
+  still enforces the mode gate, the whitelist, argument validation, a
+  confidence floor, rate limits and a delay. If the model is down or
+  malformed, the agent does nothing.
+- **Weekday mode obeys anyone in earshot**; the narrow whitelist (AC power
+  on/off, the agent's own volume) is the only control.
 - **Halacha is flagged, not decided.** The project claims no rabbinic
-  approval (*hechsher*). Open questions are recorded, not answered.
+  approval (*hechsher*). Open questions are recorded in
+  `docs/halacha-open-questions.md`, not answered.
 - **Sensibo is cloud-only**, so AC control needs internet access even though
-  speech processing is local.
+  speech processing is local. Transcript text does reach the local model; it
+  never reaches a cloud service, a disk or a log line.
 
 It is a sibling to
 [`guildmaster`](https://github.com/agentculture/guildmaster) (the skills
@@ -94,12 +111,20 @@ That is a per-clone choice; this template does not ship it.)
 ## Layout (what you can read/find/summarize here)
 
 ```text
-shabbos_goy/   agent-first CLI (cited from teken's python-cli reference)
+shabbos_goy/
   cli/                    parser, error/output contract, _commands/ (verbs)
   explain/                markdown catalog for `explain`
-tests/                    pytest smoke + introspection tests
+  decider/                the model-backed labeller (prompt, Gemma client, replay, context)
+  classifier/             the retired rule cascade — test oracle only
+  lobes/                  ears-only realtime client (ws wire, env config, session)
+  zmanim/                 stdlib sun maths, Hebrew calendar, strict windows
+  actuators/ audio/       sensibo-cli and PipeWire adapters
+  runtime/ web/           the listener's threads, and the dashboard
+  pipeline.py policy.py   the gates, and the mode x class table
+tests/                    pytest (fixtures-only); tests/golden/ is the measured evidence
 .claude/skills/           vendored guildmaster skill kit (cite-don't-import)
-docs/skill-sources.md     skill provenance ledger
+docs/                     specs/ + plans/ (historical), halacha-open-questions.md,
+                          skill-sources.md (skill provenance + cited source files)
 culture.yaml              mesh identity (suffix + backend)
 .github/workflows/        tests + deploy (PyPI Trusted Publishing)
 ```
