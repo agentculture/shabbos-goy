@@ -43,3 +43,36 @@ def test_zmanim_fails_closed_on_missing_config(
     err = capsys.readouterr().err
     assert err.startswith("error:")
     assert "hint:" in err
+
+
+def test_the_cli_helper_shares_mode_pys_fail_closed_builders(tmp_path) -> None:
+    """Found in review: a second copy of config -> zmanim parsing drifts.
+
+    Whatever mode.py refuses (a fractional candle-lighting offset, a tzeit angle
+    below the sunset geometry, an unknown timezone) the CLI helper must refuse
+    too, and a failure inside the zmanim maths must not escape as a traceback.
+    """
+    import json
+    from datetime import datetime, timezone
+
+    from shabbos_goy.cli._commands import _domain
+    from shabbos_goy.config import load_config
+
+    good = {
+        "location": {"lat": 31.78, "lon": 35.22, "timezone": "Asia/Jerusalem"},
+        "candle_lighting_offset_minutes": 18,
+        "tzeit_definition": "3_medium_stars",
+        "region": "israel",
+    }
+    now = datetime(2026, 9, 22, 9, 0, tzinfo=timezone.utc)
+    for bad in (
+        {"candle_lighting_offset_minutes": -0.5},
+        {"tzeit_definition": "degrees:0"},
+        {"tzeit_definition": "minutes:nan"},
+        {"location": {"lat": 31.78, "lon": 35.22, "timezone": "Mars/Olympus_Mons"}},
+    ):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({**good, **bad}), "utf-8")
+        assert _domain.next_strict_window(now, load_config(path=path)) is None, bad
+    path.write_text(json.dumps(good), "utf-8")
+    assert _domain.next_strict_window(now, load_config(path=path)) is not None

@@ -100,6 +100,27 @@ imported. `pyyaml`, `pytest` and `teken` remain dev-only.
   `wpctl`, device chosen by name) rather than raw ALSA, and zmanim as pure
   stdlib rather than a third-party calendar library.
 
+### Fixed
+
+From the PR review (Qodo, SonarCloud, three model reviews) and the first live run:
+
+- **Config values now fail toward strict mode.** A tzeit angle at or below the
+  sunset geometry, a non-finite number, an unknown timezone, or a fractional or
+  negative candle-lighting offset each used to resolve toward weekday or crash
+  mode resolution. Any exception inside the zmanim calculation is now strict.
+  The CLI's describing verbs share `mode.py`'s parsers instead of a second copy.
+- A failed actuation no longer spends the rate limit, and is reported as
+  `error`, not `dry_run`. Check, act and record are atomic across the voice
+  and dashboard paths.
+- A reconnect resets the audio timeline, so the new session's first utterance
+  is not dropped. A scripted WAV run now ends by itself and honours SIGTERM.
+- `pw-record` children are reaped on every session end. WebSocket frames are
+  bounded (1 MiB). The CLI control client always targets the loopback endpoint.
+- The heartbeat no longer defaults to a predictable path under `/tmp`.
+- A broken config keeps the listener running fail-closed (no crash loop) and
+  says so once: `event=config_error`.
+- The Docker image installs a pinned `grant`.
+
 ## [0.9.1] - 2026-09-18
 
 ### Changed

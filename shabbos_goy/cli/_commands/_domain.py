@@ -15,52 +15,24 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from shabbos_goy import mode as mode_module
 from shabbos_goy.config import Config
-from shabbos_goy.mode import parse_tzeit_definition
-from shabbos_goy.zmanim import Location, SunEventNotFound, ZmanimRules, next_window
+from shabbos_goy.zmanim import Location, ZmanimRules, next_window
 
 
 def location_from_config(config: Config) -> Optional[Location]:
-    """A :class:`Location` from ``config.location``, or ``None`` if unusable."""
-    location = config.location
-    if not isinstance(location, dict):
-        return None
-    lat = location.get("lat")
-    lon = location.get("lon")
-    tz = location.get("timezone")
-    if isinstance(lat, bool) or isinstance(lon, bool):
-        return None
-    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
-        return None
-    if not isinstance(tz, str) or not tz:
-        return None
-    try:
-        return Location(float(lat), float(lon), tz)
-    except ValueError:
-        return None
+    """The configured location, or ``None``. Delegates to :mod:`shabbos_goy.mode`.
+
+    One parser, not two: what the listener refuses (an unknown timezone, a
+    malformed location) a describing verb must refuse too, or ``zmanim`` and
+    ``preflight`` would print a window the listener is not using.
+    """
+    return mode_module._build_location(config)  # noqa: SLF001 - the single source of truth
 
 
 def rules_from_config(config: Config) -> Optional[ZmanimRules]:
-    """A :class:`ZmanimRules` from config, or ``None`` if unrecognised."""
-    offset = config.candle_lighting_offset_minutes
-    if isinstance(offset, bool) or not isinstance(offset, (int, float)):
-        return None
-    tzeit_rule = parse_tzeit_definition(config.tzeit_definition)
-    if tzeit_rule is None:
-        return None
-    region = config.region
-    if region == "israel":
-        israel = True
-    elif region in ("diaspora", None):
-        israel = False
-    else:
-        return None
-    try:
-        return ZmanimRules(
-            candle_lighting_offset_minutes=int(offset), tzeit=tzeit_rule, israel=israel
-        ).validate()
-    except ValueError:
-        return None
+    """The configured zmanim rules, or ``None``. Delegates to :mod:`shabbos_goy.mode`."""
+    return mode_module._build_rules(config)  # noqa: SLF001 - the single source of truth
 
 
 @dataclass(frozen=True)
@@ -86,7 +58,7 @@ def next_strict_window(now: datetime, config: Config) -> Optional[NextWindow]:
         return None
     try:
         window = next_window(now, location, rules)
-    except SunEventNotFound:
+    except Exception:  # noqa: BLE001 - any zmanim failure means "no window to show"
         return None
     if window is None:
         return None
