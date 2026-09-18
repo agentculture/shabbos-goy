@@ -246,3 +246,7 @@ skills.local.yaml
 
 # golden-set audio: TTS output, regenerable, never committed (deviation d4)
 tests/golden/audio/
+
+# Docker Compose secrets (lobes gateway key, Sensibo API key) — real values
+# only, never committed. docker/shabbos-goy.env.example ships the shape.
+docker/shabbos-goy.env
