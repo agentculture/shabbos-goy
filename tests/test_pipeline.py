@@ -764,3 +764,112 @@ def test_the_record_of_released_delayed_actions_stays_bounded() -> None:
         clock.advance(90000)  # more than a day: past every interval and the daily cap
     assert len(pipeline.delay_timer) <= 64
     assert len(pipeline._released) <= 64
+
+
+# --------------------------------------------------------------------------
+# review round: limits, config bounds, and the audio timeline
+# --------------------------------------------------------------------------
+
+
+def test_an_actuation_that_did_not_happen_does_not_consume_the_limits() -> None:
+    """Found in review: a timeout / non-zero exit / bad JSON charged the limiter.
+
+    The adapter reports ``acted: False`` for every one of those, exactly as it
+    does for a dry run. On an APPLYING listener that means the AC never moved,
+    so neither the compressor debounce nor the daily cap may be spent.
+    """
+    calls: list[tuple[str, bool, bool]] = []
+
+    def failing_power(pod_id: str, on: bool, *, apply: bool = False) -> dict:
+        calls.append((pod_id, on, apply))
+        return {"acted": False, "requested_apply": apply, "changes": {}}
+
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline(apply=True, ac_power=failing_power)
+    feed(pipeline, HOT)
+    feed(pipeline, HOT)
+
+    assert calls == [(POD, True, True), (POD, True, True)]
+    assert "rate_limited" not in [record.verdict for record in pipeline.log_records]
+
+
+def test_a_dry_run_session_spends_the_limits_exactly_like_a_real_one() -> None:
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline()
+    feed(pipeline, HOT)
+    feed(pipeline, HOT)
+
+    assert verdicts(pipeline) == [("dry_run", "ac_power_on"), ("rate_limited", "none")]
+
+
+def test_the_context_window_is_built_from_the_configured_bounds(tmp_path) -> None:
+    raw = json.loads((FIXTURES / "config.json").read_text(encoding="utf-8"))
+    raw["context_window"] = {"max_items": 2, "max_age_seconds": 30, "max_render_chars": 40}
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    config = load_config(path=path)
+    assert config.ok, config.error
+
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline(config=config)
+    rendered = repr(pipeline.context)
+
+    assert "/2" in rendered
+    assert "max_age_seconds=30" in rendered
+    assert "max_render_chars=40" in rendered
+
+
+def test_a_malformed_context_window_block_falls_back_to_the_defaults(tmp_path) -> None:
+    raw = json.loads((FIXTURES / "config.json").read_text(encoding="utf-8"))
+    raw["context_window"] = {"max_items": 0, "max_age_seconds": "soon", "max_render_chars": -5}
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    config = load_config(path=path)
+
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline(config=config)
+    rendered = repr(pipeline.context)
+
+    assert "/8" in rendered
+    assert "max_age_seconds=900" in rendered
+    assert "max_render_chars=800" in rendered
+
+
+def test_a_ring_sizes_block_that_is_not_a_mapping_does_not_break_construction(tmp_path) -> None:
+    raw = json.loads((FIXTURES / "config.json").read_text(encoding="utf-8"))
+    raw["ring_sizes"] = "lots"
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    config = load_config(path=path)
+
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline(config=config)
+    feed(pipeline, HOT)
+
+    assert pipeline._recent.capacity == 20
+    assert len(pipeline.recent()) == 1
+
+
+def test_a_new_session_after_a_connection_loss_keeps_its_own_audio_timeline() -> None:
+    """Found in review: the old session's at_ms polled the new one past its deadline."""
+    pipeline, ac, _volume, _speaker, _clock = make_pipeline(apply=True)
+    feed(pipeline, CHITCHAT, start_ms=500_000)
+    assert ac.power_calls == []
+
+    pipeline.handle_event({"kind": "connection_lost", "type": ""})
+
+    item_id = "after-loss"
+    pipeline.handle_event(
+        {"type": "input_audio_buffer.speech_started", "at_ms": 1000, "item_id": item_id}
+    )
+    pipeline.handle_event(
+        {"type": "input_audio_buffer.speech_stopped", "at_ms": 1800, "item_id": item_id}
+    )
+    # The listener polls on its own cadence, before the transcript arrives.
+    pipeline.poll()
+    pipeline.handle_event(
+        {
+            "type": "conversation.item.input_audio_transcription.completed",
+            "item_id": item_id,
+            "text": HOT,
+        }
+    )
+    pipeline.poll(2400)
+
+    assert [entry.text for entry in pipeline.recent()][-1] == HOT
+    assert ac.power_calls == [(POD, True, True)]

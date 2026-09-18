@@ -13,6 +13,8 @@ spoken a command to a listening box.
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from shabbos_goy import mode as mode_module
@@ -21,6 +23,7 @@ from .test_web_support import (
     HOT,
     NOW_STRICT,
     POD,
+    FakeAC,
     dashboard,
     feed,
     reset_override,
@@ -336,3 +339,96 @@ def test_control_actions_are_logged_without_transcript_text_or_pod_ids(tmp_path)
         set(entry) <= {"klass", "intent", "verdict", "action", "reason", "target"}
         for entry in controls
     )
+
+
+# ---------------------------------------------------------------------------
+# review round: the control path races the voice path
+# ---------------------------------------------------------------------------
+
+
+class RendezvousAC(FakeAC):
+    """A fake AC whose first call waits inside the adapter for a second one.
+
+    That is the window the race lives in: check -> (adapter) -> record. If the
+    two paths are not serialised, the control request reaches the adapter while
+    the voice action is still inside it, and both spend the same last slot.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._cond = threading.Condition()
+        self.entered = threading.Event()
+
+    def power(self, pod_id: str, on: bool, *, apply: bool = False) -> dict:
+        with self._cond:
+            self.power_calls.append((pod_id, on, apply))
+            first = len(self.power_calls) == 1
+            self.entered.set()
+            self._cond.notify_all()
+            if first:
+                self._cond.wait_for(lambda: len(self.power_calls) >= 2, timeout=1.0)
+        if apply:
+            self.state = "on" if on else "off"
+        return {"acted": bool(apply), "requested_apply": apply, "changes": {}}
+
+
+def test_a_control_press_racing_a_voice_action_cannot_double_spend_the_daily_cap(
+    tmp_path,
+) -> None:
+    """Found in review: check and record were not atomic across threads."""
+    ac = RendezvousAC()
+    overrides = {
+        "rate_limits": {
+            "min_interval_seconds": 600,
+            "daily_cap": 1,
+            "off_min_interval_seconds": 0,
+            "on_after_off_min_interval_seconds": 0,
+        }
+    }
+    body: dict = {}
+    with dashboard(tmp_path, apply=True, ac=ac, config_overrides=overrides) as ui:
+        voice = threading.Thread(target=feed, args=(ui.stack.pipeline, HOT), daemon=True)
+        voice.start()
+        assert ac.entered.wait(timeout=5), "the voice action never reached the adapter"
+
+        def press() -> None:
+            body.update(ui.post("/api/control/ac", {"power": "on"}).json())
+
+        control = threading.Thread(target=press, daemon=True)
+        control.start()
+        control.join(timeout=10)
+        voice.join(timeout=10)
+        assert not control.is_alive() and not voice.is_alive()
+
+    assert len(ac.power_calls) == 1
+    assert ui.stack.pipeline.log_records[-1].verdict == "acted"
+    assert body["verdict"] == "rate_limited"
+
+
+def test_state_can_be_polled_while_controls_are_being_pressed(tmp_path) -> None:
+    """Found in review: state() iterated the live control log a POST was appending to."""
+    failures: list[Exception] = []
+    stop = threading.Event()
+
+    server_kwargs = {"control_log_capacity": 4000}
+    with dashboard(tmp_path, server_kwargs=server_kwargs) as ui:
+        for _ in range(4000):
+            ui.server.control_volume({"direction": "up"})
+
+        def hammer() -> None:
+            try:
+                while not stop.is_set():
+                    ui.server.control_volume({"direction": "up"})
+            except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+                failures.append(exc)
+
+        presser = threading.Thread(target=hammer, daemon=True)
+        presser.start()
+        try:
+            for _ in range(200):
+                assert isinstance(ui.server.state()["controls"], list)
+        finally:
+            stop.set()
+            presser.join(timeout=5)
+
+    assert failures == []
