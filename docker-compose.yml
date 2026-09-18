@@ -85,6 +85,12 @@ services:
       # Private config (location for zmanim, the action whitelist, Sensibo
       # pod ids) — read-only, never written to by the container.
       - ${XDG_CONFIG_HOME:-${HOME}/.config}/shabbos-goy:/config:ro
+      # The operator's `grant` secrets store, read-only, for a grant-backed
+      # deployment (config names the secrets; no key in any env file). Omit
+      # this mount if the keys come from docker/shabbos-goy.env instead.
+      # UNVERIFIED until the on-box drill: whether grant reads a read-only
+      # store without wanting a lock file beside it.
+      - ${XDG_DATA_HOME:-${HOME}/.local/share}/grant:/home/shabbos-goy/.local/share/grant:ro
       # The HOST PipeWire session (decision c42) — a socket, not a device
       # node: no /dev/snd passthrough. Mounted read-write because a PipeWire
       # client socket is bidirectional (stream negotiation replies go back

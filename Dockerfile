@@ -54,7 +54,12 @@ COPY shabbos_goy ./shabbos_goy
 # console script lands on PATH deterministically. Bump this line deliberately
 # (and note it in CHANGELOG.md) to pick up a new sensibo-cli release.
 RUN pip install --no-cache-dir . \
-    && pip install --no-cache-dir sensibo-cli==0.8.1
+    && pip install --no-cache-dir sensibo-cli==0.8.1 grant==0.11.0
+# `grant` (agentculture/grant, the per-user secrets manager) is pinned the same
+# way. It is only used when the config names grant secrets: the Sensibo key is
+# then injected into each `sensibo` child, and the lobes key by re-exec (see
+# shabbos_goy/grant_inject.py). A key supplied through the env file still wins
+# and grant is not called at all.
 
 # Read-only user config and the PipeWire socket are bind-mounted at runtime
 # (see docker-compose.yml); nothing default is baked into the image.

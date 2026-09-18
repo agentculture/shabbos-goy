@@ -227,3 +227,21 @@ def test_env_example_has_no_real_lobes_host_or_key():
             continue
         assert "sk-" not in value
         assert not re.match(r"^\d{1,3}(\.\d{1,3}){3}$", value)
+
+
+# -- review thread #12: a grant-backed deployment must be able to run grant ----
+
+
+def test_dockerfile_pins_grant_exact_version():
+    text = DOCKERFILE_PATH.read_text(encoding="utf-8")
+    assert re.search(r"\bgrant==\d+\.\d+\.\d+", text), "grant must be pinned to an exact version"
+
+
+def test_compose_mounts_the_operators_grant_store_read_only():
+    import yaml
+
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    service = next(iter(compose["services"].values()))
+    mounts = [v for v in service.get("volumes", []) if isinstance(v, str) and "grant" in v]
+    assert mounts, "the grant store is not mounted"
+    assert all(m.endswith(":ro") for m in mounts), mounts
