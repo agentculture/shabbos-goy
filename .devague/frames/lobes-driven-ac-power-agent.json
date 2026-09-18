@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-18T17:06:13Z",
-  "updated": "2026-09-18T21:12:55Z",
+  "updated": "2026-09-18T22:33:08Z",
   "claims": [
     {
       "id": "c1",
@@ -1766,6 +1766,114 @@
       "seam": "control endpoint ceiling",
       "behavior": "a CLI --apply cannot escalate a listener that was started dry-run",
       "source_text": "new verbs (classify, zmanim, actions, listen, plus ac/volume/mode nouns) follow the scaffold contract: register(sub), parser_class=type(p) on nested subparsers, an overview sub-verb per noun, --json everywhere, explain catalog entries, actuating verbs dry-run unless --apply; catalog _ROOT and learn text get a domain rewrite",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o40",
+      "claim_id": "c2",
+      "seam": "sensibo argv with the grant wrapper",
+      "behavior": "the grant prefix is a closed shape around the locked argv; a hostile secret name starts no process; the key never enters this process",
+      "source_text": "AC actuation is POWER ON/OFF ONLY via `sensibo set <pod> --power on|off [--apply] --json`; the adapter builds an argv that can never contain --mode/--target/--fan/--swing (tested), because sensibo-cli set.py:116-131 uses the single-field PATCH acStates/on only when exactly one field differs and a full-state POST otherwise",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o41",
+      "claim_id": "c12",
+      "seam": "lobes key by re-exec under grant",
+      "behavior": "verbs that need the lobes key re-exec under grant when config names a secret; env wins; a guard prevents loops; a missing grant binary is not a crash",
+      "source_text": "lobes host, GATEWAY_API_KEY and SENSIBO_API_KEY live only in env/private config; scripts/scan-secrets.py does not catch ws:// URLs or non-JSON files, so this is by discipline (or the scanner is extended)",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o42",
+      "claim_id": "c32",
+      "seam": "asymmetric power limits and operator bypass",
+      "behavior": "power OFF needs only a debounce, power ON waits the compressor interval since the last OFF, operators bypass intervals but not the daily cap and still count for voice",
+      "source_text": "[challenge/containment] actuation is rate-limited in config: a minimum interval between power changes (compressor protection, two people disagreeing hot/cold) and a cap on actions per day; when a limit is hit the agent does nothing and logs it. This is the only containment available on Shabbat, since nobody can command it to stop",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o43",
+      "claim_id": "c36",
+      "seam": "preflight sensibo_key via grant",
+      "behavior": "preflight asks grant for metadata only, never the value, and names both remedies when neither source exists",
+      "source_text": "[challenge/observability] a pre-Shabbat preflight ('shabbos-goy doctor' extension or 'preflight' verb) verifies in one run: lobes /health + key accepted, Sensibo key + pod reachable, card Array present, clock synchronised, location set, and prints the next strict-mode window so the operator can check the zmanim by eye before candle lighting",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o44",
+      "claim_id": "c1",
+      "seam": "suite hermeticity",
+      "behavior": "no test sees the host config or re-execs under grant, so the fixtures-only path stays fixtures-only on a configured developer box",
+      "source_text": "shabbos-goy listens through the lobes Hebrew realtime session (ears-only), and in Shabbat / Yom Kippur mode switches the AC power on or off only when it infers the wish from indirect speech; it can report AC status, stays quiet by default with an adjustable own-volume, and survives reboots unattended",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o45",
+      "claim_id": "c26",
+      "seam": "spoken hint to real AC",
+      "behavior": "a Hebrew remark that the room is hot powered the real AC on with nobody addressing the device: heard by the reSpeaker, transcribed by lobes Whisper, labelled remark/cool by Gemma in 478 ms, delayed 15 s in strict mode, then verdict=acted; Sensibo state read back as on (was off)",
+      "source_text": "a Compose service listens ambiently through lobes; a Hebrew remark that the room is hot powers the AC on and a remark that it is cold powers it off, with nobody addressing the device; commands are dropped in strict mode and obeyed on weekdays; after a power cut it resumes the right mode with no human touch",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o46",
+      "claim_id": "c16",
+      "seam": "spoken imperative in strict mode, live",
+      "behavior": "a spoken imperative to switch the AC on was labelled imperative by the real Gemma and refused (gate_refused) during a real Shabbat window; a spoken prompt-injection sentence sent as text was labelled imperative and refused",
+      "source_text": "in Shabbat/Yom Kippur mode imperatives, requests and rebukes never act, are never queued, and nothing is asked back; logs carry classified intent + action only, never audio or transcript text",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o47",
+      "claim_id": "c32",
+      "seam": "rate limit, live",
+      "behavior": "after the first power change further hints were refused as rate_limited and never replayed",
+      "source_text": "[challenge/containment] actuation is rate-limited in config: a minimum interval between power changes (compressor protection, two people disagreeing hot/cold) and a cap on actions per day; when a limit is hit the agent does nothing and logs it. This is the only containment available on Shabbat, since nobody can command it to stop",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o48",
+      "claim_id": "c22",
+      "seam": "cold hint intent, real model",
+      "behavior": "the real Gemma labelled the text 'too cold here' (with an interjection) as intent cool, which maps to power ON: the opposite of the decided mapping cold -> OFF",
+      "source_text": "hint mapping: hot remark/wish -> AC power ON; cold remark/discomfort -> AC power OFF; unit assumed to stay in cool mode; if already in the requested state do nothing and say nothing",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o49",
+      "claim_id": "c8",
+      "seam": "start-up volume, live",
+      "behavior": "the configured volume was NOT re-applied at start-up on the real box: every listener start logged startup_volume_failed VolumeCommandError",
+      "source_text": "own-voice output is a thin PipeWire adapter in this repo (pw-play for TTS audio, PipeWire volume control for level/mute) targeting the reSpeaker XVF3800 node by name, the same device for capture and playback so AEC has its reference; the configured volume is re-applied at start-up; default is silent/near-silent; /v1/audio/speech has no volume parameter so level is applied locally",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o50",
+      "claim_id": "c1",
+      "seam": "scripted WAV run, live",
+      "behavior": "a 'listen --script file.wav' run against the real lobes session did not end when the file ended and ignored SIGTERM (needed SIGKILL)",
+      "source_text": "shabbos-goy listens through the lobes Hebrew realtime session (ears-only), and in Shabbat / Yom Kippur mode switches the AC power on or off only when it infers the wish from indirect speech; it can report AC status, stays quiet by default with an adjustable own-volume, and survives reboots unattended",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o51",
+      "claim_id": "c30",
+      "seam": "audio path on the HOST (not the container)",
+      "behavior": "capture from the reSpeaker through the host PipeWire session works from the listener process; the monitor speaker is inaudible to the mic (RMS 1075 ambient vs 1196 while playing)",
+      "source_text": "[challenge/hardware] audio I/O must coexist with the host PipeWire session: probe 'fuser /dev/snd/*' shows user pipewire (pid 3189) holding pcmC1D0c and pcmC1D0p of card Array, so raw 'hw:Array' capture from a container will hit EBUSY; the audio backend (PipeWire socket mount vs releasing the card from PipeWire for exclusive ALSA use) is chosen deliberately and tested on the box",
       "origin": "llm",
       "status": "proposed"
     }
