@@ -74,3 +74,11 @@ def test_root_and_learn_describe_the_domain_not_the_template() -> None:
 
     assert "clonable template" not in _TEXT
     assert "Shabbat" in _TEXT
+
+
+def test_the_root_parser_description_is_not_the_template_either() -> None:
+    from shabbos_goy.cli import _build_parser
+
+    description = _build_parser().description or ""
+    assert "clonable template" not in description
+    assert "Shabbat" in description

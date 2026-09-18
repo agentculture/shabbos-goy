@@ -79,7 +79,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser = _CliArgumentParser(
         prog="shabbos-goy",
-        description="shabbos-goy — a clonable template for AgentCulture mesh agents.",
+        description=(
+            "shabbos-goy — a Hebrew household agent that switches AC power from indirect "
+            "speech, and never from a spoken command on Shabbat, Yom Kippur or Yom Tov."
+        ),
     )
     parser.add_argument(
         "--version",
