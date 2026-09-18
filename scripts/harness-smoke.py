@@ -106,10 +106,20 @@ GUILD_HARNESS = {
 #: are upstream's to fix (never patch a verbatim vendored copy), so they are
 #: WAIVED — reported every run, never silently dropped. Any finding outside
 #: this allowlist fails the check.
+#:
+#: The three devague records below quote ``~/.config/<app>`` in prose: that is
+#: the XDG default config home, which is portable by definition, not a
+#: machine-specific dotfile. The text cannot simply be reworded: the frame and
+#: plan are devague state (never hand-edited, and ``devague amend`` keeps the
+#: superseded wording in each claim's revision history), and the spec is
+#: regenerated from the frame. They are historical contracts, frozen at export.
 STEWARD_WAIVED_PORTABILITY_PATHS = frozenset(
     {
         ".claude/skills/recall/SKILL.md",
         ".claude/skills/remember/SKILL.md",
+        ".devague/frames/lobes-driven-ac-power-agent.json",
+        ".devague/plans/lobes-driven-ac-power-agent.json",
+        "docs/specs/2026-09-18-lobes-driven-ac-power-agent.md",
     }
 )
 
