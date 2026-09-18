@@ -1,0 +1,9 @@
+{
+  "חם פה נורא": {"class": "remark", "intent": "cool", "confidence": 0.86},
+  "הלוואי שהיה קר": {"class": "wish", "intent": "cool", "confidence": 0.81},
+  "קשה לי לישון בחום הזה": {"class": "discomfort", "intent": "cool", "confidence": 0.79},
+  "תדליק את המזגן": {"class": "imperative", "intent": "cool", "confidence": 0.95},
+  "אתה יכול להדליק את האור?": {"class": "request", "intent": "none", "confidence": 0.9},
+  "למה המזגן לא דלוק?": {"class": "rebuke", "intent": "cool", "confidence": 0.88},
+  "מה השעה?": {"class": "unrelated", "intent": "none", "confidence": 0.9}
+}
