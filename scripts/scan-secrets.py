@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Scan tracked files for committed secrets and non-localhost endpoints.
 
-Two independent checks, tuned narrowly so prose docs full of GitHub/spec
-links don't trip it:
+Four independent checks, tuned narrowly so prose docs full of GitHub/spec
+links don't trip them:
 
 1. Credential / API-key-shaped strings — known token formats (AWS access
    keys, GitHub tokens, Slack tokens, OpenAI-style keys, PEM private key
@@ -17,6 +17,17 @@ links don't trip it:
    ``baseUrl`` / ``endpoint`` / ``url`` / ``host`` whose value is an
    ``http(s)://`` URL. ``localhost`` / ``127.0.0.1`` / ``::1`` / ``0.0.0.0``
    are allowed; anything else fails.
+
+3. Realtime ``ws://``/``wss://`` URLs — anywhere in any tracked file (JSON,
+   YAML, Markdown prose, env files, ...), not only structured config.
+
+4. The same key-shaped (``baseUrl``/``endpoint``/``url``/``host``) URL check
+   as (2), extended to YAML files, ``.env``-named files, and Markdown fenced
+   code blocks — the file shapes (2) never parses as JSON.
+
+Checks 3 and 4 share one allowlist beyond (2)'s localhost set: a whole host
+written as a documentation placeholder in angle brackets, e.g.
+``ws://<lobes-host>:8001/...``, is not a committed secret.
 
 Usage:
     scan-secrets.py                # scan all tracked files (git ls-files)
@@ -231,6 +242,126 @@ def _scan_endpoints(path: str, text: str) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------
+# Check 3: realtime (ws/wss) URLs, and host-like values outside JSON
+#
+# Check 2 above is deliberately scoped to files that parse whole as JSON, so
+# it never sees a YAML config, a `.env.example`, a Markdown fenced code
+# block, or a bare `ws://`/`wss://` literal sitting in prose (the lobes
+# realtime contract is exactly this last shape — see CLAUDE.md's "Connect:"
+# bullet). This check is purely additive: checks 1 and 2 above are
+# unchanged, this only adds two more scans that run on every file.
+#
+# Docs legitimately spell out a realtime endpoint with a placeholder host the
+# operator fills in per deployment, written in angle brackets, e.g.
+# ``ws://<lobes-host>:8001/v1/realtime``. That whole-host shape is allowlisted
+# here — nowhere else — so a concrete non-localhost host still fails.
+# ---------------------------------------------------------------------------
+
+#: A literal ws(s):// URL anywhere in a tracked file's text. Quotes and
+#: backticks are excluded from the value so a Markdown inline code span
+#: (`` `ws://host:8001/path` ``) or a quoted string closes the match at its
+#: real delimiter instead of swallowing it.
+_WS_URL_RE = re.compile(r"wss?://[^\s\"'`]+", re.IGNORECASE)
+
+#: A `key: value` / `key=value` line whose key looks like an endpoint/host
+#: field (reusing `_ENDPOINT_KEY_RE`'s vocabulary) and whose value is a
+#: literal URL — http(s) or ws(s). This is the YAML / env-example / Markdown
+#: fenced-code-block analogue of check 2's JSON key-walk.
+_KV_URL_RE = re.compile(r"""(?ix)
+        \b(base[_-]?url|endpoint|url|host)
+        \s*[:=]\s*
+        ["']?
+        (?P<value>[a-z][a-z0-9+.-]*://[^\s"']+)
+    """)
+
+#: Fenced Markdown code blocks (```lang ... ```), body only.
+_FENCE_RE = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
+
+_REALTIME_SCHEMES = ("ws", "wss")
+_SCOPED_SCHEMES = ("http", "https", "ws", "wss")
+
+#: A whole-value documentation placeholder written in angle brackets, e.g.
+#: ``<lobes-host>``. Only exempts hosts of exactly this shape; a value that
+#: merely contains ``<`` somewhere else is still examined.
+_HOST_PLACEHOLDER_RE = re.compile(r"^<[^<>]+>$")
+
+#: A bare generic word used as a stand-in host in prose (``ws://host:8001``,
+#: as this repo's own spec docs write it while describing this very check).
+#: Scoped to a *single-label* value (no dot) that is made up ENTIRELY of
+#: these tokens, so a real single-label internal hostname (``db01``,
+#: ``redis-cache``) is not exempted merely for sharing a hyphen-delimited
+#: word with this list, and a dotted/IP host is never eligible at all.
+_HOST_PLACEHOLDER_WORDS = frozenset({"host", "hostname", "myhost", "yourhost", "example"})
+
+
+def _is_host_placeholder(host: str) -> bool:
+    if _HOST_PLACEHOLDER_RE.match(host):
+        return True
+    if "." in host or ":" in host:
+        return False
+    tokens = set(host.lower().split("-"))
+    return bool(tokens) and tokens <= _HOST_PLACEHOLDER_WORDS
+
+
+def _scoped_url_host(value: str, schemes: tuple[str, ...]) -> str | None:
+    """Like `_endpoint_host`, but for a caller-selected scheme set (adds
+    ws/wss for the realtime + extended-config checks below)."""
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return None
+    if parts.scheme.lower() not in schemes:
+        return None
+    return parts.hostname or None
+
+
+def _scan_realtime_urls(path: str, text: str) -> list[Finding]:
+    """Every tracked file, for a literal ws(s):// URL with a real host."""
+    findings: list[Finding] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for match in _WS_URL_RE.finditer(line):
+            host = _scoped_url_host(match.group(0), _REALTIME_SCHEMES)
+            if host is None or host in _ALLOWED_HOSTS or _is_host_placeholder(host):
+                continue
+            findings.append(
+                Finding(path, lineno, "endpoint", f"{match.group(0)!r} is not localhost")
+            )
+    return findings
+
+
+def _config_host_blocks(path: str, text: str) -> list[str]:
+    """Text regions to key-scan for host-like values: a whole YAML or
+    env-example file, or just the fenced code blocks of a Markdown file.
+    JSON is deliberately excluded here — check 2 already covers it."""
+    name = Path(path).name
+    if name.endswith((".yaml", ".yml")):
+        return [text]
+    if ".env" in name and not name.endswith(".json"):
+        return [text]
+    if name.endswith(".md"):
+        return _FENCE_RE.findall(text)
+    return []
+
+
+def _scan_config_hosts(path: str, text: str) -> list[Finding]:
+    """`url`/`host`/`endpoint`/`base_url`-keyed URL literals in the file
+    shapes check 2 never parses: YAML, env-example, Markdown code blocks."""
+    findings: list[Finding] = []
+    for block in _config_host_blocks(path, text):
+        for lineno, line in enumerate(block.splitlines(), start=1):
+            match = _KV_URL_RE.search(line)
+            if not match:
+                continue
+            key = match.group(1)
+            value = match.group("value")
+            host = _scoped_url_host(value, _SCOPED_SCHEMES)
+            if host is None or host in _ALLOWED_HOSTS or _is_host_placeholder(host):
+                continue
+            findings.append(Finding(path, lineno, "endpoint", f"{key}={value!r} is not localhost"))
+    return findings
+
+
+# ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
 
@@ -260,6 +391,8 @@ def scan_paths(paths: list[str]) -> list[Finding]:
             continue
         findings.extend(_scan_credentials(rel_path, text))
         findings.extend(_scan_endpoints(rel_path, text))
+        findings.extend(_scan_realtime_urls(rel_path, text))
+        findings.extend(_scan_config_hosts(rel_path, text))
     return findings
 
 
