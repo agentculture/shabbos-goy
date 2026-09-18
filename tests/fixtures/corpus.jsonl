@@ -1,33 +1,33 @@
-{"id": "c01", "text": "תדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c02", "text": "תכבה את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c03", "text": "הדלק את המזגן בבקשה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
+{"id": "c01", "text": "תדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c02", "text": "תכבה את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "warm"}
+{"id": "c03", "text": "הדלק את המזגן בבקשה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
 {"id": "c04", "text": "כבה את האור", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c05", "text": "תדליקי את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
+{"id": "c05", "text": "תדליקי את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
 {"id": "c06", "text": "תכבי את האור בסלון", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
 {"id": "c07", "text": "תפתח את החלון", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
 {"id": "c08", "text": "תסגור את התריס", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c09", "text": "תוריד את הטמפרטורה בבקשה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c10", "text": "תעלה את הטמפרטורה לעשרים וחמש", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c11", "text": "שים את המזגן על עשרים ושתיים", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c12", "text": "תשים את המזגן על קירור", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
+{"id": "c09", "text": "תוריד את הטמפרטורה בבקשה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c10", "text": "תעלה את הטמפרטורה לעשרים וחמש", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "warm"}
+{"id": "c11", "text": "שים את המזגן על עשרים ושתיים", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c12", "text": "תשים את המזגן על קירור", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
 {"id": "c13", "text": "הפעל את המאוורר", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c14", "text": "תפעיל את המזגן עכשיו", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c15", "text": "נא להדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
+{"id": "c14", "text": "תפעיל את המזגן עכשיו", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c15", "text": "נא להדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
 {"id": "c16", "text": "בבקשה תדליק את האור", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c17", "text": "תגביר את הרדיו", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c18", "text": "תנמיך את המוזיקה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c19", "text": "תכבה את הרעש הזה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c20", "text": "תדליק לי את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c21", "text": "תוריד לעשרים וארבע", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c22", "text": "קרר את החדר", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c23", "text": "תחמם קצת את החדר", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c24", "text": "תכבה הכל", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c25", "text": "עכשיו תדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c26", "text": "תדליקו את המזגן בסלון", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c27", "text": "שבוס גוי תדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c28", "text": "תשים את המזגן על חימום", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
+{"id": "c17", "text": "תגביר את הרדיו", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "louder"}
+{"id": "c18", "text": "תנמיך את המוזיקה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "quieter"}
+{"id": "c19", "text": "תכבה את הרעש הזה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "quieter"}
+{"id": "c20", "text": "תדליק לי את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c21", "text": "תוריד לעשרים וארבע", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c22", "text": "קרר את החדר", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c23", "text": "תחמם קצת את החדר", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "warm"}
+{"id": "c24", "text": "תכבה הכל", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "warm"}
+{"id": "c25", "text": "עכשיו תדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c26", "text": "תדליקו את המזגן בסלון", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c27", "text": "שבוס גוי תדליק את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "cool"}
+{"id": "c28", "text": "תשים את המזגן על חימום", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "warm"}
 {"id": "c29", "text": "תפתח את הדלת", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
-{"id": "c30", "text": "תכבה את המזגן לפני שהולכים לישון", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "none"}
+{"id": "c30", "text": "תכבה את המזגן לפני שהולכים לישון", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "expect_class": "imperative", "expect_intent": "warm"}
 {"id": "c31_01", "text": "תדליג את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "note": "ק/ג confusion of תדליק"}
 {"id": "c31_02", "text": "תדליכ את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "note": "ק/כ confusion of תדליק"}
 {"id": "c31_03", "text": "תכבא את האור", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "note": "ה/א confusion of תכבה"}
@@ -36,42 +36,52 @@
 {"id": "c31_06", "text": "תכבע את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "note": "ה/ע confusion of תכבה"}
 {"id": "c31_07", "text": "הדלג את המזגן", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "note": "ק/ג confusion of הדלק"}
 {"id": "c31_08", "text": "תדליק את המזגן תודה רבה", "category": "command", "subcategory": "imperative", "expect_act_strict": false, "note": "command plus the documented noise hallucination"}
-{"id": "c40_01", "text": "אתה יכול להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
+{"id": "c40_01", "text": "אתה יכול להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
 {"id": "c40_02", "text": "תוכל לכבות את האור?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_03", "text": "אפשר להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_04", "text": "אפשר קצת קריר פה?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_05", "text": "יש מצב שתדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_06", "text": "אולי תדליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_07", "text": "למה שלא תדליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_08", "text": "אכפת לך להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_09", "text": "אתה מוכן לכבות את הרדיו?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_10", "text": "תוכלי להנמיך את המוזיקה?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_11", "text": "אפשר להוריד את הטמפרטורה?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_12", "text": "בא לך להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_13", "text": "מה דעתך להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
+{"id": "c40_03", "text": "אפשר להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_04", "text": "אפשר קצת קריר פה?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_05", "text": "יש מצב שתדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_06", "text": "אולי תדליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_07", "text": "למה שלא תדליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_08", "text": "אכפת לך להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_09", "text": "אתה מוכן לכבות את הרדיו?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "quieter"}
+{"id": "c40_10", "text": "תוכלי להנמיך את המוזיקה?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "quieter"}
+{"id": "c40_11", "text": "אפשר להוריד את הטמפרטורה?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_12", "text": "בא לך להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_13", "text": "מה דעתך להדליק את המזגן?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
 {"id": "c40_14", "text": "אפשר בבקשה להדליק את האור?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_15", "text": "האם אתה יכול לקרר את החדר?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
-{"id": "c40_16", "text": "אתה יכול לשים את המזגן על עשרים וארבע?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "none"}
+{"id": "c40_15", "text": "האם אתה יכול לקרר את החדר?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c40_16", "text": "אתה יכול לשים את המזגן על עשרים וארבע?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_01", "text": "מישהו ידליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_02", "text": "שמישהו יכבה את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "warm"}
+{"id": "c45_03", "text": "כדאי להדליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_04", "text": "צריך להדליק מזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_05", "text": "שווה להדליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_06", "text": "הלוואי שמישהו ידליק את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_07", "text": "אם מישהו היה מדליק את המזגן היה נחמד", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_08", "text": "הייתי שמח אם המזגן היה דולק", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "cool"}
+{"id": "c45_09", "text": "מישהו יכול להנמיך את הרדיו", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "quieter"}
+{"id": "c45_10", "text": "צריך לכבות את המזגן", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "warm"}
 {"id": "c50_01", "text": "המזגן דלוק?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "status"}
 {"id": "c50_02", "text": "האם המזגן עובד?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "status"}
 {"id": "c50_03", "text": "מה הטמפרטורה בחדר?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "status"}
 {"id": "c50_04", "text": "כמה מעלות יש בבית?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "status"}
 {"id": "c50_05", "text": "המזגן פועל?", "category": "command", "subcategory": "request", "expect_act_strict": false, "expect_class": "request", "expect_intent": "status"}
-{"id": "c60_01", "text": "למה המזגן לא דלוק?", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
+{"id": "c60_01", "text": "למה המזגן לא דלוק?", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
 {"id": "c60_02", "text": "למה האור כבוי?", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_03", "text": "כמה זמן המזגן כבוי?", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_04", "text": "מישהו שכח לכבות את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_05", "text": "איך יכול להיות שהמזגן לא עובד", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_06", "text": "למה אף אחד לא הדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_07", "text": "תמיד שוכחים להדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_08", "text": "שוב פעם המזגן כבוי", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_09", "text": "המזגן עדיין לא דלוק", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_10", "text": "אני לא מבין למה המזגן כבוי", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_11", "text": "מה קרה למזגן שהוא לא עובד", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_12", "text": "למה לא הדלקתם את המזגן לפני שבת", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_13", "text": "נו, המזגן לא דלוק", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_14", "text": "חבל שאף אחד לא הדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
-{"id": "c60_15", "text": "למה כל כך חם פה ואף אחד לא הדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "none"}
+{"id": "c60_03", "text": "כמה זמן המזגן כבוי?", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_04", "text": "מישהו שכח לכבות את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "warm"}
+{"id": "c60_05", "text": "איך יכול להיות שהמזגן לא עובד", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_06", "text": "למה אף אחד לא הדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_07", "text": "תמיד שוכחים להדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_08", "text": "שוב פעם המזגן כבוי", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_09", "text": "המזגן עדיין לא דלוק", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_10", "text": "אני לא מבין למה המזגן כבוי", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_11", "text": "מה קרה למזגן שהוא לא עובד", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_12", "text": "למה לא הדלקתם את המזגן לפני שבת", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_13", "text": "נו, המזגן לא דלוק", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_14", "text": "חבל שאף אחד לא הדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
+{"id": "c60_15", "text": "למה כל כך חם פה ואף אחד לא הדליק את המזגן", "category": "command", "subcategory": "rebuke", "expect_act_strict": false, "expect_class": "rebuke", "expect_intent": "cool"}
 {"id": "h01", "text": "חם פה", "category": "hint", "subcategory": "hot", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "cool"}
 {"id": "h02", "text": "חם לי", "category": "hint", "subcategory": "hot", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "cool"}
 {"id": "h03", "text": "חם נורא בבית", "category": "hint", "subcategory": "hot", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "cool"}
@@ -101,10 +111,10 @@
 {"id": "h27", "text": "הילד רועד מקור", "category": "hint", "subcategory": "cold", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "warm"}
 {"id": "h28", "text": "רועש פה", "category": "hint", "subcategory": "loud", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "quieter"}
 {"id": "h29", "text": "איזה רעש", "category": "hint", "subcategory": "loud", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "quieter"}
-{"id": "h30", "text": "הרדיו חזק מדי", "category": "hint", "subcategory": "loud", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "quieter"}
+{"id": "h30", "text": "הרדיו חזק מדי", "category": "hint", "subcategory": "loud", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "quieter", "note": "names a device: vetoed"}
 {"id": "h31", "text": "אי אפשר לשמוע מרוב רעש", "category": "hint", "subcategory": "loud", "expect_act_strict": true, "expect_class": "discomfort", "expect_intent": "quieter"}
 {"id": "h32", "text": "אני לא שומע כלום", "category": "hint", "subcategory": "quiet", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "louder", "note": "negation belongs to the hint phrase"}
-{"id": "h33", "text": "קשה לשמוע את הרדיו", "category": "hint", "subcategory": "quiet", "expect_act_strict": true, "expect_class": "discomfort", "expect_intent": "louder"}
+{"id": "h33", "text": "קשה לשמוע את הרדיו", "category": "hint", "subcategory": "quiet", "expect_act_strict": true, "expect_class": "discomfort", "expect_intent": "louder", "note": "names a device: vetoed"}
 {"id": "h34", "text": "חלש מדי", "category": "hint", "subcategory": "quiet", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "louder"}
 {"id": "h35", "text": "חושך פה", "category": "hint", "subcategory": "dark", "expect_act_strict": true, "expect_class": "remark", "expect_intent": "none", "note": "no light actuator in the MVP whitelist"}
 {"id": "h36", "text": "קשה לקרוא בחושך", "category": "hint", "subcategory": "dark", "expect_act_strict": true, "expect_class": "discomfort", "expect_intent": "none", "note": "no light actuator in the MVP whitelist"}
@@ -172,6 +182,38 @@
 {"id": "n_liturgy_08", "text": "לכה דודי לקראת כלה", "category": "negative", "subcategory": "liturgy", "expect_act_strict": false}
 {"id": "n_liturgy_09", "text": "אשר קדשנו במצוותיו וציוונו להדליק נר של שבת", "category": "negative", "subcategory": "liturgy", "expect_act_strict": false}
 {"id": "n_liturgy_10", "text": "זכור את יום השבת לקדשו", "category": "negative", "subcategory": "liturgy", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_01", "text": "שמישהו יכבה את המזגן קר פה", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_02", "text": "קר פה שמישהו יכבה את המזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_03", "text": "חם פה מישהו ידליק את המזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_04", "text": "מישהו ידליק את המזגן חם פה", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_05", "text": "כדאי להדליק את המזגן חם נורא", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_06", "text": "חם נורא כדאי להדליק את המזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_07", "text": "צריך להדליק מזגן קשה לי לנשום", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_08", "text": "קשה לי לנשום צריך להדליק מזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_09", "text": "הלוואי שמישהו ידליק את המזגן חם פה", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_10", "text": "חם פה הלוואי שמישהו ידליק את המזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_11", "text": "המזגן חם פה", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_12", "text": "קר לי מהמזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_fragment_01", "text": "חם", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_02", "text": "קר", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_03", "text": "רועש", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_04", "text": "חושך", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_05", "text": "קריר", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_06", "text": "קפוא", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_07", "text": "מחניק", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_08", "text": "היה קר", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_09", "text": "שהיה קר", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_10", "text": "יותר חם", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_11", "text": "קצת יותר קריר", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_12", "text": "וקר", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_13", "text": "היה קר לי", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_14", "text": "שהיה קר פה", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_15", "text": "יותר חם פה", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_16", "text": "קצת יותר קריר בבית", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_17", "text": "חם ולח", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_18", "text": "קר ורטוב", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_19", "text": "קריר ונעים", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
+{"id": "n_fragment_20", "text": "חושך מוחלט", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
 {"id": "n_elsewhere_01", "text": "הקור בחוץ נורא היום", "category": "negative", "subcategory": "elsewhere", "expect_act_strict": false}
 {"id": "n_elsewhere_02", "text": "המזגן של השכנים רועש", "category": "negative", "subcategory": "elsewhere", "expect_act_strict": false}
 {"id": "n_elsewhere_03", "text": "חם בחוץ היום", "category": "negative", "subcategory": "elsewhere", "expect_act_strict": false}

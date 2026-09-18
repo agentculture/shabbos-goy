@@ -204,3 +204,117 @@ def test_classification_is_hashable_and_frozen():
     result = classify("חם פה")
     with pytest.raises(Exception):
         result.klass = "imperative"  # type: ignore[misc]
+
+
+# ------------------------------------------- operating a device is not a hint
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "מישהו ידליק את המזגן",
+        "שמישהו יכבה את המזגן",
+        "כדאי להדליק את המזגן",
+        "צריך להדליק מזגן",
+        "הלוואי שמישהו ידליק את המזגן",
+        "אם מישהו היה מדליק את המזגן היה נחמד",
+        "הייתי שמח אם המזגן היה דולק",
+    ],
+)
+def test_impersonal_and_third_person_operation_is_a_request_not_a_hint(text):
+    # Hebrew reaches for the third-person jussive and the impersonal modal
+    # exactly to dodge a direct order. They are requests, and strict mode
+    # refuses them like any other command.
+    result = classify(text)
+    assert result.klass == "request"
+    assert may_act("strict", result.klass) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "שמישהו יכבה את המזגן קר פה",
+        "קר פה שמישהו יכבה את המזגן",
+        "חם פה מישהו ידליק את המזגן",
+        "מישהו ידליק את המזגן חם פה",
+        "הלוואי שמישהו ידליק את המזגן חם פה",
+        "חם פה הלוואי שמישהו ידליק את המזגן",
+    ],
+)
+def test_a_state_word_does_not_launder_a_command_in_either_order(text):
+    # The regression that blocked the merge: a command plus a state word acted
+    # on the state. The command half wins whichever half came first.
+    assert may_act("strict", classify(text).klass) is False
+
+
+@pytest.mark.parametrize("text", ["המזגן חם פה", "קר לי מהמזגן", "המזגן של השכנים רועש"])
+def test_merely_naming_a_controllable_device_is_never_a_hint(text):
+    assert classify(text).klass == "unrelated"
+    assert may_act("strict", classify(text).klass) is False
+
+
+# ---------------------------------------------------------------- fragments
+
+
+@pytest.mark.parametrize(
+    "text", ["חם", "קר", "רועש", "חושך", "היה קר", "שהיה קר", "יותר חם", "קצת יותר קריר"]
+)
+def test_a_bare_or_continuing_fragment_never_acts(text):
+    # "הלוואי שהיה ... קר" split on a pause leaves "קר", whose plain reading
+    # is the opposite of the wish. A fragment is not a remark.
+    result = classify(text)
+    assert result.klass == "unrelated"
+    assert may_act("strict", result.klass) is False
+
+
+def test_the_same_words_with_an_anchor_are_a_remark_again():
+    assert classify("קר פה").klass == "remark"
+    assert classify("קר לי").klass == "remark"
+    assert classify("איזה קור בבית").klass == "remark"
+
+
+# ------------------------------------------- weekday intents for commands
+
+
+@pytest.mark.parametrize(
+    "text,klass,intent",
+    [
+        ("תדליק את המזגן", "imperative", "cool"),
+        ("תכבה את המזגן", "imperative", "warm"),
+        ("תנמיך את הווליום", "imperative", "quieter"),
+        ("תגביר את הרדיו", "imperative", "louder"),
+        ("אתה יכול להדליק את המזגן?", "request", "cool"),
+        ("למה המזגן לא דלוק?", "rebuke", "cool"),
+        ("המזגן דלוק?", "request", "status"),
+        ("תדליק את האור", "imperative", "none"),
+    ],
+)
+def test_weekday_mode_obeys_commands_with_the_intent_they_carry(text, klass, intent):
+    result = classify(text)
+    assert (result.klass, result.intent) == (klass, intent)
+    # Weekday obeys every command class; strict refuses all of them.
+    assert may_act("weekday", result.klass) is True
+    assert may_act("strict", result.klass) is False
+
+
+def test_a_command_outside_the_whitelist_carries_no_intent_to_execute():
+    # Understood, classified, and nothing for the pipeline to do with it.
+    assert classify("תדליק את האור").intent == "none"
+    assert classify("תפתח את החלון").intent == "none"
+
+
+@pytest.mark.parametrize(
+    "text,intent",
+    [
+        ("מה עם הרדיו", "none"),  # a volume device named, nothing said to do
+        ("כדאי לכוון את המזגן", "cool"),  # the AC, set, with nothing else said
+        ("כדאי לפתוח", "none"),  # an operation with no device and no state
+        ("מה עם המזגן חם פה", "cool"),  # device named: the state describes the room
+        ("נו, חם פה נורא", "cool"),  # a complaint, not a wish: no inversion
+        ("תעשה משהו", "none"),  # an order with nothing in it to execute
+    ],
+)
+def test_a_command_with_too_little_said_carries_no_intent_it_cannot_infer(text, intent):
+    result = classify(text)
+    assert result.intent == intent
+    assert may_act("strict", result.klass) is False

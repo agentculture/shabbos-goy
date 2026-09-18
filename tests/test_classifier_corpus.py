@@ -200,12 +200,34 @@ def _hebrew_string_literals(path: Path):
                 yield node.value
 
 
+def _regex_pattern_literals(module: ast.Module) -> set[str]:
+    """Every string literal assigned to a ``*_PATTERN(S)`` name.
+
+    The classifier matches Hebrew verb roots with regular expressions, whose
+    ``(?:...)`` groups contain question marks. They are matched against input
+    and never spoken, so they are excluded from the check below by the one
+    thing that distinguishes them structurally: the name they are bound to.
+    """
+    patterns: set[str] = set()
+    for node in ast.walk(module):
+        if not isinstance(node, ast.Assign):
+            continue
+        names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if not any(name.endswith(("_PATTERN", "_PATTERNS")) for name in names):
+            continue
+        for child in ast.walk(node.value):
+            if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                patterns.add(child.value)
+    return patterns
+
+
 def test_no_code_path_produces_a_question_as_spoken_output():
     """Spoken output is Hebrew and never invites a reply (CLAUDE.md #5).
 
     Any Hebrew string literal in the package is a candidate for being spoken,
     so none of them may carry a question mark (ASCII, Arabic or full-width).
     Docstrings are excluded: they quote user utterances, and are never spoken.
+    Regex patterns are excluded for the same reason (see above).
     """
     offenders = []
     for path in sorted(PACKAGE_ROOT.rglob("*.py")):
@@ -216,9 +238,34 @@ def test_no_code_path_produces_a_question_as_spoken_output():
                 doc = ast.get_docstring(node, clean=False)
                 if doc:
                     docstrings.add(doc)
+        excluded = docstrings | _regex_pattern_literals(module)
         for literal in _hebrew_string_literals(path):
-            if literal in docstrings:
+            if literal in excluded:
                 continue
             if any(mark in literal for mark in ("?", "؟", "？")):
                 offenders.append((path.name, literal))
     assert offenders == [], offenders
+
+
+def test_corpus_has_at_least_ten_command_hint_mixtures_and_ten_fragments():
+    for category in ("mixed_command_hint", "fragment"):
+        count = len([row for row in NEGATIVES if row["subcategory"] == category])
+        assert count >= 10, f"{category}: {count}"
+
+
+def test_corpus_mixes_commands_and_hints_in_both_orders():
+    mixed = [row["text"] for row in NEGATIVES if row["subcategory"] == "mixed_command_hint"]
+    assert any(text.startswith(("חם", "קר", "קשה")) for text in mixed)
+    assert any(text.startswith(("שמישהו", "מישהו", "כדאי", "צריך")) for text in mixed)
+
+
+def test_every_command_fixture_carrying_an_intent_would_execute_it_on_a_weekday():
+    # Weekday mode obeys direct commands, so a command class has to carry the
+    # intent the pipeline will run. Strict mode is unaffected: may_act gates
+    # on the class, which is asserted above.
+    for row in COMMANDS:
+        if "expect_intent" not in row:
+            continue
+        result = classify(row["text"])
+        assert result.intent == row["expect_intent"], row["id"]
+        assert may_act("weekday", result.klass) is True, row["id"]

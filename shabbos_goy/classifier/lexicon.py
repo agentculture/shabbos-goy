@@ -365,3 +365,135 @@ FEVER_PHRASES = _fold("לי חום", "לו חום", "לה חום", "להם חו�
 FEVER = _fold("מדחום")
 
 DARK = _fold("חושך", "חשוך", "חשוכה", "אפלה")
+
+
+# ------------------------------------------------- operating a device at all
+# A hint is a remark about the STATE of the room or of the speaker. The moment
+# an utterance is about *operating* a device -- in any person, including the
+# third-person jussive Hebrew uses to dodge a direct order ("שמישהו יכבה את
+# המזגן") and the impersonal modal ("כדאי להדליק") -- it stops being a hint,
+# whatever else it contains.
+#
+# These are regular expressions, matched against a whole token (after the
+# normaliser folded its final letters) with the usual one-letter prefixes
+# allowed in front, so an unseen conjugation of a known root still matches.
+# Over-matching here is free: it can only ever *refuse* to treat something as
+# a hint.
+_PREFIX_PATTERN = r"[שוהבלכמ]{0,2}"
+_PERSON_PATTERN = r"[ילתנאמ]?"
+
+OP_ON_PATTERNS = (
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}ה?דל[יו]?ק\w*",  # הדליק ידליק תדליק מדליק להדליק הדלקה
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}ה?פעי?ל\w*",  # הפעיל יפעיל מפעיל להפעיל הפעלה
+)
+OP_OFF_PATTERNS = (
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}כב(?:ה|ות|ו(?!ד)|י)\w*",  # כבה יכבה לכבות מכבה כבו
+    rf"{_PREFIX_PATTERN}כיבוי\w*",
+)
+OP_DOWN_PATTERNS = (
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}ה?ורי?ד\w*",  # הוריד יוריד תוריד מוריד להוריד
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}ה?נמי?כ\w*",  # הנמיך ינמיך תנמיך להנמיך
+    rf"{_PREFIX_PATTERN}(?:[ילתנאמ]ה?|ה)חלי?ש\w*",  # להחליש יחליש (not the adjective חלש)
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}ה?שתי?ק\w*",  # להשתיק ישתיק תשתיק
+)
+OP_UP_PATTERNS = (
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}ה?על[הות]\w*",  # העלה יעלה תעלה להעלות
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}ה?גבי?ר\w*",  # הגביר יגביר תגביר להגביר
+)
+OP_COOL_PATTERNS = (rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}קרר\w*", rf"{_PREFIX_PATTERN}קירור\w*")
+OP_WARM_PATTERNS = (rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}חממ\w*", rf"{_PREFIX_PATTERN}חימומ\w*")
+OP_NEUTRAL_PATTERNS = (
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}פתח\w*",  # פתח יפתח תפתח לפתוח
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}סג[ורי]\w*",  # סגור יסגור לסגור תסגרי
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}סוגר\w*",
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}שים\w*",  # שים ישים תשים לשים
+    rf"{_PREFIX_PATTERN}{_PERSON_PATTERN}כוו?נ\w*",  # כוון יכוון לכוון
+)
+
+#: Tokens that look like an operating verb but are not one. Kept short and
+#: explicit: each one is a word this agent will really hear on Shabbat.
+OP_EXCEPTIONS = _fold("מפתח", "מפתחות", "כבוד", "כבודו", "מקרר", "מעלות", "גבר")
+
+#: Devices this agent can actually operate, by what the intent means for them.
+CLIMATE_DEVICES = _fold("מזגן", "מיזוג", "טמפרטורה", "מזגנים")
+VOLUME_DEVICES = _fold("רדיו", "מוזיקה", "ווליום", "וולום", "עוצמה", "רמקול", "טלוויזיה")
+#: Noise words. They set the volume CONTEXT for reading a command's intent
+#: ("תכבה את הרעש הזה" -> quieter) but they are not devices, so they never
+#: trigger the device veto: "איזה רעש" is a plain hint.
+NOISE_CONTEXT = _fold("רעש", "רועש", "רועשת", "צעקות", "רעשן")
+#: Controllable, but outside the MVP whitelist: a command about these is
+#: understood and carries no intent to execute.
+OTHER_DEVICES = _fold(
+    "אור", "אורות", "מנורה", "תריס", "חלון", "דלת", "פלטה", "דוד", "מאוורר", "בוילר"
+)
+
+#: The state a device is in, as opposed to a verb that changes it.
+STATE_ON = _fold("דלוק", "דלוקה", "דולק", "דולקת", "עובד", "עובדת", "פועל", "פועלת")
+STATE_OFF = _fold("כבוי", "כבויה", "מכובה", "כבתה")
+
+#: Impersonal and modal frames: nobody is ordered, but a device is to be
+#: operated. "כדאי להדליק את המזגן" is a request, not a remark about heat.
+IMPERSONAL_FRAMES = _fold(
+    "כדאי",
+    "צריך",
+    "צריכים",
+    "מישהו",
+    "שווה",
+    "נחוץ",
+    "רצוי",
+    "הייתי שמח",
+    "הייתי שמחה",
+    "היינו שמחים",
+    "נחמד היה",
+    "טוב היה",
+    "מה עם",
+)
+
+# --------------------------------------------------- a complete remark
+# A bare adjective is what a pause-split sentence leaves behind: "הלוואי שהיה
+# ... קר" can arrive as the single word "קר", whose plain reading ("it is
+# cold") is the OPPOSITE of the wish. A state word therefore only counts as a
+# remark when something anchors it to here and now.
+LOCATIVE_ANCHORS = _fold(
+    "פה",
+    "כאן",
+    "בבית",
+    "בחדר",
+    "בסלון",
+    "במטבח",
+    "בסלון",
+    "בחדרים",
+    "בדירה",
+    "באוויר",
+    "בחדר שינה",
+)
+EXPERIENCER_ANCHORS = _fold(
+    "לי",
+    "לנו",
+    "לו",
+    "לה",
+    "להם",
+    "לילד",
+    "לילדה",
+    "לילדים",
+    "לתינוק",
+    "לאמא",
+    "לאבא",
+    "לסבתא",
+    "לסבא",
+    "אני",
+    "אנחנו",
+    "הילד",
+    "הילדה",
+    "הילדים",
+    "התינוק",
+    "הידיים",
+    "שלי",
+    "שלנו",
+)
+INTENSIFIER_ANCHORS = _fold("איזה", "ממש", "נורא", "מאוד", "מדי", "בטירוף", "לגמרי", "כבד")
+INTENSIFIER_PHRASES = _fold("כל כך", "לא נורמלי")
+
+#: An utterance that opens like the tail of a longer one. Whatever follows,
+#: the beginning is missing, so it is not a complete remark.
+FRAGMENT_OPENERS = _fold("היה", "שהיה", "שיהיה", "יותר", "קצת", "וגם", "אבל", "גם", "או", "כי")
