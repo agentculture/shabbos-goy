@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-18T17:06:13Z",
-  "updated": "2026-09-18T18:16:40Z",
+  "updated": "2026-09-18T18:42:25Z",
   "claims": [
     {
       "id": "c1",
@@ -1382,6 +1382,17 @@
       ],
       "origin": "llm",
       "status": "approved"
+    },
+    {
+      "id": "l3",
+      "code": "grader-unverified",
+      "what": "t7 task agent wrote its 43 lobes-client tests before the implementation but never ran them red: first pytest run was after the modules existed (41 pass / 1 fail, the failure being a bad test setup), so the tests' ability to fail was not observed",
+      "skipped_check": "run the new tests against the empty module and observe failure before implementing",
+      "refs": [
+        "plan task t7, branch wf/t7 commit 0bba22e"
+      ],
+      "origin": "llm",
+      "status": "proposed"
     }
   ],
   "obligations": []
