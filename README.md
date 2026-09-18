@@ -75,7 +75,7 @@ Docker daemon enabled at boot. After a power cut it comes back by itself and
 works out the current mode from the clock, with no one touching it. Secrets
 (the Sensibo API key, the lobes gateway key) and private config (location,
 whitelist, device ids) stay outside the repository: a gitignored env file and
-a read-only mount of `~/.config/shabbos-goy`.
+a read-only mount of `$XDG_CONFIG_HOME/shabbos-goy` on the host.
 
 ## Quickstart (what exists today)
 

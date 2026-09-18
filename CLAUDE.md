@@ -142,8 +142,8 @@ repo's code approves it**, whoever proposed it:
   not pick another route without a reason.
 - **Sensibo is cloud-only.** There is no LAN protocol, so actuation needs
   internet access to `home.sensibo.com`. The API key comes from
-  `SENSIBO_API_KEY` or `~/.sensibo/.env`. Pass it to the container as a
-  secret. Never commit it.
+  `SENSIBO_API_KEY` (or sensibo-cli's own per-user env file; see its docs).
+  Pass it to the container as a secret. Never commit it.
 - `sensibo read <pod>` / `query latest` give current temperature and humidity,
   useful for deciding whether "חם פה" warrants action at all.
 
@@ -221,7 +221,7 @@ Requirements, following the workspace house style (`../climate-cli`,
   reboots.
 - Secrets (`SENSIBO_API_KEY`, lobes gateway key) come from a gitignored env
   file. Private config (location for zmanim, whitelist, Sensibo pod ids) is
-  bind-mounted read-only from `~/.config/shabbos-goy`.
+  bind-mounted read-only from `$XDG_CONFIG_HOME/shabbos-goy` on the host.
 - Startup must be **stateless and self-healing**. Compute the current mode
   from the clock and zmanim on boot. Retry lobes and Sensibo connections with
   backoff instead of crash-looping. Persist no queued action (invariant #3).
@@ -244,6 +244,7 @@ uv run black --check shabbos_goy tests                    # lint, as CI runs it
 uv run isort --check-only shabbos_goy tests
 uv run flake8 shabbos_goy tests
 uv run bandit -c pyproject.toml -r shabbos_goy
+npm install -g markdownlint-cli2@0.21.0                   # not installed by uv sync; CI pins this version
 markdownlint-cli2 "**/*.md" "#node_modules" "#.local" "#.claude/skills" "#.teken"
 
 uv run teken cli doctor . --strict                        # agent-first rubric gate

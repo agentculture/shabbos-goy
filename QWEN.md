@@ -73,7 +73,7 @@ together satisfy the two invariants `steward doctor` verifies:
   cloud-only.
 - **Deployment:** a Docker Compose service with `restart: unless-stopped`,
   `/dev/snd` passthrough (ALSA card chosen by name), secrets from a gitignored
-  env file, and private config mounted read-only from `~/.config/shabbos-goy`.
+  env file, and private config mounted read-only from `$XDG_CONFIG_HOME/shabbos-goy`.
   Startup is stateless: it recomputes the mode from the clock and zmanim, and
   if unsure it fails toward acting on nothing.
 - **Halacha is flagged, not decided.** No claim of rabbinic approval.
