@@ -294,8 +294,18 @@ _HOST_PLACEHOLDER_RE = re.compile(r"^<[^<>]+>$")
 _HOST_PLACEHOLDER_WORDS = frozenset({"host", "hostname", "myhost", "yourhost", "example"})
 
 
+# Reserved by RFC 2606 / RFC 6761: can never resolve to a real machine.
+_RESERVED_TLDS = (".invalid", ".example", ".test", ".localhost")
+
+
 def _is_host_placeholder(host: str) -> bool:
     if _HOST_PLACEHOLDER_RE.match(host):
+        return True
+    # No hostname characters at all (e.g. prose like "start with ws://, wss://"),
+    # or a format-string template such as "{server.host}": not a concrete host.
+    if not any(ch.isalnum() for ch in host) or "{" in host or "}" in host:
+        return True
+    if host.lower().rstrip(".").endswith(_RESERVED_TLDS):
         return True
     if "." in host or ":" in host:
         return False

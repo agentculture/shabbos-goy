@@ -434,3 +434,31 @@ def test_repo_checked_in_realtime_placeholder_line_scans_clean() -> None:
         findings.extend(scan_secrets._scan_realtime_urls("CLAUDE.md", line))
         findings.extend(scan_secrets._scan_config_hosts("CLAUDE.md", line))
     assert findings == []
+
+
+# -- integration fix (workforce wave 1): code and test files mention realtime
+# URLs that are not concrete hosts; they must not drown the real findings ------
+
+
+def test_scheme_prefix_in_prose_is_not_a_host(tmp_path: Path) -> None:
+    text = 'raise ValueError("must start with ws://, wss://, http:// or https://")\n'
+    assert _scan_all(tmp_path, "config.py", text) == []
+
+
+def test_format_string_template_host_is_not_flagged(tmp_path: Path) -> None:
+    text = 'url = f"ws://{server.host}:{server.port}/v1/realtime"\n'
+    assert _scan_all(tmp_path, "test_client.py", text) == []
+
+
+def test_reserved_tld_hosts_are_placeholders(tmp_path: Path) -> None:
+    for tld in ("invalid", "example", "test"):
+        text = "ws://lobes-host." + tld + ":8001/v1/realtime\n"
+        assert _scan_all(tmp_path, f"notes-{tld}.md", text) == [], tld
+
+
+def test_concrete_single_label_host_is_still_caught(tmp_path: Path) -> None:
+    """A real machine name with no dot (the shape a LAN or tailnet host has)
+    must stay a finding; only the closed placeholder word list is exempt."""
+    bad_host = "media" + "box" + "-" + "7f3a"
+    findings = _scan_all(tmp_path, "notes.md", f"ws://{bad_host}:8001/v1/realtime\n")
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]
