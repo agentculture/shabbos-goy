@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
@@ -108,6 +109,10 @@ def resolve_config_path(
     if env_path:
         return Path(env_path)
     return default_config_dir(env) / CONFIG_FILENAME
+
+
+# A `grant` secret name becomes an argv token (see actuators/sensibo.py).
+_GRANT_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 
 
 @dataclass(frozen=True)
@@ -220,6 +225,24 @@ class Config:
         bar.
         """
         return _fraction(self.raw.get("min_confidence")) if self.ok else None
+
+    @property
+    def grant_sensibo_secret(self) -> str | None:
+        """The ``grant`` secret NAME that holds the Sensibo key, or ``None``.
+
+        ``{"grant": {"sensibo_api_key": "SENSIBO_API_KEY"}}`` asks the adapter to
+        run ``sensibo`` through ``grant run --inject``. Only the name lives in
+        config, never the key. The name becomes an argv token, so anything but
+        a plain upper-case identifier is dropped here (and refused again in the
+        adapter).
+        """
+        if not self.ok:
+            return None
+        block = self.raw.get("grant")
+        name = block.get("sensibo_api_key") if isinstance(block, dict) else None
+        if isinstance(name, str) and _GRANT_NAME_RE.match(name):
+            return name
+        return None
 
     @property
     def context_window(self) -> dict:

@@ -30,6 +30,7 @@ exits 0 (healthy) or 1 (not), which is exactly what a container
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -213,8 +214,10 @@ def cmd_listen(args: argparse.Namespace) -> int:
         source=source,
         options=options,
         pod_id=_first_whitelisted_pod(config),
-        ac_power=sensibo.power,
-        ac_status=sensibo.status,
+        # The key is injected per call by `grant run --inject` when config names a
+        # secret; it never enters this process (see actuators/sensibo.py).
+        ac_power=functools.partial(sensibo.power, grant_secret=config.grant_sensibo_secret),
+        ac_status=functools.partial(sensibo.status, grant_secret=config.grant_sensibo_secret),
         volume_step=volume_step,
         volume_get=volume_get,
         heartbeat_path=getattr(args, "heartbeat", None),

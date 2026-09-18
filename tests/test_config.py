@@ -308,3 +308,18 @@ def test_a_broken_config_fails_closed_on_every_new_accessor():
     assert broken.dashboard_allow_non_tailnet is False
     assert broken.mic_node is None
     assert broken.context_max_items is None
+
+
+def test_grant_sensibo_secret_is_read_from_config_and_validated(tmp_path) -> None:
+    from shabbos_goy.config import load_config as _load
+
+    def cfg(block):
+        path = tmp_path / "c.json"
+        path.write_text(json.dumps({"grant": block} if block is not None else {}), "utf-8")
+        return _load(path=path)
+
+    assert cfg({"sensibo_api_key": "SENSIBO_API_KEY"}).grant_sensibo_secret == "SENSIBO_API_KEY"
+    assert cfg(None).grant_sensibo_secret is None
+    # A name that could become an option or a shell fragment is never passed on.
+    for bad in ("--inject", "a b", "lower", "X=Y", "", 7, ["SENSIBO_API_KEY"]):
+        assert cfg({"sensibo_api_key": bad}).grant_sensibo_secret is None

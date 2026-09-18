@@ -199,3 +199,62 @@ def test_preflight_text_mode_names_failed_checks(
         assert "healthy: False" in out
         assert "FAIL] sensibo_key" in out
         assert "hint:" in out
+
+
+# -- the Sensibo key may come from the operator's `grant` secrets manager ----
+
+
+def _grant_runner(known: set[str], calls: list[list[str]]):
+    """A subprocess.run stand-in: answers `grant show NAME --json`, defers the rest."""
+    import subprocess as _subprocess
+
+    def run(argv, *args, **kwargs):
+        if argv and argv[0] == "grant":
+            calls.append(list(argv))
+            ok = len(argv) >= 3 and argv[1] == "show" and argv[2] in known
+            return _subprocess.CompletedProcess(argv, 0 if ok else 1, stdout="{}", stderr="")
+        return _subprocess.run(argv, *args, **kwargs)
+
+    return run
+
+
+def test_sensibo_key_check_passes_when_grant_holds_the_configured_secret() -> None:
+    from shabbos_goy.cli._commands import preflight
+
+    calls: list[list[str]] = []
+    result = preflight._check_sensibo_key(
+        {}, grant_secret="SENSIBO_API_KEY", runner=_grant_runner({"SENSIBO_API_KEY"}, calls)
+    )
+    assert result.passed is True
+    assert "grant" in result.message
+    # `show` prints metadata only; preflight must never ask grant for the VALUE.
+    assert calls == [["grant", "show", "SENSIBO_API_KEY", "--json"]]
+    assert all(call[1] not in ("get", "env", "run") for call in calls)
+
+
+def test_sensibo_key_check_fails_when_grant_does_not_hold_the_secret() -> None:
+    from shabbos_goy.cli._commands import preflight
+
+    result = preflight._check_sensibo_key(
+        {}, grant_secret="SENSIBO_API_KEY", runner=_grant_runner(set(), [])
+    )
+    assert result.passed is False
+    assert "grant set SENSIBO_API_KEY" in result.remediation
+
+
+def test_sensibo_key_in_the_environment_wins_without_asking_grant() -> None:
+    from shabbos_goy.cli._commands import preflight
+
+    calls: list[list[str]] = []
+    result = preflight._check_sensibo_key(
+        {"SENSIBO_API_KEY": "x"}, grant_secret="SENSIBO_API_KEY", runner=_grant_runner(set(), calls)
+    )
+    assert result.passed is True and calls == []
+
+
+def test_sensibo_key_check_without_env_or_grant_names_both_remedies() -> None:
+    from shabbos_goy.cli._commands import preflight
+
+    result = preflight._check_sensibo_key({}, grant_secret=None, runner=_grant_runner(set(), []))
+    assert result.passed is False
+    assert "grant" in result.remediation and "SENSIBO_API_KEY" in result.remediation

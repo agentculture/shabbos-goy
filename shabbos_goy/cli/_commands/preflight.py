@@ -11,7 +11,9 @@ Checks (each a named, independent id):
   ``GET {base}/capabilities`` and reports itself ready.
 * ``senses_decide`` -- one tiny authenticated ``decide()`` round trip returns
   a validated :class:`~shabbos_goy.decider.Decision` (never :data:`NO_DECISION`).
-* ``sensibo_key`` -- ``SENSIBO_API_KEY`` is set in the environment.
+* ``sensibo_key`` -- ``SENSIBO_API_KEY`` is set in the environment, or the
+  operator's ``grant`` store holds the secret named in config (metadata
+  lookup only; the value is never requested).
 * ``sensibo_pod`` -- at least one Sensibo pod is whitelisted in config.
 * ``audio_node`` -- ``wpctl`` can read the default audio sink.
 * ``clock_sync`` -- :func:`shabbos_goy.mode.clock_is_trusted`.
@@ -174,14 +176,44 @@ def _check_senses_decide(senses_config: Optional[SensesConfig]) -> CheckResult:
     return CheckResult("senses_decide", True, "decide() round trip returned a validated decision")
 
 
-def _check_sensibo_key(env: Mapping[str, str]) -> CheckResult:
+def _check_sensibo_key(
+    env: Mapping[str, str], *, grant_secret: str | None = None, runner=subprocess.run
+) -> CheckResult:
+    """The key is either in the environment, or held by the operator's ``grant`` store.
+
+    For grant this asks ``grant show NAME --json``, which prints metadata only:
+    preflight never asks for, holds or prints the key itself.
+    """
     if env.get(ENV_SENSIBO_API_KEY):
         return CheckResult("sensibo_key", True, f"{ENV_SENSIBO_API_KEY} is set")
+    if grant_secret:
+        try:
+            proc = runner(
+                ["grant", "show", grant_secret, "--json"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            held = proc.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            held = False
+        if held:
+            return CheckResult(
+                "sensibo_key", True, f"grant holds {grant_secret}; it is injected per sensibo call"
+            )
+        return CheckResult(
+            "sensibo_key",
+            False,
+            f"grant does not hold {grant_secret} (or grant is not installed)",
+            f"store it with: grant set {grant_secret} -   (value on stdin)",
+        )
     return CheckResult(
         "sensibo_key",
         False,
-        f"{ENV_SENSIBO_API_KEY} is not set",
-        f"set {ENV_SENSIBO_API_KEY} (see sensibo-cli's own docs for a per-user env file)",
+        f"{ENV_SENSIBO_API_KEY} is not set and no grant secret is configured",
+        f"either set {ENV_SENSIBO_API_KEY}, or store it with 'grant set {ENV_SENSIBO_API_KEY} -' "
+        f'and add {{"grant": {{"sensibo_api_key": "{ENV_SENSIBO_API_KEY}"}}}} to the config',
     )
 
 
@@ -260,7 +292,7 @@ def run_preflight(
     lobes_health, senses_config = _check_lobes_health(env)
     checks.append(lobes_health)
     checks.append(_check_senses_decide(senses_config if lobes_health.passed else None))
-    checks.append(_check_sensibo_key(env))
+    checks.append(_check_sensibo_key(env, grant_secret=config.grant_sensibo_secret, runner=runner))
     checks.append(_check_sensibo_pod(config))
     checks.append(_check_audio_node(runner=runner))
     checks.append(_check_clock_sync(now, runner=runner))

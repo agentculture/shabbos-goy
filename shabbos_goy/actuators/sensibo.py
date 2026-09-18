@@ -27,9 +27,10 @@ module at all, so that risk does not exist here by construction.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess  # nosec B404 - argv-locked, no shell, see module docstring
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 SENSIBO_EXECUTABLE = "sensibo"
 
@@ -49,6 +50,45 @@ def _validate_pod_id(pod_id: object) -> str:
             "(must match ^[A-Za-z0-9]{1,64}$ — no flags, whitespace, or path characters)"
         )
     return pod_id
+
+
+# -- the key: injected by the operator's secrets manager, never held here -----
+#
+# ``grant run --inject VAR=NAME -- cmd`` (the AgentCulture per-user secrets
+# manager) forks, sets VAR from the operator's store and execvp's cmd, so the
+# child's stdout and exit code are sensibo's own and the key never enters this
+# process, a config file or a compose env file. The wrapper is a CLOSED prefix
+# around the locked argv above; the secret NAME comes from config and is
+# validated as strictly as a pod id, because it too becomes an argv token.
+GRANT_EXECUTABLE = "grant"
+SENSIBO_KEY_ENV = "SENSIBO_API_KEY"
+_GRANT_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+
+
+def _validate_grant_secret(name: object) -> str | None:
+    """``None`` means "no grant injection"; anything else must be a safe name."""
+    if name is None:
+        return None
+    if not isinstance(name, str) or not _GRANT_NAME_RE.match(name):
+        raise ValueError(
+            f"invalid grant secret name: {name!r} (must match ^[A-Z][A-Z0-9_]{{0,63}}$)"
+        )
+    return name
+
+
+def _with_grant(
+    argv: list[str], grant_secret: object, *, env: Mapping[str, str] | None = None
+) -> list[str]:
+    """Prefix ``argv`` with the closed ``grant run --inject`` wrapper when configured.
+
+    A key that is already in the environment wins (the container's env file,
+    an operator's shell): grant is then not involved at all.
+    """
+    name = _validate_grant_secret(grant_secret)
+    environ = os.environ if env is None else env
+    if name is None or environ.get(SENSIBO_KEY_ENV):
+        return argv
+    return [GRANT_EXECUTABLE, "run", "--inject", f"{SENSIBO_KEY_ENV}={name}", "--", *argv]
 
 
 def _validate_power_on(on: object) -> bool:
@@ -123,7 +163,9 @@ def _parse_json(proc: subprocess.CompletedProcess[str] | None) -> dict[str, Any]
 # -- power: dry-run by default ------------------------------------------------
 
 
-def power(pod_id: str, on: bool, *, apply: bool = False) -> dict[str, Any]:
+def power(
+    pod_id: str, on: bool, *, apply: bool = False, grant_secret: str | None = None
+) -> dict[str, Any]:
     """Turn ``pod_id``'s AC on/off. Dry-run unless ``apply=True``.
 
     Any non-zero exit (or a subprocess that never returns) is treated as
@@ -131,7 +173,7 @@ def power(pod_id: str, on: bool, *, apply: bool = False) -> dict[str, Any]:
     """
     safe_on = _validate_power_on(on)
     argv = _set_argv(pod_id, power_on=safe_on, apply=apply)
-    proc = _run(argv)
+    proc = _run(_with_grant(argv, grant_secret))
     payload = _parse_json(proc)
     if payload is None:
         return {"acted": False, "requested_apply": apply, "changes": {}}
@@ -147,7 +189,7 @@ def power(pod_id: str, on: bool, *, apply: bool = False) -> dict[str, Any]:
 # -- status: zero-write read ---------------------------------------------------
 
 
-def status(pod_id: str) -> dict[str, Any]:
+def status(pod_id: str, *, grant_secret: str | None = None) -> dict[str, Any]:
     """Current power state plus temperature/humidity for ``pod_id``. Never writes.
 
     ``power`` is derived from a dry-run ``sensibo set --power on`` (never
@@ -167,7 +209,7 @@ def status(pod_id: str) -> dict[str, Any]:
         # explicit, always-on check instead.
         raise RuntimeError("status() built an argv containing --apply; refusing to run it")
 
-    set_payload = _parse_json(_run(set_argv))
+    set_payload = _parse_json(_run(_with_grant(set_argv, grant_secret)))
     if set_payload is not None:
         changes = set_payload.get("changes")
         if isinstance(changes, dict):
@@ -179,7 +221,7 @@ def status(pod_id: str) -> dict[str, Any]:
                 # value (on=True), i.e. it is already on.
                 result["power"] = "on"
 
-    read_payload = _parse_json(_run(_read_argv(pod_id)))
+    read_payload = _parse_json(_run(_with_grant(_read_argv(pod_id), grant_secret)))
     if read_payload is not None:
         readings = read_payload.get("readings")
         if isinstance(readings, dict):
