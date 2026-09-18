@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Fake ``wpctl`` for tests — never touches real PipeWire/real volume.
+
+Keeps a tiny per-target (level, muted) state in a JSON file named by
+``$WPCTL_FAKE_STATE`` so a test can round-trip get -> set -> get, exactly the
+shape ``adjust_volume``/``apply_startup_state`` need. Unknown targets start at
+level 0.50, unmuted. A target literally named ``missing-node`` always fails
+(non-zero exit + stderr), so tests can exercise the VolumeCommandError path
+without depending on state.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+STATE_PATH = os.environ.get("WPCTL_FAKE_STATE")
+DEFAULT_ENTRY = {"level": 0.5, "muted": False}
+
+
+def load() -> dict:
+    if STATE_PATH and os.path.exists(STATE_PATH):
+        with open(STATE_PATH, encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
+
+
+def save(state: dict) -> None:
+    if STATE_PATH:
+        with open(STATE_PATH, "w", encoding="utf-8") as fh:
+            json.dump(state, fh)
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    if not args:
+        print("fake wpctl: missing command", file=sys.stderr)
+        return 2
+    command = args[0]
+
+    if command == "get-volume":
+        target = args[1]
+        if target == "missing-node":
+            print("Error: node 'missing-node' not found", file=sys.stderr)
+            return 1
+        state = load()
+        entry = state.get(target, DEFAULT_ENTRY)
+        line = f"Volume: {entry['level']:.2f}"
+        if entry["muted"]:
+            line += " [MUTED]"
+        print(line)
+        return 0
+
+    if command == "set-volume":
+        target, value = args[1], args[2]
+        if target == "missing-node":
+            print("Error: node 'missing-node' not found", file=sys.stderr)
+            return 1
+        state = load()
+        entry = dict(state.get(target, DEFAULT_ENTRY))
+        entry["level"] = float(value)
+        state[target] = entry
+        save(state)
+        return 0
+
+    if command == "set-mute":
+        target, value = args[1], args[2]
+        if target == "missing-node":
+            print("Error: node 'missing-node' not found", file=sys.stderr)
+            return 1
+        state = load()
+        entry = dict(state.get(target, DEFAULT_ENTRY))
+        entry["muted"] = value == "1"
+        state[target] = entry
+        save(state)
+        return 0
+
+    print(f"fake wpctl: unknown command {command!r}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
