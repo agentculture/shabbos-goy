@@ -12,23 +12,31 @@ from shabbos_goy import __version__
 from shabbos_goy.cli._output import emit_result
 
 _TEXT = """\
-shabbos-goy — a clonable template for AgentCulture mesh agents.
+shabbos-goy — a Hebrew-speaking, speech-to-speech household agent that helps
+observant Jews on Shabbat and Yom Kippur without the user breaking the day.
 
 Purpose
 -------
-Scaffold for a new Culture mesh agent: an agent-first CLI (cited from the teken
-`python-cli` reference), an identity (culture.yaml + CLAUDE.md), the canonical
-guildmaster skill kit under .claude/skills/, and a deploy/CI baseline. Clone it,
-rename the package, and edit culture.yaml to mint a new agent.
+It never takes a direct command: it only acts on intent it *infers* from
+indirect speech (a state remark, a wish, a discomfort). A false positive on
+an imperative/request/rebuke is the one failure this repo exists to prevent
+— see `shabbos-goy explain classify` and `shabbos-goy explain actions`.
 
 Commands
 --------
-  shabbos-goy whoami             Identity from culture.yaml.
-  shabbos-goy learn              This self-teaching prompt.
-  shabbos-goy explain <path>...  Markdown docs for any noun/verb path.
-  shabbos-goy overview           Descriptive snapshot of the agent.
-  shabbos-goy doctor             Check the agent-identity invariants.
-  shabbos-goy cli overview       Describe the CLI surface itself.
+  shabbos-goy whoami              Identity from culture.yaml.
+  shabbos-goy learn                This self-teaching prompt.
+  shabbos-goy explain <path>...   Markdown docs for any noun/verb path.
+  shabbos-goy overview            Descriptive snapshot of the agent.
+  shabbos-goy doctor               Check the agent-identity invariants.
+  shabbos-goy cli overview         Describe the CLI surface itself.
+  shabbos-goy classify "<text>"    Decide (never act) on one utterance.
+  shabbos-goy zmanim                The current mode window, from config.
+  shabbos-goy actions               The whitelist in effect, and the intent map.
+  shabbos-goy preflight              Check every precondition before Shabbat.
+  shabbos-goy ac status|power       AC noun (read/write, via the listener).
+  shabbos-goy volume get|set        Volume noun (read/write, via the listener).
+  shabbos-goy mode show|set          The mode in effect, and its override.
 
 Machine-readable output
 -----------------------
@@ -52,7 +60,11 @@ def _as_json_payload() -> dict[str, object]:
     return {
         "tool": "shabbos-goy",
         "version": __version__,
-        "purpose": "Clonable scaffold for a new AgentCulture mesh agent.",
+        "purpose": (
+            "A Hebrew-speaking, speech-to-speech household agent for Shabbat/Yom "
+            "Kippur that never takes a direct command, only infers intent from "
+            "indirect speech."
+        ),
         "commands": [
             {"path": ["whoami"], "summary": "Identity probe from culture.yaml."},
             {"path": ["learn"], "summary": "Self-teaching prompt."},
@@ -60,6 +72,22 @@ def _as_json_payload() -> dict[str, object]:
             {"path": ["overview"], "summary": "Descriptive snapshot of the agent."},
             {"path": ["doctor"], "summary": "Check the agent-identity invariants."},
             {"path": ["cli", "overview"], "summary": "Describe the CLI surface."},
+            {"path": ["classify"], "summary": "Decide (never act) on one utterance."},
+            {"path": ["zmanim"], "summary": "The current mode window, from config."},
+            {
+                "path": ["actions"],
+                "summary": "The whitelist in effect, and the intent map.",
+            },
+            {
+                "path": ["preflight"],
+                "summary": "Check every precondition before Shabbat starts.",
+            },
+            {"path": ["ac", "status"], "summary": "Current AC state (read-only)."},
+            {"path": ["ac", "power"], "summary": "Request AC power (dry-run unless --apply)."},
+            {"path": ["volume", "get"], "summary": "Current volume state (read-only)."},
+            {"path": ["volume", "set"], "summary": "Step volume (dry-run unless --apply)."},
+            {"path": ["mode", "show"], "summary": "The mode in effect now."},
+            {"path": ["mode", "set"], "summary": "Force/clear the mode override."},
         ],
         "exit_codes": {
             "0": "success",

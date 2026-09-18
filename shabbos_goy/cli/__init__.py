@@ -62,12 +62,19 @@ def _argv_has_json(argv: list[str] | None) -> bool:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    from shabbos_goy.cli._commands import ac as _ac_group
+    from shabbos_goy.cli._commands import actions as _actions_cmd
+    from shabbos_goy.cli._commands import classify as _classify_cmd
     from shabbos_goy.cli._commands import cli as _cli_group
     from shabbos_goy.cli._commands import doctor as _doctor_cmd
     from shabbos_goy.cli._commands import explain as _explain_cmd
     from shabbos_goy.cli._commands import learn as _learn_cmd
+    from shabbos_goy.cli._commands import mode as _mode_group
     from shabbos_goy.cli._commands import overview as _overview_cmd
+    from shabbos_goy.cli._commands import preflight as _preflight_cmd
+    from shabbos_goy.cli._commands import volume as _volume_group
     from shabbos_goy.cli._commands import whoami as _whoami_cmd
+    from shabbos_goy.cli._commands import zmanim as _zmanim_cmd
 
     parser = _CliArgumentParser(
         prog="shabbos-goy",
@@ -88,9 +95,13 @@ def _build_parser() -> argparse.ArgumentParser:
     _overview_cmd.register(sub)
     _doctor_cmd.register(sub)
     _cli_group.register(sub)
-    # Register your own noun groups here:
-    #   from shabbos_goy.cli._commands import my_noun as _my_noun_group
-    #   _my_noun_group.register(sub)
+    _classify_cmd.register(sub)
+    _zmanim_cmd.register(sub)
+    _actions_cmd.register(sub)
+    _preflight_cmd.register(sub)
+    _ac_group.register(sub)
+    _volume_group.register(sub)
+    _mode_group.register(sub)
 
     return parser
 
