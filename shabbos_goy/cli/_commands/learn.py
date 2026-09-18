@@ -37,6 +37,7 @@ Commands
   shabbos-goy ac status|power       AC noun (read/write, via the listener).
   shabbos-goy volume get|set        Volume noun (read/write, via the listener).
   shabbos-goy mode show|set          The mode in effect, and its override.
+  shabbos-goy listen                 The ambient loop; what the container runs.
 
 Machine-readable output
 -----------------------
@@ -88,6 +89,10 @@ def _as_json_payload() -> dict[str, object]:
             {"path": ["volume", "set"], "summary": "Step volume (dry-run unless --apply)."},
             {"path": ["mode", "show"], "summary": "The mode in effect now."},
             {"path": ["mode", "set"], "summary": "Force/clear the mode override."},
+            {
+                "path": ["listen"],
+                "summary": "The ambient loop (dry-run unless --apply).",
+            },
         ],
         "exit_codes": {
             "0": "success",

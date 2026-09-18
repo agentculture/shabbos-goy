@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Fake ``sensibo`` CLI for tests — never contacts home.sensibo.com.
+
+Mirrors just enough of sensibo-cli's surface for
+``shabbos_goy.actuators.sensibo``: ``set <pod> --power on|off [--apply]
+--json`` and ``read <pod> --json``. Per-pod state lives in the JSON file named
+by ``$SENSIBO_FAKE_STATE`` so a test can assert what was actually written.
+
+Every invocation is appended to ``$SENSIBO_FAKE_CALLS`` (one argv per JSON
+line) so a test can prove ``--apply`` was never passed on a dry run.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+STATE_PATH = os.environ.get("SENSIBO_FAKE_STATE")
+CALLS_PATH = os.environ.get("SENSIBO_FAKE_CALLS")
+
+
+def load() -> dict:
+    if STATE_PATH and os.path.exists(STATE_PATH):
+        with open(STATE_PATH, encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
+
+
+def save(state: dict) -> None:
+    if STATE_PATH:
+        with open(STATE_PATH, "w", encoding="utf-8") as fh:
+            json.dump(state, fh)
+
+
+def record(argv: list[str]) -> None:
+    if CALLS_PATH:
+        with open(CALLS_PATH, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(argv) + "\n")
+
+
+def main() -> int:
+    argv = sys.argv[1:]
+    record(argv)
+    if not argv:
+        print("fake sensibo: missing command", file=sys.stderr)
+        return 2
+
+    command = argv[0]
+    pod = argv[1] if len(argv) > 1 else ""
+    state = load()
+    entry = dict(state.get(pod, {"on": False, "temperature": 28.0, "humidity": 41.0}))
+
+    if command == "set":
+        want_on = True
+        if "--power" in argv:
+            want_on = argv[argv.index("--power") + 1] == "on"
+        applied = "--apply" in argv
+        changes = {}
+        if entry["on"] != want_on:
+            changes["on"] = {"from": entry["on"], "to": want_on}
+        if applied:
+            entry["on"] = want_on
+            state[pod] = entry
+            save(state)
+        print(json.dumps({"applied": applied, "changes": changes}))
+        return 0
+
+    if command == "read":
+        print(
+            json.dumps(
+                {
+                    "readings": {
+                        "temperature": entry["temperature"],
+                        "humidity": entry["humidity"],
+                    }
+                }
+            )
+        )
+        return 0
+
+    print(f"fake sensibo: unknown command {command!r}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

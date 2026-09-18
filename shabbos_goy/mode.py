@@ -41,7 +41,7 @@ from __future__ import annotations
 import subprocess  # nosec B404 - argv-locked, no shell; see clock_is_trusted
 import threading
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from shabbos_goy.config import Config
 from shabbos_goy.policy import MODES
@@ -191,6 +191,48 @@ def compute_zmanim_mode(now: datetime, config: Config) -> tuple[str, tuple[str, 
     if window is not None:
         return "strict", window.kinds
     return "weekday", ()
+
+
+def _window_dict(window: Window) -> dict:
+    return {
+        "start": window.start.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "end": window.end.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "kinds": list(window.kinds),
+    }
+
+
+def window_summary(now: datetime, config: Config) -> dict:
+    """The window running at ``now`` (if any) and the next one, as plain data.
+
+    Public because a UI needs exactly this and must not reach for
+    :func:`_build_location`/:func:`_build_rules` to get it: a second copy of
+    the config-to-zmanim rules is a second place to get fail-closed wrong.
+    Every failure --- a broken config, an unusable location or ruleset, a
+    latitude where the sun event does not happen --- is reported as
+    ``available: False`` with a short reason code, never as an exception and
+    never as a fabricated window.
+    """
+    unavailable = {"available": False, "current": None, "next": None, "reason": "no_zmanim"}
+    if not config.ok:
+        return {**unavailable, "reason": "config"}
+    location = _build_location(config)
+    rules = _build_rules(config)
+    if location is None or rules is None:
+        return {**unavailable, "reason": "config"}
+    try:
+        window = next_window(now, location, rules)
+        if window is None:
+            return {"available": True, "current": None, "next": None}
+        if window.contains(now):
+            following = next_window(window.end, location, rules)
+            return {
+                "available": True,
+                "current": _window_dict(window),
+                "next": _window_dict(following) if following is not None else None,
+            }
+        return {"available": True, "current": None, "next": _window_dict(window)}
+    except (SunEventNotFound, ValueError):
+        return {**unavailable, "reason": "sun_event_not_found"}
 
 
 def check_ntp_synchronized(*, runner=subprocess.run) -> bool | None:

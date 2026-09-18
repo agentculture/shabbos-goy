@@ -245,3 +245,66 @@ def test_example_rate_limits_feed_the_limits_module_unchanged() -> None:
     assert limits.daily_cap == 12
     assert limits.min_interval_seconds == 600.0
     assert limits.strict_delay_seconds == 15.0
+
+
+# --------------------------------------------------------------------------
+# accessors added for t14 (callers must stop reaching into config.raw)
+# --------------------------------------------------------------------------
+
+
+def _config(**raw):
+    from shabbos_goy.config import Config
+
+    return Config(path=FIXTURE, raw=dict(raw), error=None)
+
+
+def test_dashboard_allow_non_tailnet_is_true_only_for_a_literal_true():
+    assert _config(dashboard_allow_non_tailnet=True).dashboard_allow_non_tailnet is True
+    assert _config(dashboard_allow_non_tailnet="yes").dashboard_allow_non_tailnet is False
+    assert _config().dashboard_allow_non_tailnet is False
+
+
+def test_dashboard_hostnames_fails_closed_to_an_empty_list():
+    assert _config(dashboard_hostnames=["spark", ""]).dashboard_hostnames == ["spark"]
+    assert _config(dashboard_hostnames="spark").dashboard_hostnames == []
+    assert _config().dashboard_hostnames == []
+
+
+def test_min_confidence_is_none_unless_a_usable_fraction_is_configured():
+    assert _config(min_confidence=0.75).min_confidence == 0.75
+    assert _config(min_confidence=1.5).min_confidence is None
+    assert _config(min_confidence=True).min_confidence is None
+    assert _config().min_confidence is None
+
+
+def test_context_window_bounds_are_read_and_validated():
+    cfg = _config(context_window={"max_items": 5, "max_age_seconds": 120, "max_render_chars": 400})
+    assert cfg.context_max_items == 5
+    assert cfg.context_max_age_seconds == 120.0
+    assert cfg.context_max_render_chars == 400
+
+    bad = _config(context_window={"max_items": 0, "max_age_seconds": -1, "max_render_chars": "x"})
+    assert bad.context_max_items is None
+    assert bad.context_max_age_seconds is None
+    assert bad.context_max_render_chars is None
+
+
+def test_pipewire_node_names_come_from_the_audio_block():
+    cfg = _config(audio={"mic_node": "alsa_input.fake", "speaker_node": "alsa_output.fake"})
+    assert cfg.mic_node == "alsa_input.fake"
+    assert cfg.speaker_node == "alsa_output.fake"
+    # volume_node falls back to the speaker node, as AudioConfig does.
+    assert cfg.volume_node == "alsa_output.fake"
+    assert _config().mic_node is None
+
+
+def test_a_broken_config_fails_closed_on_every_new_accessor():
+    from shabbos_goy.cli._errors import CliError
+    from shabbos_goy.config import Config
+
+    broken = Config(path=FIXTURE, raw={"min_confidence": 0.9}, error=CliError(2, "x", "y"))
+    assert broken.min_confidence is None
+    assert broken.dashboard_hostnames == []
+    assert broken.dashboard_allow_non_tailnet is False
+    assert broken.mic_node is None
+    assert broken.context_max_items is None

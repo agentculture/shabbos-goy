@@ -53,6 +53,36 @@ AC_ACTION = "power"
 ALLOWED_POWER_VALUES = ("on", "off")
 
 
+def _fraction(value: object) -> float | None:
+    """*value* as a float in ``[0, 1]``, or ``None`` if it is not one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if 0.0 <= number <= 1.0 else None
+
+
+def _positive_int(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def _positive_number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return float(value)
+
+
+def _node_name(value: object) -> str | None:
+    """A PipeWire node name, or ``None``. Never an empty or option-shaped one."""
+    if not isinstance(value, str):
+        return None
+    name = value.strip()
+    if not name or name.startswith("-"):
+        return None
+    return name
+
+
 def default_config_dir(env: Mapping[str, str] | None = None) -> Path:
     """``$XDG_CONFIG_HOME/shabbos-goy``, or ``~/.config/shabbos-goy`` if unset."""
     env = os.environ if env is None else env
@@ -150,6 +180,88 @@ class Config:
     @property
     def dashboard_bind_address(self) -> object:
         return self.raw.get("dashboard_bind_address") if self.ok else None
+
+    # -- typed accessors ---------------------------------------------------
+    #
+    # Everything below exists so no caller has to reach into ``.raw`` and
+    # re-implement "is this the right type, and is it in range?". Each one
+    # fails closed the same way the whitelist does: a broken config, a
+    # missing key or a wrong-shaped value yields the safe default (``False``,
+    # ``[]`` or ``None``), never a half-trusted value.
+
+    @property
+    def dashboard_allow_non_tailnet(self) -> bool:
+        """The escape hatch that lets the dashboard bind a non-tailnet address.
+
+        Only a literal JSON ``true`` widens the rule -- ``"yes"``, ``1`` and
+        anything else read as "no", because this one is a security boundary
+        (:mod:`shabbos_goy.web.bind`).
+        """
+        if not self.ok:
+            return False
+        return self.raw.get("dashboard_allow_non_tailnet") is True
+
+    @property
+    def dashboard_hostnames(self) -> list[str]:
+        """Extra ``Host`` header values that name this dashboard."""
+        if not self.ok:
+            return []
+        value = self.raw.get("dashboard_hostnames")
+        if not isinstance(value, list):
+            return []
+        return [name for name in value if isinstance(name, str) and name]
+
+    @property
+    def min_confidence(self) -> float | None:
+        """The configured minimum decider confidence, or ``None`` if unusable.
+
+        ``None`` means "the caller's own default applies" --- the pipeline
+        owns that default, so a nonsense value here never silently lowers the
+        bar.
+        """
+        return _fraction(self.raw.get("min_confidence")) if self.ok else None
+
+    @property
+    def context_window(self) -> dict:
+        """The rolling context window's bounds block."""
+        if not self.ok:
+            return {}
+        value = self.raw.get("context_window")
+        return value if isinstance(value, dict) else {}
+
+    @property
+    def context_max_items(self) -> int | None:
+        return _positive_int(self.context_window.get("max_items"))
+
+    @property
+    def context_max_age_seconds(self) -> float | None:
+        return _positive_number(self.context_window.get("max_age_seconds"))
+
+    @property
+    def context_max_render_chars(self) -> int | None:
+        return _positive_int(self.context_window.get("max_render_chars"))
+
+    @property
+    def audio(self) -> dict:
+        """The PipeWire block: which nodes this agent captures and plays on."""
+        if not self.ok:
+            return {}
+        value = self.raw.get("audio")
+        return value if isinstance(value, dict) else {}
+
+    @property
+    def mic_node(self) -> str | None:
+        return _node_name(self.audio.get("mic_node"))
+
+    @property
+    def speaker_node(self) -> str | None:
+        return _node_name(self.audio.get("speaker_node"))
+
+    @property
+    def volume_node(self) -> str | None:
+        """The node whose volume this agent owns; defaults to the speaker."""
+        explicit = _node_name(self.audio.get("volume_node"))
+        return explicit if explicit is not None else self.speaker_node
 
     def is_whitelisted(self, tool: str, pod_id: str) -> bool:
         """Is ``pod_id`` whitelisted for ``tool``, per the effective whitelist?

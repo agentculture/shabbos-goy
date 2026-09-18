@@ -335,3 +335,34 @@ def test_set_override_shared_by_two_call_sites_sees_the_same_state():
 
     dashboard_forces_weekday()
     assert get_override() == "weekday"
+
+
+# --------------------------------------------------------------------------
+# window_summary: public, so the dashboard stops reaching for private helpers
+# --------------------------------------------------------------------------
+
+
+def test_window_summary_reports_the_next_window_outside_one():
+    from shabbos_goy.mode import window_summary
+
+    summary = window_summary(datetime(2026, 9, 16, 9, 0, tzinfo=timezone.utc), _config())
+    assert summary["available"] is True
+    assert summary["current"] is None
+    assert summary["next"] is not None
+    assert set(summary["next"]) == {"start", "end", "kinds"}
+    assert "shabbat" in summary["next"]["kinds"]
+
+
+def test_window_summary_reports_a_running_window_and_the_one_after_it():
+    from shabbos_goy.mode import window_summary
+
+    summary = window_summary(datetime(2026, 9, 18, 18, 30, tzinfo=timezone.utc), _config())
+    assert summary["current"] is not None
+    assert summary["next"] is not None
+
+
+def test_window_summary_fails_closed_on_a_broken_config():
+    from shabbos_goy.mode import window_summary
+
+    summary = window_summary(datetime(2026, 9, 16, 9, 0, tzinfo=timezone.utc), _broken_config())
+    assert summary == {"available": False, "current": None, "next": None, "reason": "config"}

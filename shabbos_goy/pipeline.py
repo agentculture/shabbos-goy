@@ -130,6 +130,7 @@ DEFAULT_JOIN_GAP_MS = 500
 DEFAULT_PLAYBACK_TAIL_SECONDS = 1.5
 DEFAULT_RECENT_CAPACITY = 20
 DEFAULT_LOG_CAPACITY = 200
+DEFAULT_LATENCY_CAPACITY = 20
 DEFAULT_STRICT_DELAY_SECONDS = 15.0
 
 #: Fallback rate limits when config does not (or cannot) supply them. Narrow
@@ -218,15 +219,20 @@ class LogRecord:
 
 @dataclass(frozen=True)
 class RecentUtterance:
-    """One remembered utterance, for the (planned) dashboard.
+    """One remembered utterance, for the dashboard.
 
     The ONLY place recent transcript text lives. Memory-only and bounded.
+    ``confidence`` and ``decide_latency_ms`` travel with the text rather than
+    with the log record on purpose: a :class:`LogRecord` is what gets
+    *printed*, and neither number belongs in a log line.
     """
 
     at: float
     text: str
     klass: str
     intent: str
+    confidence: float = 0.0
+    decide_latency_ms: float = 0.0
 
 
 # -- the volume adapter ------------------------------------------------------
@@ -263,14 +269,13 @@ def _stderr_log(record: LogRecord) -> None:
 
 
 def _min_confidence(config: Config) -> float:
-    if not config.ok:
-        return DEFAULT_MIN_CONFIDENCE
-    value = config.raw.get("min_confidence", DEFAULT_MIN_CONFIDENCE)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return DEFAULT_MIN_CONFIDENCE
-    if not 0.0 <= float(value) <= 1.0:
-        return DEFAULT_MIN_CONFIDENCE
-    return float(value)
+    """The configured minimum confidence, or this module's default.
+
+    ``Config.min_confidence`` does the type/range validation; the default
+    lives here, with the gate it guards.
+    """
+    configured = config.min_confidence
+    return DEFAULT_MIN_CONFIDENCE if configured is None else configured
 
 
 def _positive_int(value: object, fallback: int) -> int:
@@ -381,6 +386,10 @@ class Pipeline:
             )
         self._recent: BoundedRing[RecentUtterance] = BoundedRing(capacity)
         self._records: BoundedRing[LogRecord] = BoundedRing(log_capacity)
+        # Decide latencies are kept separately from the transcript ring so a
+        # small transcript ring does not also shrink the latency sample the
+        # dashboard's percentiles are computed from.
+        self._latencies: BoundedRing[float] = BoundedRing(DEFAULT_LATENCY_CAPACITY)
 
         self._audio_ms: Optional[int] = None
         self._chain_suppressed = False
@@ -393,6 +402,16 @@ class Pipeline:
     def recent(self) -> list[RecentUtterance]:
         """The in-memory ring of recent utterances (the only place text lives)."""
         return list(self._recent)
+
+    def decide_latencies(self) -> list[float]:
+        """Recent decide-call durations in milliseconds, newest last.
+
+        Shaped for the dashboard's ``latency_provider``: a plain list of
+        numbers, bounded, memory-only, and carrying nothing that could
+        identify an utterance. An invalid decision contributes nothing --
+        a timing without a usable decision would only skew the percentiles.
+        """
+        return list(self._latencies)
 
     @property
     def log_records(self) -> list[LogRecord]:
@@ -511,9 +530,11 @@ class Pipeline:
         clock_untrusted = not bool(getattr(resolved, "clock_trusted", True))
         ac_state = self._read_ac_state()
 
+        started = self._clock()
         decision = self._decider.decide(
             text, self.context, mode=mode or "strict", ac_state=ac_state
         )
+        latency_ms = max(0.0, (self._clock() - started) * 1000.0)
 
         klass = getattr(decision, "klass", None)
         intent = getattr(decision, "intent", None)
@@ -538,7 +559,7 @@ class Pipeline:
             )
             return
 
-        self._remember(text, decision)
+        self._remember(text, decision, latency_ms)
 
         if _is_no_decision(decision):
             # Down, slow or malformed: do nothing, once, with a reason code.
@@ -778,12 +799,18 @@ class Pipeline:
         state = self._ac_status(self._pod_id)
         return dict(state) if isinstance(state, Mapping) else None
 
-    def _remember(self, text: str, decision: Decision) -> None:
+    def _remember(self, text: str, decision: Decision, latency_ms: float) -> None:
         self._recent.append(
             RecentUtterance(
-                at=self._clock(), text=text, klass=decision.klass, intent=decision.intent
+                at=self._clock(),
+                text=text,
+                klass=decision.klass,
+                intent=decision.intent,
+                confidence=float(decision.confidence),
+                decide_latency_ms=float(latency_ms),
             )
         )
+        self._latencies.append(float(latency_ms))
         self.context.add(text, decision)
 
     def _log_refusal(self, klass: str, intent: str, verdict: str, target: str = "") -> None:
