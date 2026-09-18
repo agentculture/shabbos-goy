@@ -28,6 +28,12 @@ class Location:
             raise ValueError(f"longitude out of range: {self.longitude}")
         if not self.timezone:
             raise ValueError("timezone is required (an IANA name such as Asia/Jerusalem)")
+        # Resolve the name *now*, not at the first sun calculation. An
+        # unknown IANA name used to surface as a ValueError from deep inside
+        # next_window, where the mode resolver was not expecting one; here it
+        # is simply "this config has no usable location", which every caller
+        # already treats as strict.
+        self.zone()
 
     def zone(self) -> ZoneInfo:
         """Resolve the IANA name, raising ``ValueError`` if it is unknown."""

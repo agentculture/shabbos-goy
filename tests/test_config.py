@@ -327,3 +327,42 @@ def test_grant_sensibo_secret_is_read_from_config_and_validated(tmp_path) -> Non
     # A name that could become an option or a shell fragment is never passed on.
     for bad in ("--inject", "a b", "lower", "X=Y", "", 7, ["SENSIBO_API_KEY"]):
         assert cfg({"sensibo_api_key": bad}).grant_sensibo_secret is None
+
+
+# ---------------------------------------------------------------------------
+# Every dict-shaped accessor is a dict (PR #3 review, thread #13)
+#
+# ``load_config`` accepts any nested JSON value, so a hand-edited config can
+# put a list or a scalar where an object belongs. A caller doing ``.get`` on
+# that used to raise AttributeError at construction time -- for the listener,
+# that is a crash instead of a fail-closed start.
+# ---------------------------------------------------------------------------
+
+DICT_ACCESSORS = (
+    "whitelist",
+    "location",
+    "rate_limits",
+    "volume",
+    "ring_sizes",
+    "context_window",
+    "audio",
+    "grant",
+)
+
+
+@pytest.mark.parametrize("accessor", DICT_ACCESSORS)
+@pytest.mark.parametrize("bad", [[], ["a"], "text", 3, 1.5, True, None])
+def test_dict_accessors_return_an_empty_dict_for_a_non_object(tmp_path, accessor, bad):
+    path = _write(tmp_path, {accessor: bad})
+    cfg = config_mod.load_config(path=path)
+    assert cfg.ok is True
+    value = getattr(cfg, accessor)
+    assert value == {}
+    assert value.get("anything") is None
+
+
+@pytest.mark.parametrize("accessor", DICT_ACCESSORS)
+def test_dict_accessors_pass_an_object_through(tmp_path, accessor):
+    path = _write(tmp_path, {accessor: {"k": "v"}})
+    cfg = config_mod.load_config(path=path)
+    assert getattr(cfg, accessor) == {"k": "v"}

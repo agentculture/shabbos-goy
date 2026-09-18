@@ -247,3 +247,49 @@ def test_far_north_location_raises_rather_than_guessing():
     longyearbyen = Location(78.2232, 15.6469, "Arctic/Longyearbyen")
     with pytest.raises(SunEventNotFound):
         windows_for(date(2026, 6, 20), longyearbyen, DIASPORA_RULES)
+
+
+# ---------------------------------------------------------------------------
+# Rule validation and the inverted-window guard (PR #3 review, thread #6)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        TzeitRule.degrees(0.0),
+        TzeitRule.degrees(0.833),
+        TzeitRule.degrees(2.0),
+        TzeitRule.degrees(90.0),
+        TzeitRule.degrees(float("nan")),
+        TzeitRule.degrees(float("inf")),
+        TzeitRule.minutes(0.0),
+        TzeitRule.minutes(1000.0),
+        TzeitRule.minutes(float("nan")),
+    ],
+)
+def test_tzeit_rule_rejects_values_outside_a_usable_range(rule):
+    with pytest.raises(ValueError):
+        rule.validate()
+
+
+@pytest.mark.parametrize("offset", [-1, 1000, float("nan"), float("inf")])
+def test_zmanim_rules_rejects_an_unusable_candle_lighting_offset(offset):
+    with pytest.raises(ValueError):
+        ZmanimRules(candle_lighting_offset_minutes=offset, tzeit=TzeitRule.degrees(8.5)).validate()
+
+
+def test_windows_for_refuses_a_window_that_ends_before_it_starts(monkeypatch):
+    """A window whose end is not after its start is an error, never "no window".
+
+    Reported as "no window" it would read as weekday during Shabbat; raising
+    lets :func:`shabbos_goy.mode.compute_zmanim_mode` fail closed to strict.
+    """
+    from shabbos_goy.zmanim import windows as windows_mod
+
+    def inverted_tzeit(day, location, rules):
+        return candle_lighting(day - timedelta(days=2), location, rules)
+
+    monkeypatch.setattr(windows_mod, "tzeit", inverted_tzeit)
+    with pytest.raises(ValueError):
+        windows_mod.windows_for(date(2026, 10, 24), JERUSALEM, ISRAEL_RULES)

@@ -366,3 +366,96 @@ def test_window_summary_fails_closed_on_a_broken_config():
 
     summary = window_summary(datetime(2026, 9, 16, 9, 0, tzinfo=timezone.utc), _broken_config())
     assert summary == {"available": False, "current": None, "next": None, "reason": "config"}
+
+
+# --------------------------------------------------------------------------
+# Fail-closed on bad config values (PR #3 review, threads #6/#7/#14/#15)
+#
+# Every value below is a config a human could plausibly write and that the
+# code used to accept, truncate or crash on. None of them may resolve to
+# ``weekday``, and none of them may raise: a bad value is a strict value.
+# --------------------------------------------------------------------------
+
+BAD_ZMANIM_CONFIG_VALUES = [
+    # thread #6 -- nightfall at or below the sunset geometry (sunset is
+    # computed 0.833deg below the horizon), so the window would close before
+    # Shabbat is actually out.
+    ("tzeit_definition", "degrees:0"),
+    ("tzeit_definition", "degrees:0.5"),
+    ("tzeit_definition", "degrees:2"),
+    ("tzeit_definition", "minutes:0"),
+    # ... and absurdly late nightfall, which is just as much a typo.
+    ("tzeit_definition", "degrees:90"),
+    ("tzeit_definition", "minutes:100000"),
+    # thread #7 -- non-finite numbers parse as floats and used to reach
+    # timedelta()/the solar maths, raising ValueError/OverflowError.
+    ("tzeit_definition", "minutes:nan"),
+    ("tzeit_definition", "degrees:nan"),
+    ("tzeit_definition", "minutes:inf"),
+    ("tzeit_definition", "degrees:inf"),
+    ("tzeit_definition", "minutes:-inf"),
+    # thread #14 -- an unknown IANA name only blew up later, in Location.zone().
+    ("location", {"lat": 31.778, "lon": 35.235, "timezone": "Mars/Olympus_Mons"}),
+    ("location", {"lat": 31.778, "lon": 35.235, "timezone": "Asia/Jerusalem\x00"}),
+    ("location", []),
+    # thread #15 -- the offset used to be truncated with int() before being
+    # validated, so -0.5 became a silently-accepted 0.
+    ("candle_lighting_offset_minutes", -0.5),
+    ("candle_lighting_offset_minutes", -1),
+    ("candle_lighting_offset_minutes", 18.5),
+    ("candle_lighting_offset_minutes", float("nan")),
+    ("candle_lighting_offset_minutes", float("inf")),
+    ("candle_lighting_offset_minutes", True),
+    ("candle_lighting_offset_minutes", "18"),
+    ("candle_lighting_offset_minutes", 10_000),
+]
+
+
+@pytest.mark.parametrize(
+    "key,value", BAD_ZMANIM_CONFIG_VALUES, ids=[f"{k}={v!r}" for k, v in BAD_ZMANIM_CONFIG_VALUES]
+)
+def test_resolve_mode_fails_closed_on_a_bad_config_value(key, value):
+    # OUTSIDE_SHABBAT is a Tuesday: a *good* config resolves to weekday here,
+    # so "strict" can only come from the bad value being refused.
+    resolved = resolve_mode(OUTSIDE_SHABBAT, _config({key: value}), runner=_fake_runner())
+    assert resolved.mode == "strict"
+    assert resolved.clock_trusted is True
+    assert resolved.overridden is False
+
+
+@pytest.mark.parametrize(
+    "key,value", BAD_ZMANIM_CONFIG_VALUES, ids=[f"{k}={v!r}" for k, v in BAD_ZMANIM_CONFIG_VALUES]
+)
+def test_compute_zmanim_mode_fails_closed_on_a_bad_config_value(key, value):
+    assert compute_zmanim_mode(OUTSIDE_SHABBAT, _config({key: value})) == ("strict", ())
+
+
+@pytest.mark.parametrize(
+    "key,value", BAD_ZMANIM_CONFIG_VALUES, ids=[f"{k}={v!r}" for k, v in BAD_ZMANIM_CONFIG_VALUES]
+)
+def test_window_summary_reports_unavailable_on_a_bad_config_value(key, value):
+    from shabbos_goy.mode import window_summary
+
+    summary = window_summary(OUTSIDE_SHABBAT, _config({key: value}))
+    assert summary["available"] is False
+    assert summary["current"] is None
+
+
+@pytest.mark.parametrize(
+    "definition",
+    ["degrees:0", "degrees:0.5", "minutes:0", "minutes:nan", "degrees:nan", "minutes:inf"],
+)
+def test_parse_tzeit_definition_refuses_unusable_numbers(definition):
+    assert parse_tzeit_definition(definition) is None
+
+
+@pytest.mark.parametrize("exc", [ValueError("boom"), OverflowError("boom"), ZeroDivisionError()])
+def test_compute_zmanim_mode_fails_closed_on_any_zmanim_exception(monkeypatch, exc):
+    import shabbos_goy.mode as mode_module
+
+    def explode(*_args, **_kwargs):
+        raise exc
+
+    monkeypatch.setattr(mode_module, "next_window", explode)
+    assert compute_zmanim_mode(INSIDE_SHABBAT, _config()) == ("strict", ())
+    assert resolve_mode(INSIDE_SHABBAT, _config(), runner=_fake_runner()).mode == "strict"

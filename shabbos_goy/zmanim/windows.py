@@ -14,12 +14,13 @@ community narrows them to match its posek.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
 from . import hebrew
 from .location import Location
-from .sun import depression_time, sunset
+from .sun import SUNRISE_SUNSET_ZENITH, depression_time, sunset
 
 KIND_SHABBAT = "shabbat"
 KIND_YOM_KIPPUR = "yom_kippur"
@@ -30,6 +31,34 @@ _KIND_ORDER = (KIND_SHABBAT, KIND_YOM_KIPPUR, KIND_YOM_TOV)
 
 TZEIT_MINUTES = "minutes"
 TZEIT_DEGREES = "degrees"
+
+#: How far below the horizon the sun's centre is at the *sunset* this module
+#: computes: the standard refraction-and-radius allowance baked into
+#: :data:`~shabbos_goy.zmanim.sun.SUNRISE_SUNSET_ZENITH`. A tzeit depression
+#: angle at or below this is geometrically *earlier* than sunset, so it would
+#: close the window before the holy day is even out -- see
+#: :data:`MIN_TZEIT_DEGREES`.
+SUNSET_DEPRESSION_DEGREES = SUNRISE_SUNSET_ZENITH - 90.0
+
+#: Bounds on a tzeit depression angle. The floor is comfortably above
+#: :data:`SUNSET_DEPRESSION_DEGREES` (so nightfall always follows sunset) and
+#: below the earliest opinion anyone cites (3.65deg, "3 small stars"). The
+#: ceiling is astronomical twilight's outer edge with room to spare: past it
+#: the sun does not reach the angle at all for much of the year in populated
+#: latitudes, which is a config typo, not a posek.
+MIN_TZEIT_DEGREES = 3.0
+MAX_TZEIT_DEGREES = 26.0
+
+#: Bounds on a fixed-minutes tzeit. Zero minutes is sunset itself, which ends
+#: the window while it is still day; the ceiling is well past the latest
+#: fixed-minute opinion (72/90 minutes).
+MIN_TZEIT_MINUTES_EXCLUSIVE = 0.0
+MAX_TZEIT_MINUTES = 120.0
+
+#: Bounds on the candle-lighting offset, in minutes before sunset. Zero is
+#: allowed (candle lighting *at* sunset is a coherent, if unusual, choice);
+#: the ceiling rejects typos that would open the window hours early.
+MAX_CANDLE_LIGHTING_OFFSET_MINUTES = 120
 
 #: How far ``next_window`` will look ahead before giving up.
 _DEFAULT_SEARCH_DAYS = 400
@@ -51,12 +80,38 @@ class TzeitRule:
         return cls(TZEIT_DEGREES, value)
 
     def validate(self) -> "TzeitRule":
+        """Check the rule yields a nightfall that is *after* sunset and sane.
+
+        Raising here is what keeps a bad value fail-closed: every caller
+        turns a ``ValueError`` into strict mode rather than into a window.
+        A rule that is merely unusual is fine; a rule that would close the
+        window before the holy day is out (an angle at or below the sunset
+        geometry, or zero minutes) is not.
+        """
         if self.kind not in (TZEIT_MINUTES, TZEIT_DEGREES):
             raise ValueError(
                 f"tzeit kind must be {TZEIT_MINUTES!r} or {TZEIT_DEGREES!r}, not {self.kind!r}"
             )
-        if self.value < 0:
-            raise ValueError(f"tzeit value must not be negative: {self.value}")
+        if isinstance(self.value, bool) or not isinstance(self.value, (int, float)):
+            raise ValueError(f"tzeit value must be a number: {self.value!r}")
+        if not math.isfinite(self.value):
+            raise ValueError(f"tzeit value must be finite: {self.value}")
+        if self.kind == TZEIT_DEGREES:
+            if self.value <= SUNSET_DEPRESSION_DEGREES:
+                raise ValueError(
+                    "tzeit depression angle must be below the horizon by more than sunset's "
+                    f"{SUNSET_DEPRESSION_DEGREES}deg, else nightfall precedes sunset: {self.value}"
+                )
+            if not MIN_TZEIT_DEGREES <= self.value <= MAX_TZEIT_DEGREES:
+                raise ValueError(
+                    f"tzeit depression angle must be between {MIN_TZEIT_DEGREES} and "
+                    f"{MAX_TZEIT_DEGREES} degrees: {self.value}"
+                )
+        elif not MIN_TZEIT_MINUTES_EXCLUSIVE < self.value <= MAX_TZEIT_MINUTES:
+            raise ValueError(
+                f"tzeit minutes after sunset must be greater than {MIN_TZEIT_MINUTES_EXCLUSIVE} "
+                f"and at most {MAX_TZEIT_MINUTES}: {self.value}"
+            )
         return self
 
 
@@ -69,10 +124,15 @@ class ZmanimRules:
     israel: bool = False
 
     def validate(self) -> "ZmanimRules":
-        if self.candle_lighting_offset_minutes < 0:
+        offset = self.candle_lighting_offset_minutes
+        if isinstance(offset, bool) or not isinstance(offset, (int, float)):
+            raise ValueError(f"candle-lighting offset must be a number: {offset!r}")
+        if not math.isfinite(offset):
+            raise ValueError(f"candle-lighting offset must be finite: {offset}")
+        if not 0 <= offset <= MAX_CANDLE_LIGHTING_OFFSET_MINUTES:
             raise ValueError(
-                "candle-lighting offset must not be negative: "
-                f"{self.candle_lighting_offset_minutes}"
+                "candle-lighting offset must be between 0 and "
+                f"{MAX_CANDLE_LIGHTING_OFFSET_MINUTES} minutes: {offset}"
             )
         self.tzeit.validate()
         return self
@@ -139,6 +199,16 @@ def _run_containing(day: date, rules: ZmanimRules) -> tuple[date, ...]:
 def _window_for_run(run: tuple[date, ...], location: Location, rules: ZmanimRules) -> Window:
     start = candle_lighting(run[0] - timedelta(days=1), location, rules)
     end = tzeit(run[-1], location, rules)
+    if not end > start:
+        # Defence in depth behind TzeitRule.validate: a window that ends
+        # before it starts contains nothing, and a caller filtering on
+        # "does it contain now?" would read that as "no window" -- i.e.
+        # weekday, in the middle of Shabbat. Fail closed instead: every
+        # caller turns this ValueError into strict mode.
+        raise ValueError(
+            f"strict window ends before it starts ({end.isoformat()} <= {start.isoformat()}); "
+            "check the candle-lighting offset and the tzeit definition"
+        )
     kinds = {kind for day in run for kind in day_kinds(day, rules)}
     return Window(
         start=start,
