@@ -32,9 +32,18 @@ from shabbos_goy.config import Config
 #: and the only thing tests need to set to point at a fake server.
 ENV_CONTROL_URL = "SHABBOS_GOY_CONTROL_URL"
 
-#: Falls back to the config's (planned) dashboard bind address, and then to
+#: The control endpoint is ALWAYS on loopback. The listener binds it there
+#: whatever ``dashboard_bind_address`` says (see
+#: :func:`shabbos_goy.runtime.listener.control_address_for`), taking only the
+#: *port* from the config -- so this client must resolve the same thing. A
+#: config whose dashboard lives on a tailnet address is the case that makes
+#: the difference: the dashboard is on the tailnet, the CLI endpoint is not.
+CONTROL_HOST = "127.0.0.1"
+
+#: Falls back to the port of the config's dashboard bind address, and then to
 #: this literal default -- matching ``tests/fixtures/config.example.json``.
-DEFAULT_CONTROL_ADDRESS = "127.0.0.1:8787"
+DEFAULT_CONTROL_PORT = 8787
+DEFAULT_CONTROL_ADDRESS = f"{CONTROL_HOST}:{DEFAULT_CONTROL_PORT}"
 
 DEFAULT_TIMEOUT_SECONDS = 3.0
 
@@ -54,22 +63,36 @@ class ControlResult:
     reason: str = ""
 
 
-def resolve_base_url(config: Config, *, env: Optional[Mapping[str, str]] = None) -> str:
-    """The control endpoint base URL: env override > config > default.
+def control_port(config: Config) -> int:
+    """The control endpoint's port: the config's dashboard port, else the default.
 
-    Never touches the network -- this only resolves an address string.
+    Only the port. The host is always :data:`CONTROL_HOST` -- this mirrors
+    ``runtime.listener.control_address_for`` exactly, and
+    ``test_cli_control`` asserts the two agree.
+    """
+    address = config.dashboard_bind_address
+    if isinstance(address, str) and ":" in address:
+        _host, _, port = address.strip().rpartition(":")
+        if port.isdigit():
+            return int(port)
+    return DEFAULT_CONTROL_PORT
+
+
+def resolve_base_url(config: Config, *, env: Optional[Mapping[str, str]] = None) -> str:
+    """The control endpoint base URL: env override > loopback + config port.
+
+    Never touches the network -- this only resolves an address string. The
+    dashboard's *host* is deliberately ignored: with a tailnet dashboard
+    address (or ``listen --no-dashboard``) there is nothing listening there,
+    while the control endpoint is on loopback either way.
     """
     env = os.environ if env is None else env
     override = (env.get(ENV_CONTROL_URL) or "").strip()
     if override:
         return override.rstrip("/")
-    address = config.dashboard_bind_address
-    if isinstance(address, str) and address.strip():
-        address = address.strip()
-        if "://" in address:
-            return address.rstrip("/")
-        return f"http://{address}"
-    return f"http://{DEFAULT_CONTROL_ADDRESS}"
+    # NOSONAR - http:// by design: a loopback-only control endpoint on this
+    # host, never a network hop, so there is nothing for TLS to protect.
+    return f"http://{CONTROL_HOST}:{control_port(config)}"  # NOSONAR
 
 
 def _request(

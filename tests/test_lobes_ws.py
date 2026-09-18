@@ -8,6 +8,7 @@ server.
 from __future__ import annotations
 
 import io
+import socket
 import struct
 
 import pytest
@@ -112,3 +113,52 @@ def test_read_frame_handles_the_64_bit_extended_length_header() -> None:
 def test_mask_payload_rejects_a_wrong_sized_key() -> None:
     with pytest.raises(ValueError):
         ws.mask_payload(b"abc", b"12")
+
+
+# ---------------------------------------------------------------------------
+# A peer-declared payload length is untrusted input (review thread #5).
+# ---------------------------------------------------------------------------
+
+
+def test_read_frame_refuses_a_payload_above_the_limit_without_allocating() -> None:
+    """A 64-bit length from the peer must be checked BEFORE it sizes a buffer.
+
+    The header below claims 4 GiB and is followed by nothing at all: a reader
+    that trusted it would try to grow a buffer toward that size. This one
+    refuses on the header, so ``recv_exact`` is never asked for the payload.
+    """
+    header = bytes([0x82, 127]) + struct.pack("!Q", 4 * 1024**3)
+    asked: list[int] = []
+    stream = io.BytesIO(header)
+
+    def recv_exact(n: int) -> bytes:
+        asked.append(n)
+        return stream.read(n)
+
+    with pytest.raises(ws.FrameTooLarge):
+        ws.read_frame(recv_exact)
+    assert max(asked) <= 8, f"the oversized length was used to size a read: {asked}"
+    # A connection failure, so the client reconnects with backoff rather than
+    # treating it as a readable frame.
+    assert issubclass(ws.FrameTooLarge, ws.FrameReadError)
+
+
+def test_the_frame_limit_is_configurable_and_defaults_to_one_mebibyte() -> None:
+    assert ws.DEFAULT_MAX_PAYLOAD_BYTES == 1024 * 1024
+    payload = b"y" * 300
+    frame = bytes([0x82, 126]) + struct.pack("!H", len(payload)) + payload
+    with pytest.raises(ws.FrameTooLarge):
+        ws.read_frame(io.BytesIO(frame).read, max_payload_bytes=299)
+    fin, _opcode, decoded = ws.read_frame(io.BytesIO(frame).read, max_payload_bytes=300)
+    assert (fin, decoded) == (True, payload)
+
+
+def test_a_connection_carries_its_frame_limit_into_read_frame() -> None:
+    conn = ws.WebSocketConnection(socket.socket(), max_payload_bytes=64)
+    try:
+        assert conn.max_payload_bytes == 64
+        conn._buf.extend(bytes([0x82, 126]) + struct.pack("!H", 65) + b"z" * 65)
+        with pytest.raises(ws.FrameTooLarge):
+            conn.read_frame()
+    finally:
+        conn.close()

@@ -21,6 +21,11 @@ Three things about it are load-bearing:
 * **Nothing it prints carries transcript text.** The summary is counts,
   verdicts and action names; the running diagnostics are
   :class:`~shabbos_goy.runtime.RuntimeNote` lines.
+* **A broken config is visible, not fatal.** It has already failed closed
+  (an empty whitelist, strict mode), and exiting would crash-loop the
+  container on the one day nobody can restart it --- so ``listen`` starts
+  anyway and says so: one ``event=config_error`` line naming the error's
+  *code*, and the same code in the run summary. Never the file's contents.
 
 ``--healthcheck`` does not start anything: it reads the heartbeat file and
 exits 0 (healthy) or 1 (not), which is exactly what a container
@@ -169,8 +174,12 @@ def _build_source(args: argparse.Namespace, config: Config):
         ) from exc
 
 
-def _summary(listener: Listener) -> dict:
-    """What the run did. Counts, verdicts and action names -- never text."""
+def _summary(listener: Listener, *, config_error: Optional[int] = None) -> dict:
+    """What the run did. Counts, verdicts and action names -- never text.
+
+    ``config_error`` is the :class:`CliError` *code* of a config that failed
+    to load, or ``None``. The code only: the message can name the file.
+    """
     acted = [
         {"verdict": record.verdict, "action": record.action, "target": record.target}
         for record in listener.pipeline.log_records
@@ -186,6 +195,7 @@ def _summary(listener: Listener) -> dict:
         "dropped_events": listener.queue_dropped,
         "control": listener.control_url,
         "dashboard": listener.dashboard_url,
+        "config_error": config_error,
     }
 
 
@@ -226,8 +236,16 @@ def cmd_listen(args: argparse.Namespace) -> int:
         heartbeat_path=getattr(args, "heartbeat", None),
     )
     listener.install_signal_handlers()
+    # A broken config is VISIBLE but not fatal, on purpose. Exiting would
+    # crash-loop the container, and Shabbat is exactly when nobody can restart
+    # it; a broken config has already failed closed (nothing is whitelisted and
+    # the mode is strict), so the listener that keeps running can act on
+    # nothing. One named line names the code -- never the file or its contents.
+    config_error = config.error.code if config.error is not None else None
+    if config_error is not None:
+        listener.note("config_error", str(config_error))
     code = listener.run()
-    summary = _summary(listener)
+    summary = _summary(listener, config_error=config_error)
     if json_mode:
         emit_result(summary, json_mode=True)
     else:
@@ -238,6 +256,8 @@ def cmd_listen(args: argparse.Namespace) -> int:
             f"decisions: {summary['decisions']}",
             f"actions: {len(summary['actions'])}",
         ]
+        if summary["config_error"] is not None:
+            lines.append(f"config_error: {summary['config_error']}")
         for action in summary["actions"]:
             lines.append(f"  [{action['verdict']}] {action['action']} -> {action['target']}")
         emit_result("\n".join(lines), json_mode=False)

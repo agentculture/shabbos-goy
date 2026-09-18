@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -473,3 +474,122 @@ def test_arriving_frames_keep_the_watchdog_quiet() -> None:
 
     assert exits == []
     assert outcome.reason == lc.REASON_SERVER_CLOSED
+
+
+# ---------------------------------------------------------------------------
+# A FINITE source ends the session (review thread #3): `listen --script a.wav`
+# must finish, not hang on the watchdog and then replay the file.
+# ---------------------------------------------------------------------------
+
+
+def _one_shot_source(chunks: list[bytes]):
+    feed = list(chunks)
+
+    def audio_source() -> bytes | None:
+        return feed.pop(0) if feed else None
+
+    return audio_source
+
+
+def test_a_finite_source_closes_the_turn_with_silence_and_ends_the_session() -> None:
+    """EOF on a WAV: a tail of silence (so the server's VAD closes the turn),
+    a short wait for the last transcript, then a named end -- never a stall."""
+    speech = b"\x01\x02" * 256
+
+    def script(server: FakeLobesServer, conn) -> None:
+        # Wait until the tail of silence has been sent, then answer with the
+        # last transcript, exactly as the real VAD-driven server would.
+        conn.wait_for(
+            lambda frames: sum(1 for f in frames if f.opcode == OPCODE_TEXT) >= 3, timeout=5.0
+        )
+        conn.send_event(
+            {
+                "type": "conversation.item.input_audio_transcription.completed",
+                "item_id": "last",
+                "text": "חם פה",
+            }
+        )
+        # Deliberately no close: the client must end this session itself.
+
+    recorder = Recorder()
+    with FakeLobesServer(script) as server:
+        client = lc.LobesClient(
+            make_config(server),
+            recorder,
+            audio_source=_one_shot_source([speech]),
+            read_timeout=0.05,
+            watchdog_seconds=5.0,
+            tail_silence_seconds=0.2,
+            source_end_grace=0.3,
+        )
+        outcome = client.run_once()
+        conn = server.wait_for_connection()
+
+    assert outcome.reason == lc.REASON_SOURCE_ENDED
+    assert client.source_ended is True
+    assert client.stats.stalls == 0
+    assert recorder.transcripts() == ["חם פה"]
+
+    appends = [f.json() for f in conn.snapshot() if f.opcode == OPCODE_TEXT]
+    assert all(event["type"] == "input_audio_buffer.append" for event in appends)
+    import base64 as _b64
+
+    tail = [_b64.b64decode(event["audio"]) for event in appends[1:]]
+    assert tail, "no tail of silence was sent, so the server's VAD never closed the turn"
+    assert all(set(chunk) == {0} for chunk in tail)
+
+
+def test_the_client_does_not_reconnect_after_a_finite_source_ended() -> None:
+    """Reconnecting would replay the file from the top, so the run never ends."""
+
+    def script(server: FakeLobesServer, conn) -> None:
+        conn.wait_for(
+            lambda frames: sum(1 for f in frames if f.opcode == OPCODE_TEXT) >= 2, timeout=5.0
+        )
+
+    sleeper = SleepRecorder()
+    with FakeLobesServer(script) as server:
+        client = lc.LobesClient(
+            make_config(server),
+            Recorder(),
+            audio_source=_one_shot_source([b"\x03\x04" * 256]),
+            read_timeout=0.05,
+            watchdog_seconds=5.0,
+            sleep=sleeper,
+            tail_silence_seconds=0.1,
+            source_end_grace=0.1,
+            max_connections=3,
+        )
+        code = client.run()
+
+    assert client.stats.connections == 1, "the exhausted script was replayed by a reconnect"
+    assert sleeper.calls == []
+    assert code in (lc.EXIT_OK, lc.EXIT_ENVIRONMENT)
+
+
+def test_stop_ends_a_scripted_run_at_once_even_inside_the_end_of_source_grace() -> None:
+    """SIGTERM promptness: the post-EOF wait is interruptible, not a sleep."""
+
+    def script(server: FakeLobesServer, conn) -> None:
+        conn.wait_for(lambda frames: False, timeout=5.0)
+
+    with FakeLobesServer(script) as server:
+        client = lc.LobesClient(
+            make_config(server),
+            Recorder(),
+            audio_source=_one_shot_source([b"\x05\x06" * 256]),
+            read_timeout=0.05,
+            watchdog_seconds=30.0,
+            tail_silence_seconds=0.0,
+            source_end_grace=30.0,
+        )
+        stopper = threading.Timer(0.2, client.stop)
+        stopper.daemon = True
+        stopper.start()
+        started = time.monotonic()
+        outcome = client.run_once()
+        elapsed = time.monotonic() - started
+        stopper.cancel()
+
+    assert elapsed < 5.0, f"stop() took {elapsed:.1f}s: the grace wait is not interruptible"
+    assert outcome.reason in (lc.REASON_STOPPED, lc.REASON_SOURCE_ENDED)

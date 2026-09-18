@@ -228,7 +228,9 @@ def wav_audio_source(path: str | Path, *, chunk_bytes: int = CAPTURE_CHUNK_BYTES
     """A ``LobesClient`` audio source that streams a WAV's PCM16 frames.
 
     Returns ``None`` once the file is exhausted, which is how the client's
-    feeder learns the session is over.
+    feeder learns the session is over (it then closes the turn with a tail of
+    silence and ends the session by name --- see
+    :meth:`shabbos_goy.lobes.LobesClient._end_of_source`).
     """
     import wave
 
@@ -237,16 +239,25 @@ def wav_audio_source(path: str | Path, *, chunk_bytes: int = CAPTURE_CHUNK_BYTES
     frames = max(1, chunk_bytes // frame_size)
     done = threading.Event()
 
+    def close() -> None:
+        """Idempotent: the reader closes on EOF, teardown closes regardless."""
+        if not done.is_set():
+            done.set()
+        try:
+            handle.close()
+        except (OSError, ValueError, AttributeError):  # pragma: no cover
+            pass
+
     def read() -> Optional[bytes]:
         if done.is_set():
             return None
         data = handle.readframes(frames)
         if not data:
-            done.set()
-            handle.close()
+            close()
             return None
         return data
 
+    read.close = close  # type: ignore[attr-defined]
     return read
 
 
@@ -258,6 +269,14 @@ def pipewire_audio_source(
     This is the mic feeder's data supply: the capture process is started
     here, the client's own feeder thread pulls from it, and nothing mutes it
     --- own-voice suppression happens downstream, by discarding transcripts.
+
+    The returned callable carries a ``close()`` that **terminates and reaps
+    the child**. A capture process must never outlive the session that
+    started it: without this, every reconnect would leave another ``pw-record``
+    holding the microphone, and the box would slowly run out of them.
+    ``start_capture`` sends the child's stderr to ``DEVNULL`` for the same
+    reason --- an undrained pipe is a child that blocks forever on a full
+    buffer.
     """
     process = pipewire.start_capture(node, popen=popen)
 
@@ -265,11 +284,51 @@ def pipewire_audio_source(
         stream = process.stdout
         if stream is None:
             return None
-        data = stream.read(chunk_bytes)
+        try:
+            data = stream.read(chunk_bytes)
+        except (OSError, ValueError):
+            # The pipe was closed under us by close(): EOF, not an error.
+            return None
         return data if data else None
 
+    def close() -> None:
+        """Terminate the capture child and wait for it. Safe to call twice."""
+        try:
+            if process.poll() is None:
+                process.terminate()
+        except (OSError, ValueError):  # pragma: no cover - already gone
+            pass
+        try:
+            process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:  # pragma: no cover - a wedged child
+            try:
+                process.kill()
+                process.wait(timeout=2.0)
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                pass
+        except (OSError, ValueError):  # pragma: no cover - already reaped
+            pass
+        stream = getattr(process, "stdout", None)
+        if stream is not None:
+            try:
+                stream.close()
+            except (OSError, ValueError):  # pragma: no cover
+                pass
+
     read.process = process  # type: ignore[attr-defined]
+    read.close = close  # type: ignore[attr-defined]
     return read
+
+
+def _close_audio_source(listener: "Listener", audio: Any) -> None:
+    """Close an audio source that has one. Never raises, never names a device."""
+    closer = getattr(audio, "close", None)
+    if closer is None:
+        return
+    try:
+        closer()
+    except Exception as exc:  # noqa: BLE001 - name it; teardown continues
+        listener.note("capture_close_failed", type(exc).__name__)
 
 
 def lobes_source(
@@ -285,6 +344,18 @@ def lobes_source(
     named line and another attempt later, so a box that boots before its
     secrets are mounted comes back on its own rather than crash-looping
     through Shabbat.
+
+    Two endings are not "try again":
+
+    * a **finite** audio source (a ``--script`` WAV) that reached EOF --- the
+      client closed the last turn and named the session ``source_ended``.
+      Reconnecting would replay the file from the top and the run would never
+      finish. A microphone never ends, so this only ever happens on the
+      fixtures path.
+    * the listener stopping (SIGTERM).
+
+    The audio source is closed in a ``finally`` on **every** session end, so
+    no capture child survives a reconnect.
     """
 
     def source(listener: "Listener") -> None:
@@ -325,6 +396,10 @@ def lobes_source(
                 listener.note("lobes_session_failed", type(exc).__name__)
             finally:
                 listener.attach_client(None)
+                _close_audio_source(listener, audio)
+            if bool(getattr(client, "source_ended", False)):
+                listener.note("source_ended")
+                return
             if not listener.stopping:
                 listener.note("lobes_reconnecting")
                 listener.wait_for_stop(retry_seconds)
@@ -607,8 +682,13 @@ class Listener:
     def install_signal_handlers(self) -> None:
         """SIGTERM/SIGINT -> a clean stop. ``docker stop`` sends SIGTERM."""
         for signum in (signal.SIGTERM, signal.SIGINT):
+            # `name=` binds per iteration: a late-bound closure over `signum`
+            # would make every signal report the last one installed.
+            def handler(*_args, name: str = signal.Signals(signum).name) -> None:
+                self.request_stop(name)
+
             try:
-                signal.signal(signum, lambda *_: self.request_stop(signal.Signals(signum).name))
+                signal.signal(signum, handler)
             except (ValueError, OSError):  # pragma: no cover - not the main thread
                 pass
 

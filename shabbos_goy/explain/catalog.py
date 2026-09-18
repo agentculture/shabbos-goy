@@ -345,10 +345,22 @@ word, no confirmation question and no queued action: a refused utterance is
 dropped, never retried, and nothing survives a restart.
 
 It also starts the loopback control endpoint the `ac`, `volume` and `mode`
-verbs talk to (default `127.0.0.1:8787`, or the port from
-`dashboard_bind_address`), and — unless `--no-dashboard` — the Tailscale-only
-dashboard. A dashboard address that is not up yet never stops the listener:
-the bind is retried on a timer.
+verbs talk to (always on `127.0.0.1`, at the port from
+`dashboard_bind_address`, else 8787), and — unless `--no-dashboard` — the
+Tailscale-only dashboard. A dashboard address that is not up yet never stops
+the listener: the bind is retried on a timer.
+
+Two things deliberately do not stop it either. A **broken config** prints one
+`event=config_error` line (the error's code, never the file or its contents),
+reports the same code in the summary, and keeps listening — it has already
+failed closed, with nothing whitelisted and strict mode, and a container that
+exits on a bad config crash-loops on the one day nobody can restart it. A
+**missing lobes environment** is one named line and another attempt later.
+
+A `--script` WAV, by contrast, *does* end the run: at the end of the file the
+client sends a tail of silence so the server's VAD closes the last turn,
+waits briefly for that transcript, and ends the session by name instead of
+reconnecting and replaying the file from the top.
 
 ## Usage
 

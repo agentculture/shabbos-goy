@@ -16,10 +16,21 @@ prove different things:
 The file holds timestamps and a window. It holds no transcript text, no
 class, no intent, no key and no pod id --- the type itself is the guarantee,
 the same trick :class:`shabbos_goy.pipeline.LogRecord` uses. It lives on
-tmpfs (``/tmp`` by default, or wherever ``SHABBOS_GOY_HEARTBEAT`` points), so
-it never survives a reboot and is not state the listener could resume from
-(invariant #3): it is a report about the present, written for something else
-to read.
+tmpfs (wherever ``SHABBOS_GOY_HEARTBEAT`` points, else a per-user runtime
+directory), so it never survives a reboot and is not state the listener could
+resume from (invariant #3): it is a report about the present, written for
+something else to read.
+
+Where it lives, and why not ``/tmp/shabbos-goy/heartbeat.json``
+---------------------------------------------------------------
+A fixed, predictable path in a world-writable directory is a symlink trap:
+any other user on the host can pre-create it as a link and make this process
+write through it. So the default is ``$XDG_RUNTIME_DIR/shabbos-goy/`` (a
+per-user tmpfs, mode 0700) and, when that is unset, ``<tempdir>/shabbos-goy-
+<uid>/`` --- and either way the directory is created 0700, **refused** if it
+is a symlink or not owned by this uid, and the file is opened ``O_NOFOLLOW``
+0600. An explicit path (``--heartbeat``, ``SHABBOS_GOY_HEARTBEAT``) still
+wins: the container mounts its own tmpfs and names it.
 
 Timestamps are **wall clock** (``time.time``), not monotonic, because the
 reader is usually a different process.
@@ -29,16 +40,21 @@ from __future__ import annotations
 
 import json
 import os
+import stat
+import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
 __all__ = [
-    "DEFAULT_HEARTBEAT_PATH",
+    "DEFAULT_HEARTBEAT_NAME",
     "DEFAULT_WINDOW_SECONDS",
     "ENV_HEARTBEAT_PATH",
+    "ENV_XDG_RUNTIME_DIR",
     "KINDS",
     "Heartbeat",
+    "UnsafeHeartbeatDirectory",
+    "default_heartbeat_dir",
     "healthcheck",
     "heartbeat_path",
     "read_heartbeat",
@@ -47,7 +63,19 @@ __all__ = [
 #: Where the heartbeat file lives; a tmpfs path in the container.
 ENV_HEARTBEAT_PATH = "SHABBOS_GOY_HEARTBEAT"
 
-DEFAULT_HEARTBEAT_PATH = "/tmp/shabbos-goy/heartbeat.json"  # nosec B108 - tmpfs by design
+#: The per-user runtime directory, when the session manager provides one.
+ENV_XDG_RUNTIME_DIR = "XDG_RUNTIME_DIR"
+
+DEFAULT_HEARTBEAT_NAME = "heartbeat.json"
+
+#: Owner-only, for both the directory and the file.
+DIR_MODE = 0o700
+FILE_MODE = 0o600
+
+
+class UnsafeHeartbeatDirectory(OSError):
+    """The heartbeat directory is a symlink, or is not owned by this user."""
+
 
 #: How recent "recent activity" has to be. Generous on purpose: a quiet
 #: household produces no transcripts for hours, so the window has to be wide
@@ -59,15 +87,51 @@ DEFAULT_WINDOW_SECONDS = 120.0
 KINDS = ("pong", "audio", "transcript")
 
 
+def default_heartbeat_dir(env: Optional[Mapping[str, str]] = None) -> Path:
+    """The per-user directory the heartbeat defaults into.
+
+    ``$XDG_RUNTIME_DIR/shabbos-goy`` when the session manager gives us one
+    (already per-user, already tmpfs, already 0700), else
+    ``<tempdir>/shabbos-goy-<uid>``. Never a name another user could predict
+    *and* create first in a shared directory.
+    """
+    env = os.environ if env is None else env
+    runtime_dir = (env.get(ENV_XDG_RUNTIME_DIR) or "").strip()
+    if runtime_dir:
+        return Path(runtime_dir) / "shabbos-goy"
+    return Path(tempfile.gettempdir()) / f"shabbos-goy-{os.getuid()}"
+
+
 def heartbeat_path(
     env: Optional[Mapping[str, str]] = None, override: Optional[str | Path] = None
 ) -> Path:
-    """Where to write (or read) the heartbeat: explicit > env > tmpfs default."""
+    """Where to write (or read) the heartbeat: explicit > env > per-user default."""
     if override is not None:
         return Path(override)
     env = os.environ if env is None else env
     configured = (env.get(ENV_HEARTBEAT_PATH) or "").strip()
-    return Path(configured) if configured else Path(DEFAULT_HEARTBEAT_PATH)
+    if configured:
+        return Path(configured)
+    return default_heartbeat_dir(env) / DEFAULT_HEARTBEAT_NAME
+
+
+def _prepare_directory(directory: Path) -> Path:
+    """Create *directory* 0700 and prove it is ours. Raises otherwise.
+
+    The two refusals are the whole point: a **symlink** could redirect the
+    write anywhere, and a directory owned by **another uid** is one somebody
+    else can replace the file inside. Either way we would rather have no
+    heartbeat than write through someone else's path.
+    """
+    directory.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
+    info = os.lstat(directory)
+    if stat.S_ISLNK(info.st_mode):
+        raise UnsafeHeartbeatDirectory(f"{directory} is a symlink")
+    if not stat.S_ISDIR(info.st_mode):
+        raise UnsafeHeartbeatDirectory(f"{directory} is not a directory")
+    if info.st_uid != os.getuid():
+        raise UnsafeHeartbeatDirectory(f"{directory} is not owned by this user")
+    return directory
 
 
 class Heartbeat:
@@ -118,17 +182,30 @@ class Heartbeat:
         }
 
     def write(self) -> bool:
-        """Write the snapshot atomically. ``False`` on any OS error.
+        """Write the snapshot atomically, refusing an unsafe path. ``False`` on
+        any OS error.
 
         A heartbeat that cannot be written must never take the listener down
-        with it -- a full or read-only tmpfs is an operator problem, not a
-        reason to stop listening.
+        with it -- a full or read-only tmpfs, or a directory that turns out
+        not to be ours, is an operator problem, not a reason to stop
+        listening. The healthcheck will report ``missing``, which is true.
+
+        The write itself is ``O_NOFOLLOW`` 0600 into a temporary file in the
+        *same* directory, then :func:`os.replace` -- so a reader never sees a
+        half-written file, and a symlink planted at either name is refused
+        rather than followed.
         """
+        payload = json.dumps(self.payload()).encode("utf-8")
+        temporary = self.path.with_name(f"{self.path.name}.tmp")
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = self.path.with_name(f"{self.path.name}.tmp")
-            temporary.write_text(json.dumps(self.payload()), encoding="utf-8")
-            temporary.replace(self.path)
+            _prepare_directory(self.path.parent)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+            handle = os.open(temporary, flags, FILE_MODE)
+            try:
+                os.write(handle, payload)
+            finally:
+                os.close(handle)
+            os.replace(temporary, self.path)
         except OSError:
             return False
         return True

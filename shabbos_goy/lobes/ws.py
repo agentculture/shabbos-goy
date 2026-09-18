@@ -40,8 +40,26 @@ OPCODE_PING = 0x9
 OPCODE_PONG = 0xA
 
 
+#: The largest payload a single frame may declare, in bytes. A peer-provided
+#: 64-bit length is attacker-controlled input: without a bound, one malformed
+#: (or compromised) endpoint could make the reader allocate its way through
+#: the host's memory. 1 MiB is ~30 s of 16 kHz PCM16 and far more than any
+#: real lobes event, so nothing legitimate ever approaches it.
+DEFAULT_MAX_PAYLOAD_BYTES = 1024 * 1024
+
+
 class FrameReadError(Exception):
     """The frame stream ended (EOF) or was malformed before a full frame arrived."""
+
+
+class FrameTooLarge(FrameReadError):
+    """The peer declared a payload larger than the configured maximum.
+
+    A subclass of :class:`FrameReadError` on purpose: the client already
+    treats a frame-read failure as a lost connection (reconnect with
+    backoff), which is exactly the right response to a peer that is talking
+    nonsense. Raised *before* the payload is read, so nothing is allocated.
+    """
 
 
 class HandshakeError(Exception):
@@ -137,13 +155,21 @@ def build_frame(opcode: int, payload: bytes = b"", *, mask: bool = True) -> byte
     return bytes(header) + payload
 
 
-def read_frame(recv_exact: Callable[[int], bytes]) -> tuple[bool, int, bytes]:
+def read_frame(
+    recv_exact: Callable[[int], bytes],
+    *,
+    max_payload_bytes: int = DEFAULT_MAX_PAYLOAD_BYTES,
+) -> tuple[bool, int, bytes]:
     """Read one frame using ``recv_exact(n) -> bytes``.
 
     Raises :class:`FrameReadError` on EOF or a short read, so a truncated
     stream can never be mistaken for a valid short frame. ``recv_exact`` is
     any callable of one int argument, which is what makes this testable
     against a plain :class:`io.BytesIO` fed pre-built frames.
+
+    A declared payload above *max_payload_bytes* raises
+    :class:`FrameTooLarge` **before** a single payload byte is requested:
+    the length field comes from the peer, so it is never a size to trust.
     """
     first_two = recv_exact(2)
     if len(first_two) < 2:
@@ -163,6 +189,12 @@ def read_frame(recv_exact: Callable[[int], bytes]) -> tuple[bool, int, bytes]:
         if len(ext) < 8:
             raise FrameReadError("connection closed while reading the 64-bit extended length")
         length = struct.unpack("!Q", ext)[0]
+    if length > max_payload_bytes:
+        # Named, and raised before any buffer is sized from it.
+        raise FrameTooLarge(
+            f"peer declared a {length}-byte payload, above the "
+            f"{max_payload_bytes}-byte frame limit: refusing to allocate it"
+        )
     mask_key = None
     if masked:
         mask_key = recv_exact(4)
@@ -185,10 +217,16 @@ def read_frame(recv_exact: Callable[[int], bytes]) -> tuple[bool, int, bytes]:
 class WebSocketConnection:
     """One RFC 6455 connection: handshake, masked writes, framed reads."""
 
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(
+        self,
+        sock: socket.socket,
+        *,
+        max_payload_bytes: int = DEFAULT_MAX_PAYLOAD_BYTES,
+    ) -> None:
         self._sock = sock
         self._buf = bytearray()
         self._send_lock = threading.Lock()
+        self.max_payload_bytes = int(max_payload_bytes)
 
     @classmethod
     def connect(
@@ -200,6 +238,7 @@ class WebSocketConnection:
         extra_headers: dict[str, str] | None = None,
         tls: bool = False,
         connect_timeout: float = 10.0,
+        max_payload_bytes: int = DEFAULT_MAX_PAYLOAD_BYTES,
     ) -> tuple["WebSocketConnection", int, dict[str, str]]:
         """Dial the peer and perform the WS handshake.
 
@@ -213,7 +252,7 @@ class WebSocketConnection:
         if tls:
             context = ssl.create_default_context()
             sock = context.wrap_socket(sock, server_hostname=host)
-        conn = cls(sock)
+        conn = cls(sock, max_payload_bytes=max_payload_bytes)
         request = build_handshake_request(f"{host}:{port}", path, key, extra_headers=extra_headers)
         sock.sendall(request)
         head = conn._read_until(b"\r\n\r\n", timeout=connect_timeout)
@@ -282,7 +321,7 @@ class WebSocketConnection:
             return data
 
         try:
-            return read_frame(reader)
+            return read_frame(reader, max_payload_bytes=self.max_payload_bytes)
         except socket.timeout:
             self._buf[:0] = consumed
             raise
