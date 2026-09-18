@@ -85,6 +85,12 @@ class LimitsConfig:
     strict_delay_seconds: float = 15.0
     retry_window_seconds: float = 300.0
     retry_max_attempts: int = 5
+    #: Power OFF is safe for the unit at any moment, and on Shabbat it is the only
+    #: way a cold person can stop the AC: it needs only a short debounce.
+    off_min_interval_seconds: float = 60.0
+    #: Power ON soon after OFF short-cycles the compressor (the refrigerant
+    #: pressures have not equalised). This is the interval that protects it.
+    on_after_off_min_interval_seconds: float = 240.0
 
     @classmethod
     def from_dict(cls, data: dict) -> "LimitsConfig":
@@ -94,6 +100,10 @@ class LimitsConfig:
             strict_delay_seconds=float(data.get("strict_delay_seconds", 15.0)),
             retry_window_seconds=float(data.get("retry_window_seconds", 300.0)),
             retry_max_attempts=int(data.get("retry_max_attempts", 5)),
+            off_min_interval_seconds=float(data.get("off_min_interval_seconds", 60.0)),
+            on_after_off_min_interval_seconds=float(
+                data.get("on_after_off_min_interval_seconds", 240.0)
+            ),
         )
 
 
@@ -126,6 +136,7 @@ class RateLimiter:
         self._config = config
         self._clock = clock
         self._last_change_at: dict[str, float] = {}
+        self._last_off_at: dict[str, float] = {}
         self._daily_events: dict[str, BoundedRing[float]] = {}
         self._refusal_log: BoundedRing[Refusal] = BoundedRing(log_capacity)
 
@@ -136,19 +147,31 @@ class RateLimiter:
             self._daily_events[key] = ring
         return ring
 
-    def check(self, key: str = "default") -> tuple[bool, Optional[str]]:
-        """Return (allowed, reason). Does not mutate any counters — call
-        ``record()`` afterwards if (and only if) the action actually ran."""
-        now = self._clock()
+    def check(
+        self,
+        key: str = "default",
+        *,
+        direction: Optional[str] = None,
+        operator: bool = False,
+    ) -> tuple[bool, Optional[str]]:
+        """May ``key`` change now? Call ``record()`` afterwards iff the action ran.
 
-        last = self._last_change_at.get(key)
-        if last is not None:
-            elapsed = now - last
-            if elapsed < self._config.min_interval_seconds:
-                reason = (
-                    f"minimum interval not elapsed for {key!r}: "
-                    f"{elapsed:.1f}s < {self._config.min_interval_seconds:.1f}s"
-                )
+        ``direction`` is ``"on"`` / ``"off"`` for a power change and ``None`` for
+        anything else (a volume step), which keeps the symmetric interval.
+        Power is asymmetric on purpose: OFF needs only a short debounce since
+        the last change; ON must wait the compressor interval since the last
+        OFF. ``operator=True`` (CLI, dashboard) bypasses the intervals but not
+        the daily cap, and the operator's action still counts for everyone.
+        """
+        now = self._clock()
+        if direction not in (None, "on", "off"):
+            reason = f"unknown direction for {key!r}"
+            self._log_refusal(key, now, reason)
+            return False, reason
+
+        if not operator:
+            reason = self._interval_refusal(key, direction, now)
+            if reason is not None:
                 self._log_refusal(key, now, reason)
                 return False, reason
 
@@ -156,19 +179,40 @@ class RateLimiter:
         window_start = now - 86400.0
         count_in_window = sum(1 for t in ring if t >= window_start)
         if count_in_window >= self._config.daily_cap:
-            reason = (
-                f"daily cap reached for {key!r}: " f"{count_in_window}/{self._config.daily_cap}"
-            )
+            reason = f"daily cap reached for {key!r}: {count_in_window}/{self._config.daily_cap}"
             self._log_refusal(key, now, reason)
             return False, reason
 
         return True, None
 
-    def record(self, key: str = "default") -> None:
-        """Record that the action actually happened. Only call this after
-        a ``check()`` that returned ``True``."""
+    def _interval_refusal(self, key: str, direction: Optional[str], now: float) -> Optional[str]:
+        last = self._last_change_at.get(key)
+        if direction is None:
+            needed = self._config.min_interval_seconds
+            if last is not None and now - last < needed:
+                return (
+                    f"minimum interval not elapsed for {key!r}: {now - last:.1f}s < {needed:.1f}s"
+                )
+            return None
+        debounce = self._config.off_min_interval_seconds
+        if last is not None and now - last < debounce:
+            return f"power debounce not elapsed for {key!r}: {now - last:.1f}s < {debounce:.1f}s"
+        if direction == "on":
+            last_off = self._last_off_at.get(key)
+            needed = self._config.on_after_off_min_interval_seconds
+            if last_off is not None and now - last_off < needed:
+                return (
+                    f"compressor interval not elapsed for {key!r}: "
+                    f"{now - last_off:.1f}s since power-off < {needed:.1f}s"
+                )
+        return None
+
+    def record(self, key: str = "default", *, direction: Optional[str] = None) -> None:
+        """Note that the action ran. Only ever call this after it actually did."""
         now = self._clock()
         self._last_change_at[key] = now
+        if direction == "off":
+            self._last_off_at[key] = now
         self._bucket(key).append(now)
 
     def _log_refusal(self, key: str, now: float, reason: str) -> None:

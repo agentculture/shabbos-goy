@@ -78,15 +78,18 @@ def test_ac_control_refuses_an_argument_the_validator_rejects(tmp_path) -> None:
 
 
 def test_ac_control_shares_the_rate_limiter_with_voice(tmp_path) -> None:
+    """Operator presses bypass the intervals, but they still COUNT for the voice path."""
     with dashboard(tmp_path) as ui:
         first = ui.post("/api/control/ac", {"power": "on"}).json()
         second = ui.post("/api/control/ac", {"power": "off"}).json()
 
+        # An operator who cannot switch the AC off for ten minutes is no operator.
         assert first["verdict"] == "dry_run"
-        assert second["verdict"] == "rate_limited"
-        assert len(ui.stack.ac.power_calls) == 1
+        assert second["verdict"] == "dry_run"
+        assert len(ui.stack.ac.power_calls) == 2
 
-        # ... and the voice path sees the same limiter.
+        # ... and the voice path sees the same limiter: ON straight after the
+        # operator's OFF is inside the compressor interval.
         feed(ui.stack.pipeline, HOT)
         assert ui.stack.pipeline.log_records[-1].verdict == "rate_limited"
 
@@ -169,15 +172,20 @@ def test_volume_control_is_dry_run_by_default(tmp_path) -> None:
 def test_volume_control_steps_the_adapter_when_applying(tmp_path) -> None:
     with dashboard(tmp_path, apply=True) as ui:
         up = ui.post("/api/control/volume", {"direction": "up"}).json()
-        # The volume key shares the pipeline's rate limiter too.
-        assert ui.post("/api/control/volume", {"direction": "down"}).json()["verdict"] == (
-            "rate_limited"
-        )
-        ui.stack.clock.advance(601)
+        # An operator bypasses the interval: a second press straight away works.
         down = ui.post("/api/control/volume", {"direction": "down"}).json()
 
     assert (up["verdict"], down["verdict"]) == ("acted", "acted")
     assert ui.stack.volume.steps == [1, -1]
+
+
+def test_operator_volume_presses_still_count_toward_the_daily_cap(tmp_path) -> None:
+    with dashboard(tmp_path, apply=True) as ui:
+        verdicts = [
+            ui.post("/api/control/volume", {"direction": "up"}).json()["verdict"] for _ in range(13)
+        ]
+    assert verdicts[:12] == ["acted"] * 12
+    assert verdicts[12] == "rate_limited"
 
 
 def test_volume_control_refuses_a_key_that_is_not_whitelisted(tmp_path) -> None:

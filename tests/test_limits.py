@@ -347,3 +347,111 @@ def test_soak_25h_stream_keeps_buffers_bounded_and_admits_a_fresh_hint():
 
     ok, reason = limiter.check()
     assert ok, f"a fresh hint should still be admitted after 25h+: {reason}"
+
+
+# -- asymmetric power limits and the operator bypass (operator decision) -----
+#
+# The interval exists to stop the compressor short-cycling, which is about
+# switching ON soon after OFF. Switching OFF soon after ON is harmless, and on
+# Shabbat it is the only way a cold person can stop the AC. Operator controls
+# (CLI, dashboard) bypass the interval but still count toward it.
+
+
+def _power_limiter(clock: "FakeClock") -> RateLimiter:
+    config = LimitsConfig.from_dict(
+        {
+            "min_interval_seconds": 600,
+            "daily_cap": 12,
+            "off_min_interval_seconds": 60,
+            "on_after_off_min_interval_seconds": 240,
+        }
+    )
+    return RateLimiter(config, clock)
+
+
+def test_power_interval_defaults_are_the_agreed_numbers() -> None:
+    config = LimitsConfig.from_dict({"min_interval_seconds": 600, "daily_cap": 12})
+    assert config.off_min_interval_seconds == 60.0
+    assert config.on_after_off_min_interval_seconds == 240.0
+
+
+def test_off_is_allowed_soon_after_on_but_not_inside_the_debounce() -> None:
+    clock = FakeClock()
+    limiter = _power_limiter(clock)
+    limiter.record("pod", direction="on")
+    clock.advance(30)
+    assert limiter.check("pod", direction="off")[0] is False
+    clock.advance(35)  # 65 s after the power-on: past the 60 s debounce
+    assert limiter.check("pod", direction="off")[0] is True
+
+
+def test_on_after_off_waits_for_the_compressor_interval() -> None:
+    clock = FakeClock()
+    limiter = _power_limiter(clock)
+    limiter.record("pod", direction="off")
+    clock.advance(120)
+    allowed, reason = limiter.check("pod", direction="on")
+    assert allowed is False and "compressor" in (reason or "")
+    clock.advance(125)  # 245 s after the power-off
+    assert limiter.check("pod", direction="on")[0] is True
+
+
+def test_the_compressor_interval_is_measured_from_the_last_off_not_the_last_change() -> None:
+    clock = FakeClock()
+    limiter = _power_limiter(clock)
+    limiter.record("pod", direction="off")
+    clock.advance(250)
+    limiter.record("pod", direction="on")
+    clock.advance(70)
+    limiter.record("pod", direction="off")
+    clock.advance(100)  # 100 s after the latest off, 400 s after the first one
+    assert limiter.check("pod", direction="on")[0] is False
+
+
+def test_an_undirected_action_keeps_the_symmetric_interval() -> None:
+    clock = FakeClock()
+    limiter = _power_limiter(clock)
+    limiter.record("self")
+    clock.advance(300)
+    assert limiter.check("self")[0] is False
+    clock.advance(301)
+    assert limiter.check("self")[0] is True
+
+
+def test_the_daily_cap_still_bounds_directed_actions() -> None:
+    clock = FakeClock()
+    limiter = _power_limiter(clock)
+    for index in range(12):
+        direction = "on" if index % 2 == 0 else "off"
+        assert limiter.check("pod", direction=direction)[0] is True
+        limiter.record("pod", direction=direction)
+        clock.advance(300)
+    assert limiter.check("pod", direction="off")[0] is False
+
+
+def test_an_operator_bypasses_the_interval_but_still_counts_toward_it() -> None:
+    clock = FakeClock()
+    limiter = _power_limiter(clock)
+    limiter.record("pod", direction="off")
+    clock.advance(5)
+    # Voice is refused; the operator is not.
+    assert limiter.check("pod", direction="on")[0] is False
+    assert limiter.check("pod", direction="on", operator=True)[0] is True
+    limiter.record("pod", direction="on")
+    clock.advance(5)
+    # The operator's action counted: voice is still inside the off-debounce.
+    assert limiter.check("pod", direction="off")[0] is False
+
+
+def test_an_operator_does_not_bypass_the_daily_cap() -> None:
+    clock = FakeClock()
+    limiter = _power_limiter(clock)
+    for _ in range(12):
+        limiter.record("pod", direction="on")
+        clock.advance(10)
+    assert limiter.check("pod", direction="off", operator=True)[0] is False
+
+
+def test_an_unknown_direction_is_refused() -> None:
+    limiter = _power_limiter(FakeClock())
+    assert limiter.check("pod", direction="sideways")[0] is False

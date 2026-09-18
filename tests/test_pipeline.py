@@ -728,3 +728,27 @@ def test_an_invalid_decision_records_no_timing_and_no_text() -> None:
 
     assert pipeline.recent() == []
     assert pipeline.decide_latencies() == []
+
+
+def test_a_cold_remark_a_minute_after_a_power_on_switches_it_off() -> None:
+    """Found live: a symmetric 10-minute lockout left a cold person unable to stop the AC."""
+    pipeline, ac, _volume, _speaker, clock = make_pipeline(apply=True, ac=FakeAC(state="off"))
+    feed(pipeline, HOT)
+    assert ac.state == "on"
+    clock.advance(70)
+    feed(pipeline, COLD)
+    assert ac.state == "off"
+    assert [call[1] for call in ac.power_calls] == [True, False]
+
+
+def test_a_hot_remark_soon_after_a_power_off_waits_for_the_compressor() -> None:
+    pipeline, ac, _volume, _speaker, clock = make_pipeline(apply=True, ac=FakeAC(state="on"))
+    feed(pipeline, COLD)
+    assert ac.state == "off"
+    clock.advance(120)
+    feed(pipeline, HOT)
+    assert ac.state == "off"
+    assert ("rate_limited", "none") in [(r.verdict, r.action) for r in pipeline.log_records]
+    clock.advance(130)  # 250 s after the power-off
+    feed(pipeline, HOT)
+    assert ac.state == "on"

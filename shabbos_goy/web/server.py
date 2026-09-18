@@ -65,6 +65,7 @@ from ..pipeline import (
     VERDICT_RATE_LIMITED,
     LogRecord,
     PlannedAction,
+    power_direction,
 )
 from ..policy import CLASSES, MODES
 from .bind import BindRefused, parse_bind_address, validate_bind_address
@@ -600,7 +601,9 @@ class DashboardServer:
         if not self.config.is_whitelisted(planned.tool, planned.key):
             return self._refuse(intent, VERDICT_NOT_WHITELISTED, action, planned.alias)
 
-        allowed, _reason = self.pipeline.rate_limiter.check(planned.key)
+        allowed, _reason = self.pipeline.rate_limiter.check(
+            planned.key, direction=power_direction(planned), operator=True
+        )
         if not allowed:
             return self._refuse(intent, VERDICT_RATE_LIMITED, action, planned.alias)
 
@@ -636,7 +639,7 @@ class DashboardServer:
                 "reason": reason,
             }
 
-        self.pipeline.rate_limiter.record(planned.key)
+        self.pipeline.rate_limiter.record(planned.key, direction=power_direction(planned))
         self._log_control(intent, verdict, action, planned.alias)
         return {
             "ok": True,

@@ -309,6 +309,17 @@ def _is_no_decision(decision: Decision) -> bool:
 # -- the pipeline ------------------------------------------------------------
 
 
+def power_direction(planned: "PlannedAction") -> str | None:
+    """``"on"`` / ``"off"`` for an AC power change, ``None`` for anything else.
+
+    The rate limiter is asymmetric for power (a quick OFF is safe, ON after OFF
+    must wait for the compressor) and symmetric for everything else.
+    """
+    if planned.tool == TOOL_SENSIBO and planned.value in ("on", "off"):
+        return planned.value
+    return None
+
+
 class Pipeline:
     """Transcript events in, at most one whitelisted tool call out."""
 
@@ -637,7 +648,7 @@ class Pipeline:
                 self._log_refusal(klass, intent, VERDICT_INVALID_ARGUMENTS, planned.alias)
                 return
 
-        allowed, _reason = self.rate_limiter.check(planned.key)
+        allowed, _reason = self.rate_limiter.check(planned.key, direction=power_direction(planned))
         if not allowed:
             # The limiter's refusal record keys on the real pod id; the log
             # line gets the alias.
@@ -682,7 +693,7 @@ class Pipeline:
                 self._log_refusal(klass, intent, VERDICT_NO_ADAPTER, planned.alias)
                 return
             result = self._ac_power(planned.key, planned.value == "on", apply=self._apply)
-            self.rate_limiter.record(planned.key)
+            self.rate_limiter.record(planned.key, direction=power_direction(planned))
             acted = bool(isinstance(result, Mapping) and result.get("acted"))
             self._record(
                 LogRecord(
@@ -701,7 +712,7 @@ class Pipeline:
         if not self._apply:
             # A volume change has no dry-run form of its own: not calling the
             # adapter IS the dry run.
-            self.rate_limiter.record(planned.key)
+            self.rate_limiter.record(planned.key, direction=power_direction(planned))
             self._record(
                 LogRecord(
                     klass=klass,
@@ -713,7 +724,7 @@ class Pipeline:
             )
             return
         self._volume_step(1 if planned.value == "up" else -1)
-        self.rate_limiter.record(planned.key)
+        self.rate_limiter.record(planned.key, direction=power_direction(planned))
         self._record(
             LogRecord(
                 klass=klass,
