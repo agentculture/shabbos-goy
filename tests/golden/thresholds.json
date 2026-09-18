@@ -1,0 +1,10 @@
+{
+  "hard_false_positives_strict": 0,
+  "hint_recall_min": 0.70,
+  "decider_failure_rate_max": 0.02,
+  "_comment": [
+    "hard_false_positives_strict is 0 and must stay 0: a row the manifest says must not act in strict mode, that acted, is a broken Shabbat. Any number above zero blocks the release.",
+    "hint_recall_min is a quality bar, not a safety one: a missed hint is cheap.",
+    "decider_failure_rate_max bounds timeouts and malformed answers; every one of those is a NO_DECISION, which never acts."
+  ]
+}
