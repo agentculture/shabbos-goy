@@ -432,3 +432,16 @@ def test_state_can_be_polled_while_controls_are_being_pressed(tmp_path) -> None:
             presser.join(timeout=5)
 
     assert failures == []
+
+
+def test_an_applying_control_that_did_not_act_is_an_error_not_a_dry_run(tmp_path) -> None:
+    """A failed `sensibo --apply` (timeout, non-zero exit) must not read as a dry run."""
+
+    class FailingAC(FakeAC):
+        def power(self, pod_id: str, on: bool, *, apply: bool = False) -> dict:
+            self.power_calls.append((pod_id, on, apply))
+            return {"acted": False, "requested_apply": apply, "changes": {}}
+
+    with dashboard(tmp_path, apply=True, ac=FailingAC()) as ui:
+        pressed = ui.post("/api/control/ac", {"power": "on"}).json()
+    assert pressed["verdict"] == "error"

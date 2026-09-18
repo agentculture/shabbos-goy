@@ -790,6 +790,11 @@ def test_an_actuation_that_did_not_happen_does_not_consume_the_limits() -> None:
 
     assert calls == [(POD, True, True), (POD, True, True)]
     assert "rate_limited" not in [record.verdict for record in pipeline.log_records]
+    # ... and it is reported as what it was. "dry_run" would tell an operator
+    # reading the log that nothing was attempted, on a listener that was applying.
+    verdicts = [record.verdict for record in pipeline.log_records]
+    assert "dry_run" not in verdicts
+    assert verdicts.count("error") == 2
 
 
 def test_a_dry_run_session_spends_the_limits_exactly_like_a_real_one() -> None:

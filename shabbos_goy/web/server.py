@@ -287,7 +287,9 @@ class DashboardServer:
         host = self.bind_result.address
         if ":" in host:
             host = f"[{host}]"
-        return f"http://{host}:{self.bind_result.port}"
+        # Plain HTTP by design: this server binds only loopback or a Tailscale
+        # address (see web/bind.py), and Tailscale already encrypts the hop.
+        return f"http://{host}:{self.bind_result.port}"  # NOSONAR python:S5332
 
     def resolve_bind(self) -> tuple[str, int]:
         """The (host, port) this server would bind, or :class:`BindRefused`.
@@ -647,7 +649,12 @@ class DashboardServer:
                 if planned.tool == TOOL_SENSIBO:
                     result = adapter(planned.key, planned.value == "on", apply=apply)
                     acted = bool(isinstance(result, Mapping) and result.get("acted"))
-                    verdict = VERDICT_ACTED if acted else VERDICT_DRY_RUN
+                    # An applying call that did not act FAILED (timeout, non-zero
+                    # exit): only a non-applying call is honestly a dry run.
+                    if acted:
+                        verdict = VERDICT_ACTED
+                    else:
+                        verdict = VERDICT_ERROR if apply else VERDICT_DRY_RUN
                 elif not apply:
                     # A volume step has no dry-run form of its own: not calling
                     # the adapter IS the dry run.

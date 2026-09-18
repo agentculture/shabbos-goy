@@ -771,7 +771,13 @@ class Pipeline:
                 LogRecord(
                     klass=klass,
                     intent=intent,
-                    verdict=VERDICT_ACTED if acted else VERDICT_DRY_RUN,
+                    # An applying call that did not act FAILED; only a listener that
+                    # is not applying can honestly call the outcome a dry run.
+                    verdict=(
+                        VERDICT_ACTED
+                        if acted
+                        else (VERDICT_ERROR if self._apply else VERDICT_DRY_RUN)
+                    ),
                     action=planned.name,
                     target=planned.alias,
                 )
