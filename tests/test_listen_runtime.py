@@ -653,3 +653,46 @@ def test_a_wav_script_is_streamed_as_pcm_chunks_then_ends(tmp_path) -> None:
     assert seen == 1600
     # Exhausted stays exhausted: the client's feeder learns the session ended.
     assert read() is None
+
+
+def test_a_frozen_lobes_session_makes_run_return_the_stall_exit_code(tmp_path, monkeypatch) -> None:
+    """Spec c31: Compose restarts on EXIT, not on "unhealthy".
+
+    The lobes client's watchdog calls its ``exit_action`` on the reader thread,
+    where ``sys.exit`` would only kill that thread and ``run()`` would return 0.
+    The listener must hand the client an exit action that stops the whole
+    listener and makes ``run()`` return the stall code, with one text-free
+    log line naming the stall.
+    """
+    from shabbos_goy.lobes.client import EXIT_STALLED
+    from shabbos_goy.runtime import lobes_source
+
+    seen: dict = {}
+
+    class FrozenClient:
+        def __init__(self, config, on_event, **kwargs):
+            seen["exit_action"] = kwargs.get("exit_action")
+
+        def run(self):
+            # What LobesClient does when its watchdog window expires.
+            seen["exit_action"](EXIT_STALLED)
+
+        def stop(self):
+            pass
+
+        def set_playback_active(self, active):
+            pass
+
+    monkeypatch.setenv("SHABBOS_GOY_LOBES_URL", "ws://lobes-host.invalid:8001/v1/realtime")
+    listener = make_listener(
+        tmp_path,
+        source=lobes_source(retry_seconds=0.01, client_factory=FrozenClient),
+    )
+    result: dict = {}
+    thread = threading.Thread(target=lambda: result.update(code=listener.run()), daemon=True)
+    thread.start()
+    thread.join(timeout=10)
+    assert not thread.is_alive(), "run() did not return after a stall"
+    assert callable(seen.get("exit_action")), "the listener gave the client no exit action"
+    assert result["code"] == EXIT_STALLED
+    assert any(note.event == "lobes_stalled" for note in listener.notes)

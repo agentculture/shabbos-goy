@@ -307,7 +307,17 @@ def lobes_source(
 
             listener.connection.note_connecting()
             factory = client_factory or LobesClient
-            client = factory(config, listener.on_lobes_event, audio_source=audio)
+            client = factory(
+                config,
+                listener.on_lobes_event,
+                audio_source=audio,
+                # The client's watchdog fires on THIS thread, where sys.exit would
+                # only end the thread and run() would return 0. Hand it a stall
+                # path that stops the whole listener with the stall exit code, so
+                # Compose's restart policy (which reacts to exit, never to
+                # "unhealthy") brings the container back (spec c31).
+                exit_action=listener.stalled,
+            )
             listener.attach_client(client)
             try:
                 client.run()
@@ -401,6 +411,7 @@ class Listener:
         self._queue: queue.Queue = queue.Queue(maxsize=max(1, self.options.queue_size))
         self._tick = threading.Event()
         self._stopping = threading.Event()
+        self._exit_code = 0
         self._drained = threading.Event()
         self._paused = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -573,7 +584,13 @@ class Listener:
             self.request_stop("SIGINT")
         finally:
             self.stop()
-        return 0
+        return self._exit_code
+
+    def stalled(self, code: int = 3) -> None:
+        """The ears froze (socket open, no frames): stop, and exit non-zero."""
+        self.note("lobes_stalled", str(code))
+        self._exit_code = int(code) or 3
+        self.request_stop("stalled")
 
     def request_stop(self, reason: str = "") -> None:
         """Ask for a clean shutdown (a signal handler's whole job)."""
