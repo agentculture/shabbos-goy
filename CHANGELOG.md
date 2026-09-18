@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-09-18
+
+### Changed
+
+- `/init`: `CLAUDE.md` is now the shabbos-goy runtime prompt instead of the
+  template seed. It covers the no-direct-commands invariant, the halachic
+  scope, and the planned architecture from issue #1: lobes ears-only speech,
+  classifier, zmanim gate, tool calling to `sensibo-cli`, and a Docker Compose
+  deployment that survives reboots. Everything not yet built is marked
+  `(planned)`.
+- `README.md` describes the agent (name note, no-*hechsher* disclaimer,
+  planned pipeline and deployment) in place of the template instructions.
+- `AGENTS.override.md`, `AGENTS.colleague.md` and `QWEN.md` describe this
+  agent instead of the template, and no longer point at a "Cloning this
+  template" section.
+
 ## [0.9.0] - 2026-09-06
 
 ### Added

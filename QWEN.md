@@ -9,18 +9,18 @@ Qwen Code session.
 
 ## What this project is
 
-`shabbos-goy` is a **clonable template for AgentCulture mesh agents**.
-It is a working, minimal example of the sibling pattern every Culture agent
-follows: an agent-first CLI, a mesh identity, the canonical skill kit, and a
-buildable/deployable package baseline. Clone it, rename the package, edit
-`culture.yaml`, and you have a new agent that `steward doctor` recognizes.
+`shabbos-goy` is a **Hebrew-speaking, speech-to-speech household agent** that
+helps observant Jews on Shabbat and Yom Kippur without the user breaking the
+day. It **never acts on a direct command**. It only infers intent from
+indirect remarks ("הלוואי שהיה קר" / "I wish it was cold" → turn on the AC).
+The build brief is issue #1 on `agentculture/shabbos-goy`.
 
-It is a sibling to [`guildmaster`](https://github.com/agentculture/guildmaster)
-(the **skills supplier**), [`steward`](https://github.com/agentculture/steward)
-(**alignment** — `steward doctor`, the sibling-pattern baseline), and
-[`teken`](https://github.com/agentculture/teken) (the **afi-cli** "Agent First
-Interface" scaffolder this CLI is cited from) within the Organic Development
-framework.
+It is an AgentCulture mesh agent, provisioned from `culture-agent-template`,
+and a sibling of [`guildmaster`](https://github.com/agentculture/guildmaster)
+(skills supplier), [`steward`](https://github.com/agentculture/steward)
+(alignment), [`teken`](https://github.com/agentculture/teken) (the CLI
+scaffolder), `lobes-cli` (the Hebrew speech stack it consumes) and
+`sensibo-cli` (the AC control it composes).
 
 ## Prompt files by harness
 
@@ -52,27 +52,31 @@ requires nor changes that declaration. The declaration and the resident prompt
 together satisfy the two invariants `steward doctor` verifies:
 **prompt-file-present** and **backend-consistency** (`claude` ↔ `CLAUDE.md`).
 
-## Cloning this template (re-initialization)
+## Design (planned; nothing below is built yet)
 
-When you start a new agent from this template:
+`CLAUDE.md` holds the full design. In short:
 
-1. Rename the package directory `shabbos_goy/` → `<your_module>/`
-   and replace `shabbos_goy` (module) / `shabbos-goy`
-   (CLI and dist name) throughout `pyproject.toml`, the package, `tests/`,
-   `sonar-project.properties`, and `README.md`. The name is hard-coded in
-   ~100 places, so list every occurrence first rather than renaming by hand
-   (`git grep` is portable and skips `.git` / untracked `__pycache__`):
-
-   ```bash
-   git grep -nF -e 'shabbos-goy' -e 'shabbos_goy'
-   ```
-
-2. Set your `suffix` (and `backend`) in `culture.yaml`. `whoami` and `doctor`
-   then reflect the new identity with no further code change.
-3. Rewrite `CLAUDE.md` (and this file, and the other two harness files) to
-   describe your agent.
-4. Re-vendor the skill kit you need from guildmaster (see
-   `docs/skill-sources.md`) — keep only the skills your agent uses.
+- **Core invariant, enforced by a tested classifier, not a prompt:**
+  imperatives, requests and rebukes are never acted on, and never queued for
+  later (including across a restart). There is no wake word and no
+  confirmation question. When unsure, it does nothing. The headline metric is
+  the false-positive rate on commands, measured on ASR-transcribed Hebrew.
+- **Pipeline:** microphone → lobes Hebrew realtime session in **ears-only**
+  mode (it never sends `response.create`) → transcript joiner → classifier →
+  zmanim calendar gate → whitelisted **tool call** → optional neutral spoken
+  remark via batch TTS.
+- **Tool calling / climate:** actions are declared as tools (flat
+  `name`/`description`/`parameters` shape). The first backend is `sensibo-cli`
+  (`sensibo set <pod> --mode cool --target 24 [--apply] --json`). Every call,
+  from a rule or from a model, passes classifier → gate → whitelist → argument
+  validation in this repo's code. The whitelist is config, not code. Sensibo is
+  cloud-only.
+- **Deployment:** a Docker Compose service with `restart: unless-stopped`,
+  `/dev/snd` passthrough (ALSA card chosen by name), secrets from a gitignored
+  env file, and private config mounted read-only from `~/.config/shabbos-goy`.
+  Startup is stateless: it recomputes the mode from the clock and zmanim, and
+  if unsure it fails toward acting on nothing.
+- **Halacha is flagged, not decided.** No claim of rabbinic approval.
 
 ## The CLI
 
@@ -86,6 +90,8 @@ The CLI is cited (cite-don't-import) from teken's `python-cli` reference
 - `shabbos-goy overview` — descriptive snapshot of the agent.
 - `shabbos-goy doctor` — check the agent-identity invariants.
 - `shabbos-goy cli overview` — describe the CLI surface itself.
+- *(planned)* `classify "<text>"`, `zmanim --location …`, `actions`,
+  `listen`. Any actuating verb is dry-run by default, and `--apply` actuates.
 
 Conventions: every command supports `--json`; results go to stdout, errors and
 diagnostics to stderr (never mixed); exit codes are `0` success, `1` user

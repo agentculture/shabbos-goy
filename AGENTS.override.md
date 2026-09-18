@@ -20,14 +20,38 @@ what the repo is and how it is laid out, not who is reading it.
 
 ## What this project is
 
-`shabbos-goy` is a clonable template for AgentCulture mesh agents —
-a working, minimal example of the sibling pattern every Culture agent follows:
-an agent-first CLI, a mesh identity, the canonical skill kit, and a
-buildable/deployable package baseline. It is a sibling to
+`shabbos-goy` is a **Hebrew-speaking, speech-to-speech household agent** that
+helps observant Jews on Shabbat and Yom Kippur without the user breaking the
+day. It **never acts on a direct command**. It only infers intent from indirect
+remarks ("הלוואי שהיה קר" / "I wish it was cold" → turn on the AC). The build
+brief is issue #1 on `agentculture/shabbos-goy`.
+
+**Status: scaffold only.** The repo was provisioned from
+`culture-agent-template`. The only code on disk is the template's agent-first
+CLI (`whoami`, `learn`, `explain`, `overview`, `doctor`, `cli overview`). The
+domain pieces are **planned, not built**: the Hebrew utterance classifier, the
+zmanim calendar gate, the whitelisted tool calls (AC via the sibling
+`sensibo-cli`), the ears-only client for the lobes Hebrew speech stack, and
+the Docker Compose service that survives reboots. When summarizing, never
+describe planned pieces as existing. `CLAUDE.md` marks each one `(planned)`.
+
+Facts worth getting right when you answer questions about it:
+
+- **The core invariant**: imperatives, requests phrased as questions, and
+  rebukes ("why isn't the AC on?") are **never** acted on, and never queued
+  for later. There is no wake word and no confirmation question. When unsure,
+  it does nothing.
+- **Halacha is flagged, not decided.** The project claims no rabbinic
+  approval (*hechsher*). Open questions are recorded, not answered.
+- **Sensibo is cloud-only**, so AC control needs internet access even though
+  speech processing is local.
+
+It is a sibling to
 [`guildmaster`](https://github.com/agentculture/guildmaster) (the skills
 supplier), [`steward`](https://github.com/agentculture/steward) (alignment),
-and [`teken`](https://github.com/agentculture/teken) (the CLI scaffolder this
-package is cited from).
+[`teken`](https://github.com/agentculture/teken) (the CLI scaffolder this
+package is cited from), `lobes-cli` (the speech stack) and `sensibo-cli` (AC
+control).
 
 ## Four harnesses, four files, no shared base
 
@@ -85,9 +109,8 @@ culture.yaml              mesh identity (suffix + backend)
 - The vendored skills under `.claude/skills/` are cited **verbatim** from
   guildmaster — never propose editing their scripts; the fix belongs upstream
   (`docs/skill-sources.md` has the re-sync procedure).
-- The package/CLI name (`shabbos_goy` / `shabbos-goy`)
-  is hard-coded in roughly a hundred places; a rename is a `git grep` sweep,
-  not a hand edit (see `CLAUDE.md`'s "Cloning this template" section).
+- Secrets (the Sensibo API key, the lobes gateway key) and private config
+  (location, device ids) never belong in tracked files. Flag any you find.
 - Every PR bumps the version (`version-bump` skill); CI's `version-check` job
   blocks merge otherwise.
 - This file describes the repo **as it exists on disk today**. If you are
