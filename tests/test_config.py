@@ -214,7 +214,7 @@ def test_config_carries_the_full_documented_shape(tmp_path):
         "min_interval_seconds": 600,
         "off_min_interval_seconds": 60,
         "on_after_off_min_interval_seconds": 240,
-        "daily_cap": 24,
+        "daily_cap": 48,
         "retry_window_seconds": 300,
         "retry_max_attempts": 5,
     }
@@ -244,7 +244,7 @@ def test_example_rate_limits_feed_the_limits_module_unchanged() -> None:
     limits = LimitsConfig.from_dict(
         {**cfg.rate_limits, "strict_delay_seconds": cfg.strict_mode_delay_seconds}
     )
-    assert limits.daily_cap == 24
+    assert limits.daily_cap == 48
     assert limits.off_min_interval_seconds == 60.0
     assert limits.on_after_off_min_interval_seconds == 240.0
     assert limits.min_interval_seconds == 600.0
