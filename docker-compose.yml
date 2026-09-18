@@ -39,12 +39,14 @@
 # Compose does NOT restart a container merely for being reported
 # `unhealthy` — restart: unless-stopped only reacts to the *process exiting*.
 # The healthcheck below is therefore a report for `docker inspect`/an
-# operator, not a supervisor by itself. Read honestly: as of this task,
-# shabbos_goy/runtime/listener.py has no self-exit-on-stale-heartbeat
-# watchdog wired in (checked by reading it, not assumed) — an unhealthy
-# container today keeps running until something else (an external
-# supervisor, or a future watchdog in the listener itself) makes it exit.
-# Do not treat `unhealthy` as self-healing until that lands.
+# operator, not a supervisor by itself. What does bring a wedged listener
+# back is its own exit: when the lobes socket stays open but no frame
+# arrives within the client's watchdog window, the listener logs
+# `lobes_stalled` and exits 3, and restart: unless-stopped starts it again.
+# That covers a frozen realtime session only. A stall elsewhere (for
+# example a deadlocked worker thread) still shows up only as `unhealthy`,
+# and lobes being down is NOT a stall: the listener keeps retrying with
+# backoff instead of restart-looping while models load after a reboot.
 name: shabbos-goy
 
 services:
