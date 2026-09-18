@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from shabbos_goy.cli._commands import _control
 from shabbos_goy.cli._commands._domain import next_strict_window_payload
 from shabbos_goy.cli._commands.overview import emit_overview
+from shabbos_goy.cli._errors import EXIT_SUCCESS
 from shabbos_goy.cli._output import emit_result
 from shabbos_goy.config import load_config
 from shabbos_goy.mode import resolve_mode
@@ -59,7 +60,29 @@ def _no_verb(args: argparse.Namespace) -> int:
     return cmd_mode_overview(args)
 
 
+def _local_mode_payload(config) -> dict:
+    """The zmanim-implied mode, computed here because no listener answered.
+
+    There is no override to apply -- an override lives only in a running
+    listener's memory (see the module docstring) -- so this is exactly what a
+    freshly-started listener would also report before any override is set.
+    """
+    now = datetime.now(timezone.utc)
+    resolved = resolve_mode(now, config)
+    return {
+        "listener": False,
+        "mode": resolved.mode,
+        "window_kinds": list(resolved.kinds),
+        "clock_trusted": resolved.clock_trusted,
+        "next_strict_window": next_strict_window_payload(now, config),
+    }
+
+
 def cmd_mode_show(args: argparse.Namespace) -> int:
+    """Always succeeds, by design: a missing listener is a documented fallback,
+    not a failure, and ``mode show`` is the one verb that must answer with no
+    listener running. The single exit below is that contract, made explicit --
+    ``mode set``, which genuinely cannot fall back, exits 2 instead."""
     json_mode = bool(getattr(args, "json", False))
     config = load_config(path=getattr(args, "config", None))
     base_url = _control.resolve_base_url(config)
@@ -67,25 +90,10 @@ def cmd_mode_show(args: argparse.Namespace) -> int:
     if result.ok:
         payload = dict(result.data) if isinstance(result.data, dict) else {}
         payload["listener"] = True
-        emit_result(payload, json_mode=json_mode)
-        return 0
-
-    # No listener: compute the zmanim-implied mode locally. There is no
-    # override to apply here -- an override lives only in a running
-    # listener's memory (see the module docstring) -- so this is exactly
-    # what a freshly-started listener would also report before any override
-    # is ever set.
-    now = datetime.now(timezone.utc)
-    resolved = resolve_mode(now, config)
-    payload = {
-        "listener": False,
-        "mode": resolved.mode,
-        "window_kinds": list(resolved.kinds),
-        "clock_trusted": resolved.clock_trusted,
-        "next_strict_window": next_strict_window_payload(now, config),
-    }
+    else:
+        payload = _local_mode_payload(config)
     emit_result(payload, json_mode=json_mode)
-    return 0
+    return EXIT_SUCCESS
 
 
 def cmd_mode_set(args: argparse.Namespace) -> int:
@@ -99,7 +107,7 @@ def cmd_mode_set(args: argparse.Namespace) -> int:
     payload = dict(result.data) if isinstance(result.data, dict) else {}
     payload["listener"] = True
     emit_result(payload, json_mode=json_mode)
-    return 0
+    return EXIT_SUCCESS
 
 
 def register(sub: argparse._SubParsersAction) -> None:

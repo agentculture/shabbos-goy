@@ -27,10 +27,12 @@ from .connection import (
     ConnectionMonitor,
 )
 from .heartbeat import (  # noqa: F401 - re-exported for callers of this package
-    DEFAULT_HEARTBEAT_PATH,
+    DEFAULT_HEARTBEAT_NAME,
     DEFAULT_WINDOW_SECONDS,
     ENV_HEARTBEAT_PATH,
     Heartbeat,
+    UnsafeHeartbeatDirectory,
+    default_heartbeat_dir,
     healthcheck,
     heartbeat_path,
     read_heartbeat,
@@ -48,7 +50,7 @@ from .listener import (
 )
 
 __all__ = [
-    "DEFAULT_HEARTBEAT_PATH",
+    "DEFAULT_HEARTBEAT_NAME",
     "DEFAULT_WINDOW_SECONDS",
     "ENV_HEARTBEAT_PATH",
     "STATE_AUTH_FAILED",
@@ -62,7 +64,9 @@ __all__ = [
     "Listener",
     "ListenerOptions",
     "RuntimeNote",
+    "UnsafeHeartbeatDirectory",
     "control_address_for",
+    "default_heartbeat_dir",
     "events_file_source",
     "healthcheck",
     "heartbeat_path",

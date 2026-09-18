@@ -359,7 +359,10 @@ def test_start_capture_runs_fake_pw_record_and_yields_bytes(
         out, err = proc.communicate(timeout=5)
         assert proc.returncode == 0
         assert out == b"\x00\x00" * 64
-        assert err == b""
+        # stderr is DEVNULL, not a pipe: nothing in this process ever reads a
+        # capture child's stderr, and an undrained pipe fills and wedges the
+        # child, which then outlives its session (review thread #4).
+        assert err is None
     finally:
         if proc.poll() is None:
             proc.kill()
@@ -370,9 +373,11 @@ def test_start_capture_missing_node_reports_failure_via_exit_code(
 ) -> None:
     proc = pw.start_capture("missing-node", env=fake_pipewire_env)
     out, err = proc.communicate(timeout=5)
+    # The exit code is the signal; the child's own diagnostics go to DEVNULL
+    # (see above), so a failure is named by our code, never echoed from its.
     assert proc.returncode != 0
     assert out == b""
-    assert b"missing-node" in err
+    assert err is None
 
 
 def test_start_capture_missing_binary_raises_audio_backend_error(tmp_path) -> None:

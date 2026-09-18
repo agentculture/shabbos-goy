@@ -238,3 +238,69 @@ def test_listen_is_documented_in_learn_and_the_explain_catalog() -> None:
     assert "--apply" in ENTRIES[("listen",)]
     assert "listen" in _TEXT
     assert "shabbos-goy listen" in ENTRIES[()]
+
+
+# ---------------------------------------------------------------------------
+# A broken config is visible, but never fatal (review thread #11, partial).
+# ---------------------------------------------------------------------------
+
+
+def _broken_config(tmp_path: Path) -> Path:
+    path = tmp_path / "broken.json"
+    path.write_text("{ this is not json", encoding="utf-8")
+    return path
+
+
+def _listen_with_broken_config(tmp_path: Path, extra: list[str] | None = None) -> int:
+    events = write_events_file(tmp_path / "events.jsonl", [HOT])
+    return main(
+        [
+            "listen",
+            "--config",
+            str(_broken_config(tmp_path)),
+            "--script",
+            str(events),
+            "--decider",
+            "replay",
+            "--replay-file",
+            str(REPLAY),
+            "--control-address",
+            "127.0.0.1:0",
+            "--no-dashboard",
+            "--heartbeat",
+            str(tmp_path / "heartbeat.json"),
+            "--json",
+        ]
+        + (extra or [])
+    )
+
+
+def test_a_broken_config_keeps_listening_and_says_so_exactly_once(
+    weekday, fake_path, tmp_path, capsys
+) -> None:
+    """Deliberately NOT an exit: a container that quits on a bad config
+    crash-loops, and Shabbat is when nobody can restart it. A broken config
+    has already failed closed -- empty whitelist, strict mode -- so the
+    listener that keeps running can act on nothing. It must be *visible*
+    though: one named line, and the code in the summary."""
+    rc = _listen_with_broken_config(tmp_path)
+    captured = capsys.readouterr()
+
+    assert rc == 0, "a broken config must not make the container exit"
+    payload = json.loads(captured.out)
+    assert payload["config_error"] == 2
+    assert payload["actions"] == [], "a broken config whitelists nothing"
+
+    lines = [line for line in captured.err.splitlines() if line.startswith("event=config_error")]
+    assert lines == ["event=config_error detail=2"], captured.err
+    # The code, never the file or its contents.
+    assert "this is not json" not in captured.err
+    assert str(tmp_path) not in " ".join(lines)
+
+
+def test_a_broken_config_leaves_healthcheck_alone(tmp_path, capsys) -> None:
+    rc = main(
+        ["listen", "--healthcheck", "--heartbeat", str(tmp_path / "nope.json"), "--json"],
+    )
+    assert rc == 1
+    assert json.loads(capsys.readouterr().out)["reason"] == "missing"

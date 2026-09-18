@@ -19,9 +19,13 @@ suite.
 
 from __future__ import annotations
 
+import http.client
 import json
+import os
+import stat
 import threading
 import time
+import urllib.error
 
 import pytest
 
@@ -244,13 +248,17 @@ def test_an_exception_in_a_dashboard_handler_does_not_stop_the_loop(tmp_path) ->
 
         original = type(control).state
         type(control).state = boom
+        status = 0
         try:
-            response = request(f"{listener.control_url}/api/state")
-            assert response.status >= 500
-        except Exception:  # noqa: BLE001 - a 500 may surface as a closed socket
-            pass
+            status = request(f"{listener.control_url}/api/state").status
+        except (urllib.error.URLError, ConnectionError, http.client.RemoteDisconnected):
+            # http.server can drop the connection instead of finishing the 500.
+            # Only THAT is tolerated -- the assertion below still has to run,
+            # so a bare `except` must never swallow it.
+            status = 500
         finally:
             type(control).state = original
+        assert status >= 500
 
         assert _flush(listener, clock)
         assert wait_until(lambda: verdicts(listener) == [("dry_run", "ac_power_on")])
@@ -311,9 +319,77 @@ def test_healthcheck_on_a_missing_file_is_a_named_failure(tmp_path) -> None:
     assert reason == "missing"
 
 
-def test_heartbeat_path_comes_from_the_environment_and_defaults_under_tmp() -> None:
+def test_heartbeat_path_comes_from_the_environment_and_defaults_per_user() -> None:
     assert str(heartbeat_path(env={"SHABBOS_GOY_HEARTBEAT": "/run/hb.json"})) == "/run/hb.json"
-    assert str(heartbeat_path(env={})).startswith("/tmp/")  # nosec B108 - tmpfs by design
+
+    # XDG_RUNTIME_DIR is already a per-user tmpfs: use it when there is one.
+    xdg = heartbeat_path(env={"XDG_RUNTIME_DIR": "/run/user/4242"})
+    assert str(xdg) == "/run/user/4242/shabbos-goy/heartbeat.json"
+
+    # Without one, a per-uid directory -- never a fixed name another user on
+    # the host could predict and pre-create as a symlink.
+    fallback = heartbeat_path(env={})
+    assert fallback.parent.name == f"shabbos-goy-{os.getuid()}"
+    assert fallback.name == "heartbeat.json"
+
+
+def test_the_heartbeat_directory_and_file_are_owner_only(tmp_path) -> None:
+    beat = Heartbeat(tmp_path / "run" / "hb.json", clock=lambda: 1_000.0)
+    beat.mark("pong")
+    assert beat.write() is True
+    assert stat.S_IMODE((tmp_path / "run").stat().st_mode) == 0o700
+    assert stat.S_IMODE((tmp_path / "run" / "hb.json").stat().st_mode) == 0o600
+
+
+def test_a_symlinked_heartbeat_directory_is_refused_not_followed(tmp_path) -> None:
+    """The symlink-attack case: somebody else's link must not redirect us."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(elsewhere, target_is_directory=True)
+
+    beat = Heartbeat(link / "hb.json", clock=lambda: 1_000.0)
+    beat.mark("pong")
+    assert beat.write() is False, "the write followed a symlinked directory"
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_a_heartbeat_directory_owned_by_another_user_is_refused(tmp_path, monkeypatch) -> None:
+    """Owned by somebody else means somebody else can swap the file."""
+    from shabbos_goy.runtime import heartbeat as heartbeat_module
+
+    # `heartbeat.os` IS the os module, so capture the real uid before patching.
+    not_us = os.getuid() + 1
+    monkeypatch.setattr(heartbeat_module.os, "getuid", lambda: not_us)
+    beat = Heartbeat(tmp_path / "hb.json", clock=lambda: 1_000.0)
+    beat.mark("pong")
+    assert beat.write() is False
+    assert not (tmp_path / "hb.json").exists()
+
+
+def test_the_heartbeat_is_never_written_through_a_planted_symlink(tmp_path) -> None:
+    """O_NOFOLLOW: a link planted at the temp name is refused, not followed."""
+    target = tmp_path / "victim"
+    target.write_text("untouched", encoding="utf-8")
+    (tmp_path / "hb.json.tmp").symlink_to(target)
+
+    beat = Heartbeat(tmp_path / "hb.json", clock=lambda: 1_000.0)
+    beat.mark("pong")
+    assert beat.write() is False
+    assert target.read_text(encoding="utf-8") == "untouched"
+
+
+def test_a_refused_heartbeat_never_takes_the_listener_down(tmp_path) -> None:
+    (tmp_path / "real").mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path / "real", target_is_directory=True)
+    clock = AudioClock()
+    listener = make_listener(
+        tmp_path, events=_turn(HOT), clock=clock, heartbeat_path=link / "hb.json"
+    )
+    with running(listener):
+        assert _flush(listener, clock)
+        assert wait_until(lambda: verdicts(listener) == [("dry_run", "ac_power_on")])
 
 
 def test_the_running_listener_writes_a_heartbeat_and_serves_healthz(tmp_path) -> None:
@@ -696,3 +772,108 @@ def test_a_frozen_lobes_session_makes_run_return_the_stall_exit_code(tmp_path, m
     assert callable(seen.get("exit_action")), "the listener gave the client no exit action"
     assert result["code"] == EXIT_STALLED
     assert any(note.event == "lobes_stalled" for note in listener.notes)
+
+
+# ---------------------------------------------------------------------------
+# The capture child must not outlive its session (review thread #4).
+# ---------------------------------------------------------------------------
+
+
+class _FakePwRecord:
+    """A stand-in for ``pw-record``: no binary, no microphone, no PipeWire."""
+
+    instances: list["_FakePwRecord"] = []
+
+    def __init__(self, argv, stdout=None, stderr=None, env=None) -> None:
+        import io
+
+        self.argv = list(argv)
+        self.stderr_argument = stderr
+        self.stdout = io.BytesIO(b"\x00\x01" * 8192)
+        self.terminated = False
+        self.killed = False
+        self.waited = False
+        self._returncode: int | None = None
+        type(self).instances.append(self)
+
+    # -- the subprocess.Popen surface the runtime uses --------------------
+    def poll(self):
+        return self._returncode
+
+    def terminate(self) -> None:
+        self.terminated = True
+        self._returncode = -15
+
+    def kill(self) -> None:  # pragma: no cover - the fake always terminates
+        self.killed = True
+        self._returncode = -9
+
+    def wait(self, timeout=None):
+        self.waited = True
+        if self._returncode is None:
+            self._returncode = 0
+        return self._returncode
+
+
+@pytest.fixture
+def fake_capture():
+    _FakePwRecord.instances = []
+    yield _FakePwRecord
+    _FakePwRecord.instances = []
+
+
+def test_the_capture_child_gets_devnull_stderr_and_is_reaped_by_close(fake_capture) -> None:
+    """An undrained stderr pipe blocks the child; an unreaped child holds the mic."""
+    import subprocess
+
+    from shabbos_goy.runtime import pipewire_audio_source
+
+    source = pipewire_audio_source("alsa_input.fake", popen=fake_capture, chunk_bytes=64)
+    process = fake_capture.instances[-1]
+    assert process.stderr_argument is subprocess.DEVNULL, "stderr must not be an undrained pipe"
+    assert source() is not None
+
+    source.close()
+    assert process.terminated is True
+    assert process.waited is True
+    assert process.poll() is not None
+    # Reading a closed source is EOF, not an exception on the feeder thread.
+    assert source() is None
+    source.close()  # idempotent
+
+
+def test_no_capture_process_survives_repeated_lobes_reconnects(
+    tmp_path, monkeypatch, fake_capture
+) -> None:
+    """Every session end closes its capture, so reconnects never accumulate."""
+    from shabbos_goy.runtime import lobes_source, pipewire_audio_source
+
+    class _ImmediatelyEndingClient:
+        def __init__(self, config, on_event, **kwargs) -> None:
+            self.stats = None
+            self.source_ended = False
+
+        def run(self):
+            return 0
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setenv("SHABBOS_GOY_LOBES_URL", "ws://lobes-host.invalid:8001/v1/realtime")
+    listener = make_listener(
+        tmp_path,
+        source=lobes_source(
+            retry_seconds=0.001,
+            audio_source_factory=lambda: pipewire_audio_source(
+                "alsa_input.fake", popen=fake_capture, chunk_bytes=64
+            ),
+            client_factory=_ImmediatelyEndingClient,
+        ),
+    )
+    with running(listener):
+        assert wait_until(lambda: len(fake_capture.instances) >= 4)
+        alive = [p for p in fake_capture.instances[:-1] if p.poll() is None]
+        assert alive == [], f"{len(alive)} capture children outlived their session"
+
+    survivors = [p for p in fake_capture.instances if p.poll() is None]
+    assert survivors == [], f"{len(survivors)} capture children survived the shutdown"

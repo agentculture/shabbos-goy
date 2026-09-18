@@ -56,6 +56,13 @@ REASON_SERVER_CLOSED = "server_closed"
 REASON_CONNECTION_LOST = "connection_lost"
 REASON_STOPPED = "stopped"
 REASON_STALLED = "stalled"
+#: A FINITE audio source (a ``--script`` WAV) reached EOF. A microphone never
+#: does, so only the fixtures path ever ends this way — and it must end, not
+#: be replayed from the top by a reconnect.
+REASON_SOURCE_ENDED = "source_ended"
+
+#: 100 ms of 16 kHz mono PCM16 silence, the same chunk size capture uses.
+SILENCE_CHUNK = b"\x00" * 3200
 
 #: The whole of this client's outbound vocabulary.
 ALLOWED_CLIENT_EVENT_TYPES: frozenset[str] = frozenset({"input_audio_buffer.append"})
@@ -166,6 +173,9 @@ class LobesClient:
         exit_action: Callable[[int], None] = sys.exit,
         max_connections: int | None = None,
         idle_audio_pause: float = 0.01,
+        max_frame_bytes: int = ws.DEFAULT_MAX_PAYLOAD_BYTES,
+        tail_silence_seconds: float = 0.8,
+        source_end_grace: float = 3.0,
     ) -> None:
         self.config = config
         self.stats = ClientStats()
@@ -180,9 +190,13 @@ class LobesClient:
         self._exit_action = exit_action
         self._max_connections = max_connections
         self._idle_audio_pause = idle_audio_pause
+        self._max_frame_bytes = int(max_frame_bytes)
+        self._tail_silence_seconds = float(tail_silence_seconds)
+        self._source_end_grace = float(source_end_grace)
 
         self._stopped = threading.Event()
         self._session_over = threading.Event()
+        self._source_ended = threading.Event()
         self._conn: ws.WebSocketConnection | None = None
         self._playback_active = False
         self._open_turns: set[str] = set()
@@ -191,6 +205,16 @@ class LobesClient:
     @property
     def playback_active(self) -> bool:
         return self._playback_active
+
+    @property
+    def source_ended(self) -> bool:
+        """True once a FINITE audio source reached EOF and the turn was closed.
+
+        The caller's cue that there is nothing left to hear: reconnecting
+        would only replay the file from the top (a live microphone never
+        sets this, because it never ends).
+        """
+        return self._source_ended.is_set()
 
     def set_playback_active(self, active: bool) -> None:
         """Mark the agent's own TTS as playing.
@@ -270,6 +294,9 @@ class LobesClient:
                 failures = 0
             else:
                 failures += 1
+            if outcome.reason == REASON_SOURCE_ENDED:
+                # The audio is over. Reconnecting would replay it.
+                break
         if productive == 0 and self.stats.connections > 0:
             return EXIT_ENVIRONMENT
         return EXIT_OK
@@ -280,6 +307,7 @@ class LobesClient:
         conn = self._connect()
         self._conn = conn
         self._session_over.clear()
+        self._source_ended.clear()
         self._open_turns = set()
         feeder = self._start_feeder()
         watchdog = Watchdog(self._watchdog_seconds, self._clock)
@@ -288,6 +316,11 @@ class LobesClient:
         seen = 0
         try:
             while not self._stopped.is_set():
+                if self._source_ended.is_set():
+                    # The feeder closed a finite source's last turn and waited
+                    # out its transcript: this session is done, by name.
+                    reason = REASON_SOURCE_ENDED
+                    break
                 try:
                     fin, opcode, payload = conn.read_frame(timeout=self._read_timeout)
                 except socket.timeout:
@@ -331,6 +364,7 @@ class LobesClient:
                 extra_headers=self.config.handshake_headers(),
                 tls=self.config.tls,
                 connect_timeout=self._connect_timeout,
+                max_payload_bytes=self._max_frame_bytes,
             )
         except (OSError, ws.HandshakeError) as exc:
             self.stats.connect_failures += 1
@@ -386,12 +420,54 @@ class LobesClient:
         while not self._stopped.is_set() and not self._session_over.is_set():
             chunk = self._audio_source()
             if chunk is None:
+                self._end_of_source()
                 return
             if not chunk:
                 self._sleep(self._idle_audio_pause)
                 continue
             if not self.send_audio(chunk):
                 return
+
+    def _end_of_source(self) -> None:
+        """A finite source hit EOF: close the last turn, then end the session.
+
+        Three steps, and each is load-bearing:
+
+        1. **A tail of silence.** The server's VAD ends a turn on silence, so
+           without it the last sentence of a WAV is never transcribed — the
+           file simply stops mid-turn and the session hangs until the
+           watchdog.
+        2. **A short, interruptible wait** for that final transcript. It is
+           ``Event.wait`` on the stop flag, not a sleep, so SIGTERM still
+           ends a scripted run promptly.
+        3. **A named end.** :attr:`source_ended` tells the read loop (and the
+           listener) that the audio is over, so nothing reconnects and
+           replays the file from the beginning.
+
+        A microphone never reaches here: capture does not end.
+        """
+        chunks = max(0, int(self._tail_silence_seconds * 10))
+        for _ in range(chunks):
+            if self._stopped.is_set() or self._session_over.is_set():
+                break
+            if not self.send_audio(SILENCE_CHUNK):
+                break
+        self._wait_for_last_transcript()
+        self._source_ended.set()
+
+    def _wait_for_last_transcript(self) -> None:
+        """Wait out the grace, waking early for a stop or a finished session.
+
+        Polled rather than slept: ``stop()`` (SIGTERM) and a server-side close
+        must both end a scripted run at once, not after the whole grace.
+        """
+        remaining = self._source_end_grace
+        while remaining > 0:
+            if self._stopped.is_set() or self._session_over.is_set():
+                return
+            step = min(0.05, remaining)
+            self._stopped.wait(step)
+            remaining -= step
 
     def _handle_text(self, payload: bytes) -> None:
         try:

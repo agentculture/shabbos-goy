@@ -408,13 +408,18 @@ def start_capture(
 
     Raises :class:`AudioBackendError` immediately if the binary could not
     even be started (missing executable) — never a silent spawn failure.
+
+    stderr goes to ``DEVNULL`` on purpose: nothing in this process ever reads
+    a capture child's stderr, and an undrained pipe fills, blocks the child
+    inside ``write()``, and leaves it holding the microphone after the
+    session that started it is gone.
     """
     argv = build_capture_argv(device, rate=rate, channels=channels)
     try:
         return popen(
             argv,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             env=env if env is not None else os.environ.copy(),
         )
     except OSError as exc:

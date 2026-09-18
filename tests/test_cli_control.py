@@ -127,3 +127,34 @@ def test_no_listener_error_names_listen_verb() -> None:
     assert err.code == 2
     assert "8787" in err.message
     assert "shabbos-goy listen" in err.remediation
+
+
+# ---------------------------------------------------------------------------
+# The control endpoint is always on loopback (review thread #9).
+# ---------------------------------------------------------------------------
+
+
+def test_a_tailnet_dashboard_address_still_resolves_to_the_loopback_endpoint() -> None:
+    """The listener binds the CLI endpoint on 127.0.0.1 whatever the dashboard
+    address says, so ``ac``/``mode``/``volume`` must target that, not the
+    tailnet host (where nothing is listening -- and with ``--no-dashboard``,
+    nothing ever will be)."""
+    config = Config(path=FIXTURE_CONFIG, raw={"dashboard_bind_address": "100.72.13.4:8787"})
+    assert _control.resolve_base_url(config, env={}) == "http://127.0.0.1:8787"
+
+    # The port is still taken from the config, only the host is not.
+    other = Config(
+        path=FIXTURE_CONFIG, raw={"dashboard_bind_address": "spark.tail1234.ts.net:9100"}
+    )
+    assert _control.resolve_base_url(other, env={}) == "http://127.0.0.1:9100"
+
+
+def test_the_client_resolves_exactly_what_the_listener_binds() -> None:
+    """One address, agreed in two places: if these drift, ``ac status`` finds
+    nothing. ``control_address_for`` is the listener's side of the same rule."""
+    from shabbos_goy.runtime import control_address_for
+
+    for address in ("100.72.13.4:8787", "127.0.0.1:9999", "0.0.0.0:8080", "", "nonsense"):
+        config = Config(path=FIXTURE_CONFIG, raw={"dashboard_bind_address": address})
+        bound = control_address_for(config)
+        assert _control.resolve_base_url(config, env={}) == f"http://{bound}"
