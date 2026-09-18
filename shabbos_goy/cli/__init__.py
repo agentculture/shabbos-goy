@@ -69,6 +69,7 @@ def _build_parser() -> argparse.ArgumentParser:
     from shabbos_goy.cli._commands import doctor as _doctor_cmd
     from shabbos_goy.cli._commands import explain as _explain_cmd
     from shabbos_goy.cli._commands import learn as _learn_cmd
+    from shabbos_goy.cli._commands import listen as _listen_cmd
     from shabbos_goy.cli._commands import mode as _mode_group
     from shabbos_goy.cli._commands import overview as _overview_cmd
     from shabbos_goy.cli._commands import preflight as _preflight_cmd
@@ -102,6 +103,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _ac_group.register(sub)
     _volume_group.register(sub)
     _mode_group.register(sub)
+    _listen_cmd.register(sub)
 
     return parser
 

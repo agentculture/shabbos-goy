@@ -662,3 +662,69 @@ def test_nothing_is_persisted_across_a_restart(mode: str) -> None:
     assert fresh_volume.steps == []
     assert fresh.recent() == []
     assert len(fresh.delay_timer) == 0
+
+
+# --------------------------------------------------------------------------
+# t14: per-decision timing and confidence (what the dashboard shows)
+# --------------------------------------------------------------------------
+
+
+class SlowDecider:
+    """A decider that costs a known amount of time on the injected clock."""
+
+    source = "slow:p1"
+
+    def __init__(self, clock, cost: float, answer: Decision) -> None:
+        self.clock = clock
+        self.cost = cost
+        self.answer = answer
+
+    def decide(self, utterance, context, *, mode, ac_state=None):
+        self.clock.advance(self.cost)
+        return self.answer
+
+
+def test_a_recent_utterance_carries_its_confidence_and_decide_latency() -> None:
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline()
+    feed(pipeline, HOT)
+
+    recent = pipeline.recent()
+    assert len(recent) == 1
+    assert recent[0].confidence == pytest.approx(0.9)
+    assert recent[0].decide_latency_ms == pytest.approx(0.0)
+
+
+def test_decide_latency_is_measured_on_the_injected_clock() -> None:
+    clock = FakeClock()
+    answer = Decision(klass="remark", intent="cool", confidence=0.9, source="slow:p1", reason="ok")
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline(
+        clock=clock, decider=SlowDecider(clock, 0.25, answer)
+    )
+    feed(pipeline, HOT)
+
+    assert pipeline.recent()[0].decide_latency_ms == pytest.approx(250.0)
+    assert pipeline.decide_latencies() == [pytest.approx(250.0)]
+
+
+def test_decide_latencies_are_a_bounded_ring_of_plain_numbers() -> None:
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline(recent_capacity=3)
+    for _ in range(5):
+        feed(pipeline, CHITCHAT)
+
+    samples = pipeline.decide_latencies()
+    assert len(samples) <= 20
+    assert all(isinstance(value, float) for value in samples)
+
+
+def test_an_invalid_decision_records_no_timing_and_no_text() -> None:
+    class Broken:
+        source = "broken"
+
+        def decide(self, utterance, context, *, mode, ac_state=None):
+            return Decision(klass="nonsense", intent="cool", confidence=0.9, source="x", reason="")
+
+    pipeline, _ac, _volume, _speaker, _clock = make_pipeline(decider=Broken())
+    feed(pipeline, HOT)
+
+    assert pipeline.recent() == []
+    assert pipeline.decide_latencies() == []

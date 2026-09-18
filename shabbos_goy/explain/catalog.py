@@ -34,6 +34,7 @@ prevent — see `shabbos-goy explain classify` and `shabbos-goy explain actions`
 - `shabbos-goy ac status|power` — AC noun (read/write, via the listener).
 - `shabbos-goy volume get|set` — volume noun (read/write, via the listener).
 - `shabbos-goy mode show|set` — the mode in effect, and its override.
+- `shabbos-goy listen` — the ambient loop; what the container runs.
 
 ## Exit-code policy
 
@@ -48,6 +49,7 @@ prevent — see `shabbos-goy explain classify` and `shabbos-goy explain actions`
 - `shabbos-goy explain doctor`
 - `shabbos-goy explain classify`
 - `shabbos-goy explain preflight`
+- `shabbos-goy explain listen`
 """
 
 _WHOAMI = """\
@@ -333,6 +335,50 @@ never survives a restart. Exits `2` with no listener running.
 """
 
 
+_LISTEN = """\
+# shabbos-goy listen
+
+The ambient runtime loop, and what the Docker service runs: the ears-only
+lobes session -> the transcript joiner -> the decider -> the calendar gate ->
+the whitelist -> an actuator. **Dry-run unless `--apply`.** There is no wake
+word, no confirmation question and no queued action: a refused utterance is
+dropped, never retried, and nothing survives a restart.
+
+It also starts the loopback control endpoint the `ac`, `volume` and `mode`
+verbs talk to (default `127.0.0.1:8787`, or the port from
+`dashboard_bind_address`), and — unless `--no-dashboard` — the Tailscale-only
+dashboard. A dashboard address that is not up yet never stops the listener:
+the bind is retried on a timer.
+
+## Usage
+
+    shabbos-goy listen
+    shabbos-goy listen --apply
+    shabbos-goy listen --script events.jsonl --decider replay --replay-file replay.json
+    shabbos-goy listen --healthcheck --json
+
+## Flags
+
+- `--apply` — actually actuate (default: dry-run).
+- `--script PATH` — run the same loop with no microphone: a JSONL file of
+  lobes events (no server, no socket), or a WAV streamed through the real
+  client path.
+- `--decider {gemma,replay}` / `--replay-file PATH` — which decider to ask.
+- `--no-dashboard` — skip the dashboard; the control endpoint still runs.
+- `--control-address ADDR` — where the loopback control endpoint binds.
+- `--heartbeat PATH` — the liveness file (default: `$SHABBOS_GOY_HEARTBEAT`,
+  else a tmpfs path).
+- `--healthcheck` — read the heartbeat and exit `0` (healthy) or `1`. Starts
+  nothing; this is what a container `HEALTHCHECK` runs.
+
+## Privacy
+
+Nothing it prints carries transcript text, the context window, a key or a pod
+id: diagnostics are named event lines, and the summary is counts, verdicts
+and action names.
+"""
+
+
 ENTRIES: dict[tuple[str, ...], str] = {
     (): _ROOT,
     ("shabbos-goy",): _ROOT,
@@ -359,4 +405,5 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("mode", "overview"): _MODE,
     ("mode", "show"): _MODE_SHOW,
     ("mode", "set"): _MODE_SET,
+    ("listen",): _LISTEN,
 }

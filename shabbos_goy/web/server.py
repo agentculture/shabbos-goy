@@ -67,8 +67,7 @@ from ..pipeline import (
     PlannedAction,
 )
 from ..policy import CLASSES, MODES
-from ..zmanim import SunEventNotFound, next_window
-from .bind import ALLOW_NON_TAILNET_KEY, BindRefused, parse_bind_address, validate_bind_address
+from .bind import BindRefused, parse_bind_address, validate_bind_address
 from .page import DASHBOARD_HTML
 
 __all__ = [
@@ -100,6 +99,20 @@ _CONTROL_PATHS = frozenset(
         "/api/control/preflight",
     }
 )
+
+# The CLI's own vocabulary. ``shabbos_goy/cli/_commands/_control.py`` was
+# written against these exact paths and bodies before this endpoint existed;
+# they are the contract between the two and are covered by
+# ``tests/test_listen_control.py``, which drives the real CLI verbs against a
+# real running control server.
+PATH_MODE = "/mode"
+PATH_AC_STATUS = "/ac/status"
+PATH_AC_POWER = "/ac/power"
+PATH_VOLUME = "/volume"
+PATH_HEALTHZ = "/healthz"
+
+_CLI_READ_PATHS = frozenset({PATH_MODE, PATH_AC_STATUS, PATH_VOLUME, PATH_HEALTHZ})
+_CLI_WRITE_PATHS = frozenset({PATH_MODE, PATH_AC_POWER, PATH_VOLUME})
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +153,11 @@ class Controls:
     ac_power: Optional[Callable[..., Mapping[str, Any]]] = None
     ac_status: Optional[Callable[[str], Mapping[str, Any]]] = None
     volume_step: Optional[Callable[[int], Any]] = None
+    #: A zero-argument read of the agent's own volume, for ``GET /volume``.
+    #: The pipeline has no such adapter (it only ever *steps*), so this is
+    #: wired by the listener and is simply absent in a pipeline-built
+    #: :class:`Controls` -- reported as unavailable, never invented.
+    volume_get: Optional[Callable[[], Any]] = None
     apply: bool = False
 
 
@@ -168,50 +186,6 @@ def _percentile(samples: list[float], fraction: float) -> float:
     ordered = sorted(samples)
     rank = max(1, min(len(ordered), int(-(-len(ordered) * fraction // 1))))
     return float(ordered[rank - 1])
-
-
-def _iso(moment: datetime) -> str:
-    return moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def _window_dict(window: Any) -> dict[str, Any]:
-    return {
-        "start": _iso(window.start),
-        "end": _iso(window.end),
-        "kinds": list(window.kinds),
-    }
-
-
-def _window_summary(now: datetime, config: Config) -> dict[str, Any]:
-    """The window running now (if any) and the next one.
-
-    Built from the *same* config-to-zmanim helpers the mode resolver uses, so
-    the page can never show a window the resolver would not have honoured.
-    They are private to ``shabbos_goy.mode`` today (see the report note: a
-    public ``mode.window_summary`` belongs there); reaching for them is still
-    better than a second copy of the fail-closed rules.
-    """
-    unavailable = {"available": False, "current": None, "next": None, "reason": "no_zmanim"}
-    if not config.ok:
-        return {**unavailable, "reason": "config"}
-    location = mode_module._build_location(config)
-    rules = mode_module._build_rules(config)
-    if location is None or rules is None:
-        return {**unavailable, "reason": "config"}
-    try:
-        window = next_window(now, location, rules)
-        if window is None:
-            return {"available": True, "current": None, "next": None}
-        if window.contains(now):
-            following = next_window(window.end, location, rules)
-            return {
-                "available": True,
-                "current": _window_dict(window),
-                "next": _window_dict(following) if following is not None else None,
-            }
-        return {"available": True, "current": None, "next": _window_dict(window)}
-    except (SunEventNotFound, ValueError):
-        return {**unavailable, "reason": "sun_event_not_found"}
 
 
 def _record_dict(record: LogRecord) -> dict[str, str]:
@@ -260,6 +234,7 @@ class DashboardServer:
         decider: Any = None,
         connection_provider: Optional[Callable[[], Mapping[str, Any]]] = None,
         latency_provider: Optional[Callable[[], Any]] = None,
+        health_provider: Optional[Callable[[], Mapping[str, Any]]] = None,
         now_provider: Optional[Callable[[], datetime]] = None,
         clock: Optional[Callable[[], float]] = None,
         bind_address: Optional[str] = None,
@@ -275,6 +250,7 @@ class DashboardServer:
         self.decider = decider if decider is not None else getattr(pipeline, "_decider", None)
         self._connection_provider = connection_provider
         self._latency_provider = latency_provider
+        self._health_provider = health_provider
         self._now_provider = now_provider or (lambda: datetime.now(timezone.utc))
         self._clock = clock if clock is not None else getattr(pipeline, "_clock", None)
         if self._clock is None:  # pragma: no cover - the pipeline always has one
@@ -318,9 +294,7 @@ class DashboardServer:
         host, port = parse_bind_address(raw)
         if self._loopback_only:
             return "127.0.0.1", port
-        allow = False
-        if self.config.ok:
-            allow = self.config.raw.get(ALLOW_NON_TAILNET_KEY) is True
+        allow = self.config.dashboard_allow_non_tailnet
         return validate_bind_address(host, allow_non_tailnet=allow), port
 
     def start(self) -> BindResult:
@@ -372,9 +346,7 @@ class DashboardServer:
         names = {self.bind_result.address, "localhost"}
         if self.bind_result.address in ("127.0.0.1", "::1"):
             names |= {"127.0.0.1", "::1"}
-        extra = self.config.raw.get("dashboard_hostnames") if self.config.ok else None
-        if isinstance(extra, list):
-            names |= {name for name in extra if isinstance(name, str) and name}
+        names |= set(self.config.dashboard_hostnames)
         allowed = set()
         for name in names:
             bracketed = f"[{name}]" if ":" in name else name
@@ -457,6 +429,20 @@ class DashboardServer:
             "p95": _percentile(samples, 0.95),
         }
 
+    def _last_confidence(self, klass: str, intent: str) -> Optional[float]:
+        """The confidence of the newest remembered utterance with this label.
+
+        The pipeline keeps confidence on the transcript ring, not on the log
+        record (a log line must never grow a field that invites more), so the
+        pairing is by label and is best-effort: no match means ``None``,
+        never a guess.
+        """
+        for utterance in reversed(self.pipeline.recent()):
+            if utterance.klass == klass and utterance.intent == intent:
+                value = getattr(utterance, "confidence", None)
+                return float(value) if isinstance(value, (int, float)) else None
+        return None
+
     def _decider_state(self, records: list[LogRecord]) -> dict[str, Any]:
         source = getattr(self.decider, "source", None)
         if not isinstance(source, str):
@@ -468,9 +454,7 @@ class DashboardServer:
                 last = {
                     "klass": record.klass,
                     "intent": record.intent,
-                    # The pipeline does not retain per-decision confidence;
-                    # nothing here invents one.
-                    "confidence": None,
+                    "confidence": self._last_confidence(record.klass, record.intent),
                     "verdict": record.verdict,
                     "action": record.action,
                     "reason": record.reason,
@@ -494,7 +478,7 @@ class DashboardServer:
         records = list(self.pipeline.log_records)
         return {
             "mode": _mode_dict(self._resolved_mode()),
-            "window": _window_summary(self._now_provider(), self.config),
+            "window": mode_module.window_summary(self._now_provider(), self.config),
             "connection": self._connection(),
             "ac": self._ac_state(),
             "apply": bool(getattr(self.pipeline, "apply", False)),
@@ -550,8 +534,7 @@ class DashboardServer:
                     "action": record.action if record is not None else None,
                     "target": record.target if record is not None else None,
                     "reason": record.reason if record is not None else None,
-                    # No per-utterance timing exists in the pipeline today.
-                    "decide_latency_ms": None,
+                    "decide_latency_ms": getattr(utterance, "decide_latency_ms", None),
                 }
             )
         capacity = getattr(getattr(self.pipeline, "_recent", None), "capacity", len(rows))
@@ -603,7 +586,9 @@ class DashboardServer:
         )
         return self._run(planned, "volume")
 
-    def _run(self, planned: PlannedAction, intent: str) -> dict[str, Any]:
+    def _run(
+        self, planned: PlannedAction, intent: str, *, apply: Optional[bool] = None
+    ) -> dict[str, Any]:
         """Whitelist, rate limit, adapter -- the same three the voice path uses.
 
         The mode x class gate is deliberately absent (an operator is not an
@@ -625,7 +610,9 @@ class DashboardServer:
         if adapter is None:
             return self._refuse(intent, VERDICT_NO_ADAPTER, action, planned.alias)
 
-        apply = self.controls.apply
+        # The listener's own ``--apply`` is the ceiling: a caller may ask for
+        # a dry run on an applying listener, never the other way round.
+        apply = self.controls.apply if apply is None else (self.controls.apply and bool(apply))
         try:
             if planned.tool == TOOL_SENSIBO:
                 result = adapter(planned.key, planned.value == "on", apply=apply)
@@ -674,6 +661,113 @@ class DashboardServer:
         mode_module.set_override(value)
         self._log_control("mode", VERDICT_ACTED, f"mode_{value or 'clear'}", "-", value or "clear")
         return {"ok": True, "verdict": VERDICT_ACTED, "action": f"mode_{value or 'clear'}"}
+
+    # -- the CLI-facing surface -------------------------------------------
+    #
+    # Same gates, same adapters, same dry-run default as the page's own
+    # controls; only the path names and the JSON shapes differ, because the
+    # CLI client was written first and this endpoint meets it where it is.
+
+    def mode_payload(self) -> dict[str, Any]:
+        """What ``shabbos-goy mode show`` prints (minus its ``listener`` flag)."""
+        resolved = self._resolved_mode()
+        return {
+            "mode": getattr(resolved, "mode", "strict"),
+            "window_kinds": list(getattr(resolved, "kinds", ()) or ()),
+            "clock_trusted": bool(getattr(resolved, "clock_trusted", False)),
+            "overridden": bool(getattr(resolved, "overridden", False)),
+            "override": mode_module.get_override(),
+        }
+
+    def set_mode_override(self, body: Mapping[str, Any]) -> dict[str, Any]:
+        """``shabbos-goy mode set``: force, or clear with ``null``/``auto``."""
+        if "override" not in body:
+            raise CliError(code=400, message="override is required (a mode name, or null)")
+        value = body["override"]
+        if value == "auto":
+            value = None
+        if value is not None and value not in MODES:
+            raise CliError(code=400, message=f"override must be null or one of {MODES}")
+        mode_module.set_override(value)
+        self._log_control("mode", VERDICT_ACTED, f"mode_{value or 'clear'}", "-", value or "clear")
+        return self.mode_payload()
+
+    def ac_status_payload(self) -> dict[str, Any]:
+        """``shabbos-goy ac status``: a read, through the listener's adapter."""
+        return self._ac_state()
+
+    def cli_ac_power(self, body: Mapping[str, Any]) -> dict[str, Any]:
+        """``shabbos-goy ac power {on,off} [--apply]``."""
+        action = body.get("action", AC_ACTION)
+        value = body.get("value")
+        if not isinstance(action, str) or not isinstance(value, str):
+            raise CliError(code=400, message="action and value must be strings")
+        validate_ac_argument(action, value)
+        planned = PlannedAction(
+            tool=TOOL_SENSIBO,
+            key=self.controls.pod_id,
+            alias=self.controls.pod_alias,
+            action=AC_ACTION,
+            value=value,
+        )
+        return self._run(planned, "ac", apply=bool(body.get("apply")))
+
+    def volume_payload(self) -> dict[str, Any]:
+        """``shabbos-goy volume get``: the agent's own level and mute state."""
+        reader = self.controls.volume_get
+        if reader is None:
+            return {"available": False, "level": None, "muted": None, "reason": "no_adapter"}
+        try:
+            raw = reader()
+        except Exception as exc:  # noqa: BLE001 - the message may quote a node name
+            return {
+                "available": False,
+                "level": None,
+                "muted": None,
+                "reason": type(exc).__name__,
+            }
+        level = getattr(raw, "level", None)
+        muted = getattr(raw, "muted", None)
+        if isinstance(raw, Mapping):
+            level, muted = raw.get("level"), raw.get("muted")
+        return {
+            "available": True,
+            "level": float(level) if isinstance(level, (int, float)) else None,
+            "muted": bool(muted),
+            "reason": "",
+        }
+
+    def cli_volume(self, body: Mapping[str, Any]) -> dict[str, Any]:
+        """``shabbos-goy volume set {up,down} [--apply]``."""
+        direction = body.get("direction")
+        if direction not in ("up", "down"):
+            raise CliError(code=400, message="direction must be 'up' or 'down'")
+        planned = PlannedAction(
+            tool=TOOL_VOLUME,
+            key=self.controls.volume_key,
+            alias=self.controls.volume_alias,
+            action="step",
+            value=direction,
+        )
+        return self._run(planned, "volume", apply=bool(body.get("apply")))
+
+    def health(self) -> tuple[bool, dict[str, Any]]:
+        """``GET /healthz`` for the container healthcheck.
+
+        Delegates to the injected provider (the listener's heartbeat) rather
+        than deciding freshness here. With nothing injected the answer is an
+        honest "unknown", which is *not* healthy: a healthcheck that passes
+        because nothing measured anything is worse than none.
+        """
+        if self._health_provider is None:
+            return False, {"ok": False, "reason": "not_wired"}
+        try:
+            raw = self._health_provider()
+        except Exception as exc:  # noqa: BLE001 - never 500 the healthcheck
+            return False, {"ok": False, "reason": type(exc).__name__}
+        data = dict(raw) if isinstance(raw, Mapping) else {}
+        ok = bool(data.get("ok"))
+        return ok, {"ok": ok, "reason": str(data.get("reason", ""))}
 
     def preflight(self) -> dict[str, Any]:
         """Check everything an actuation would need. Changes nothing."""
@@ -812,7 +906,20 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/api/utterances":
             self._send(200, self.dashboard.utterances())
             return
-        if path in _CONTROL_PATHS:
+        if path == PATH_HEALTHZ:
+            ok, payload = self.dashboard.health()
+            self._send(200 if ok else 503, payload)
+            return
+        if path == PATH_MODE:
+            self._send(200, self.dashboard.mode_payload())
+            return
+        if path == PATH_AC_STATUS:
+            self._send(200, self.dashboard.ac_status_payload())
+            return
+        if path == PATH_VOLUME:
+            self._send(200, self.dashboard.volume_payload())
+            return
+        if path in _CONTROL_PATHS or path == PATH_AC_POWER:
             self._error(405, "method_not_allowed", "controls are POST only")
             return
         self._error(404, "not_found")
@@ -821,10 +928,10 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._guard():
             return
         path = self._path()
-        if path in _READ_PATHS:
+        if path in _READ_PATHS or path in (PATH_AC_STATUS, PATH_HEALTHZ):
             self._error(405, "method_not_allowed", "read endpoints are GET only")
             return
-        if path not in _CONTROL_PATHS:
+        if path not in _CONTROL_PATHS and path not in _CLI_WRITE_PATHS:
             self._error(404, "not_found")
             return
 
@@ -843,8 +950,17 @@ class _Handler(BaseHTTPRequestHandler):
                 result = dashboard.control_ac(body)
             elif path == "/api/control/volume":
                 result = dashboard.control_volume(body)
-            else:
+            elif path == "/api/control/mode":
                 result = dashboard.control_mode(body)
+            elif path == PATH_MODE:
+                # The CLI's mode payload is its own shape, and carries no
+                # action verdict -- send it as-is.
+                self._send(200, dashboard.set_mode_override(body))
+                return
+            elif path == PATH_AC_POWER:
+                result = dashboard.cli_ac_power(body)
+            else:
+                result = dashboard.cli_volume(body)
         except CliError:
             # The message can quote whatever the caller sent; only the code
             # goes back.

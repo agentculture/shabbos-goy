@@ -219,8 +219,9 @@ def test_decide_latency_is_reported_when_a_provider_supplies_it(tmp_path) -> Non
 
 
 def test_decide_latency_is_honestly_absent_when_nothing_measures_it(tmp_path) -> None:
-    """The pipeline keeps no per-decision timings, so with nothing injected
-    the dashboard says so rather than inventing a number."""
+    """With no ``latency_provider`` injected the dashboard says so rather than
+    inventing a number. The listener injects the pipeline's own
+    ``decide_latencies`` (t14); a bare DashboardServer is given nothing."""
     with dashboard(tmp_path) as ui:
         state = ui.get("/api/state").json()
 
@@ -260,7 +261,9 @@ def test_utterances_carry_text_class_intent_verdict_action_and_timings(tmp_path)
     assert entry["action"] == "ac_power_on"
     assert entry["target"] == "ac"
     assert entry["age_seconds"] == pytest.approx(5.0)
-    assert entry["decide_latency_ms"] is None
+    # t14 made the per-decision timing real: the stub decider costs nothing
+    # on the hand-advanced clock, so this is 0.0 -- a measurement, not a guess.
+    assert entry["decide_latency_ms"] == pytest.approx(0.0)
 
 
 def test_an_utterance_with_no_matching_log_record_still_shows_its_text(tmp_path) -> None:
@@ -310,3 +313,32 @@ def test_a_decision_the_pipeline_refused_still_appears_with_its_verdict(tmp_path
 
     assert entry["verdict"] == "low_confidence"
     assert entry["action"] == "none"
+
+
+def test_the_last_decision_carries_its_real_confidence(tmp_path) -> None:
+    """t14 wired confidence through from the transcript ring."""
+    with dashboard(tmp_path) as ui:
+        feed(ui.stack.pipeline, HOT)
+        state = ui.get("/api/state").json()
+
+    last = state["decider"]["last"]
+    assert last["klass"] == "remark"
+    assert last["confidence"] == pytest.approx(0.9)
+
+
+def test_the_pipelines_own_latencies_are_a_usable_provider(tmp_path) -> None:
+    stack = make_stack(tmp_path)
+    server = DashboardServer(
+        stack.pipeline,
+        stack.mode_provider,
+        stack.config,
+        latency_provider=stack.pipeline.decide_latencies,
+        now_provider=lambda: stack.now,
+    )
+    with serving(server):
+        feed(stack.pipeline, HOT)
+        state = request(f"{server.url}/api/state").json()
+
+    latency = state["decider"]["decide_latency_ms"]
+    assert latency["available"] is True
+    assert latency["count"] == 1
