@@ -1,0 +1,1671 @@
+{
+  "source": "Hebcal REST API (hebcal.com), fetched by tests/fixtures/fetch_zmanim_vectors.py. Hebcal is an independent published source; these values were NOT produced by shabbos_goy.",
+  "note": "every day Hebcal marks yomtov=true within the given Hebrew year, for Israel (i=on) and the diaspora (i=off)",
+  "years": {
+    "5786": {
+      "israel": [
+        {
+          "date": "2025-09-23",
+          "title": "Rosh Hashana 5786",
+          "hdate": "1 Tishrei 5786"
+        },
+        {
+          "date": "2025-09-24",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-02",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-07",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-14",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5786"
+        },
+        {
+          "date": "2026-04-02",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5786"
+        },
+        {
+          "date": "2026-04-08",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5786"
+        },
+        {
+          "date": "2026-05-22",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5786"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2025-09-23",
+          "title": "Rosh Hashana 5786",
+          "hdate": "1 Tishrei 5786"
+        },
+        {
+          "date": "2025-09-24",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-02",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-07",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-08",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-14",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5786"
+        },
+        {
+          "date": "2025-10-15",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5786"
+        },
+        {
+          "date": "2026-04-02",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5786"
+        },
+        {
+          "date": "2026-04-03",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5786"
+        },
+        {
+          "date": "2026-04-08",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5786"
+        },
+        {
+          "date": "2026-04-09",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5786"
+        },
+        {
+          "date": "2026-05-22",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5786"
+        },
+        {
+          "date": "2026-05-23",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5786"
+        }
+      ]
+    },
+    "5787": {
+      "israel": [
+        {
+          "date": "2026-09-12",
+          "title": "Rosh Hashana 5787",
+          "hdate": "1 Tishrei 5787"
+        },
+        {
+          "date": "2026-09-13",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5787"
+        },
+        {
+          "date": "2026-09-21",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5787"
+        },
+        {
+          "date": "2026-09-26",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5787"
+        },
+        {
+          "date": "2026-10-03",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5787"
+        },
+        {
+          "date": "2027-04-22",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5787"
+        },
+        {
+          "date": "2027-04-28",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5787"
+        },
+        {
+          "date": "2027-06-11",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5787"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2026-09-12",
+          "title": "Rosh Hashana 5787",
+          "hdate": "1 Tishrei 5787"
+        },
+        {
+          "date": "2026-09-13",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5787"
+        },
+        {
+          "date": "2026-09-21",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5787"
+        },
+        {
+          "date": "2026-09-26",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5787"
+        },
+        {
+          "date": "2026-09-27",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5787"
+        },
+        {
+          "date": "2026-10-03",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5787"
+        },
+        {
+          "date": "2026-10-04",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5787"
+        },
+        {
+          "date": "2027-04-22",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5787"
+        },
+        {
+          "date": "2027-04-23",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5787"
+        },
+        {
+          "date": "2027-04-28",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5787"
+        },
+        {
+          "date": "2027-04-29",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5787"
+        },
+        {
+          "date": "2027-06-11",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5787"
+        },
+        {
+          "date": "2027-06-12",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5787"
+        }
+      ]
+    },
+    "5788": {
+      "israel": [
+        {
+          "date": "2027-10-02",
+          "title": "Rosh Hashana 5788",
+          "hdate": "1 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-03",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-11",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-16",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-23",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5788"
+        },
+        {
+          "date": "2028-04-11",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5788"
+        },
+        {
+          "date": "2028-04-17",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5788"
+        },
+        {
+          "date": "2028-05-31",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5788"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2027-10-02",
+          "title": "Rosh Hashana 5788",
+          "hdate": "1 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-03",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-11",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-16",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-17",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-23",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5788"
+        },
+        {
+          "date": "2027-10-24",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5788"
+        },
+        {
+          "date": "2028-04-11",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5788"
+        },
+        {
+          "date": "2028-04-12",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5788"
+        },
+        {
+          "date": "2028-04-17",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5788"
+        },
+        {
+          "date": "2028-04-18",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5788"
+        },
+        {
+          "date": "2028-05-31",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5788"
+        },
+        {
+          "date": "2028-06-01",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5788"
+        }
+      ]
+    },
+    "5789": {
+      "israel": [
+        {
+          "date": "2028-09-21",
+          "title": "Rosh Hashana 5789",
+          "hdate": "1 Tishrei 5789"
+        },
+        {
+          "date": "2028-09-22",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5789"
+        },
+        {
+          "date": "2028-09-30",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5789"
+        },
+        {
+          "date": "2028-10-05",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5789"
+        },
+        {
+          "date": "2028-10-12",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5789"
+        },
+        {
+          "date": "2029-03-31",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5789"
+        },
+        {
+          "date": "2029-04-06",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5789"
+        },
+        {
+          "date": "2029-05-20",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5789"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2028-09-21",
+          "title": "Rosh Hashana 5789",
+          "hdate": "1 Tishrei 5789"
+        },
+        {
+          "date": "2028-09-22",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5789"
+        },
+        {
+          "date": "2028-09-30",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5789"
+        },
+        {
+          "date": "2028-10-05",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5789"
+        },
+        {
+          "date": "2028-10-06",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5789"
+        },
+        {
+          "date": "2028-10-12",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5789"
+        },
+        {
+          "date": "2028-10-13",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5789"
+        },
+        {
+          "date": "2029-03-31",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5789"
+        },
+        {
+          "date": "2029-04-01",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5789"
+        },
+        {
+          "date": "2029-04-06",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5789"
+        },
+        {
+          "date": "2029-04-07",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5789"
+        },
+        {
+          "date": "2029-05-20",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5789"
+        },
+        {
+          "date": "2029-05-21",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5789"
+        }
+      ]
+    },
+    "5790": {
+      "israel": [
+        {
+          "date": "2029-09-10",
+          "title": "Rosh Hashana 5790",
+          "hdate": "1 Tishrei 5790"
+        },
+        {
+          "date": "2029-09-11",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5790"
+        },
+        {
+          "date": "2029-09-19",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5790"
+        },
+        {
+          "date": "2029-09-24",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5790"
+        },
+        {
+          "date": "2029-10-01",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5790"
+        },
+        {
+          "date": "2030-04-18",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5790"
+        },
+        {
+          "date": "2030-04-24",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5790"
+        },
+        {
+          "date": "2030-06-07",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5790"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2029-09-10",
+          "title": "Rosh Hashana 5790",
+          "hdate": "1 Tishrei 5790"
+        },
+        {
+          "date": "2029-09-11",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5790"
+        },
+        {
+          "date": "2029-09-19",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5790"
+        },
+        {
+          "date": "2029-09-24",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5790"
+        },
+        {
+          "date": "2029-09-25",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5790"
+        },
+        {
+          "date": "2029-10-01",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5790"
+        },
+        {
+          "date": "2029-10-02",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5790"
+        },
+        {
+          "date": "2030-04-18",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5790"
+        },
+        {
+          "date": "2030-04-19",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5790"
+        },
+        {
+          "date": "2030-04-24",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5790"
+        },
+        {
+          "date": "2030-04-25",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5790"
+        },
+        {
+          "date": "2030-06-07",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5790"
+        },
+        {
+          "date": "2030-06-08",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5790"
+        }
+      ]
+    },
+    "5791": {
+      "israel": [
+        {
+          "date": "2030-09-28",
+          "title": "Rosh Hashana 5791",
+          "hdate": "1 Tishrei 5791"
+        },
+        {
+          "date": "2030-09-29",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-07",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-12",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-19",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5791"
+        },
+        {
+          "date": "2031-04-08",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5791"
+        },
+        {
+          "date": "2031-04-14",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5791"
+        },
+        {
+          "date": "2031-05-28",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5791"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2030-09-28",
+          "title": "Rosh Hashana 5791",
+          "hdate": "1 Tishrei 5791"
+        },
+        {
+          "date": "2030-09-29",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-07",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-12",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-13",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-19",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5791"
+        },
+        {
+          "date": "2030-10-20",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5791"
+        },
+        {
+          "date": "2031-04-08",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5791"
+        },
+        {
+          "date": "2031-04-09",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5791"
+        },
+        {
+          "date": "2031-04-14",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5791"
+        },
+        {
+          "date": "2031-04-15",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5791"
+        },
+        {
+          "date": "2031-05-28",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5791"
+        },
+        {
+          "date": "2031-05-29",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5791"
+        }
+      ]
+    },
+    "5792": {
+      "israel": [
+        {
+          "date": "2031-09-18",
+          "title": "Rosh Hashana 5792",
+          "hdate": "1 Tishrei 5792"
+        },
+        {
+          "date": "2031-09-19",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5792"
+        },
+        {
+          "date": "2031-09-27",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5792"
+        },
+        {
+          "date": "2031-10-02",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5792"
+        },
+        {
+          "date": "2031-10-09",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5792"
+        },
+        {
+          "date": "2032-03-27",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5792"
+        },
+        {
+          "date": "2032-04-02",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5792"
+        },
+        {
+          "date": "2032-05-16",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5792"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2031-09-18",
+          "title": "Rosh Hashana 5792",
+          "hdate": "1 Tishrei 5792"
+        },
+        {
+          "date": "2031-09-19",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5792"
+        },
+        {
+          "date": "2031-09-27",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5792"
+        },
+        {
+          "date": "2031-10-02",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5792"
+        },
+        {
+          "date": "2031-10-03",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5792"
+        },
+        {
+          "date": "2031-10-09",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5792"
+        },
+        {
+          "date": "2031-10-10",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5792"
+        },
+        {
+          "date": "2032-03-27",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5792"
+        },
+        {
+          "date": "2032-03-28",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5792"
+        },
+        {
+          "date": "2032-04-02",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5792"
+        },
+        {
+          "date": "2032-04-03",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5792"
+        },
+        {
+          "date": "2032-05-16",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5792"
+        },
+        {
+          "date": "2032-05-17",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5792"
+        }
+      ]
+    },
+    "5793": {
+      "israel": [
+        {
+          "date": "2032-09-06",
+          "title": "Rosh Hashana 5793",
+          "hdate": "1 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-07",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-15",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-20",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-27",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5793"
+        },
+        {
+          "date": "2033-04-14",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5793"
+        },
+        {
+          "date": "2033-04-20",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5793"
+        },
+        {
+          "date": "2033-06-03",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5793"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2032-09-06",
+          "title": "Rosh Hashana 5793",
+          "hdate": "1 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-07",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-15",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-20",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-21",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-27",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5793"
+        },
+        {
+          "date": "2032-09-28",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5793"
+        },
+        {
+          "date": "2033-04-14",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5793"
+        },
+        {
+          "date": "2033-04-15",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5793"
+        },
+        {
+          "date": "2033-04-20",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5793"
+        },
+        {
+          "date": "2033-04-21",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5793"
+        },
+        {
+          "date": "2033-06-03",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5793"
+        },
+        {
+          "date": "2033-06-04",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5793"
+        }
+      ]
+    },
+    "5794": {
+      "israel": [
+        {
+          "date": "2033-09-24",
+          "title": "Rosh Hashana 5794",
+          "hdate": "1 Tishrei 5794"
+        },
+        {
+          "date": "2033-09-25",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-03",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-08",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-15",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5794"
+        },
+        {
+          "date": "2034-04-04",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5794"
+        },
+        {
+          "date": "2034-04-10",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5794"
+        },
+        {
+          "date": "2034-05-24",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5794"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2033-09-24",
+          "title": "Rosh Hashana 5794",
+          "hdate": "1 Tishrei 5794"
+        },
+        {
+          "date": "2033-09-25",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-03",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-08",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-09",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-15",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5794"
+        },
+        {
+          "date": "2033-10-16",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5794"
+        },
+        {
+          "date": "2034-04-04",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5794"
+        },
+        {
+          "date": "2034-04-05",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5794"
+        },
+        {
+          "date": "2034-04-10",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5794"
+        },
+        {
+          "date": "2034-04-11",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5794"
+        },
+        {
+          "date": "2034-05-24",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5794"
+        },
+        {
+          "date": "2034-05-25",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5794"
+        }
+      ]
+    },
+    "5795": {
+      "israel": [
+        {
+          "date": "2034-09-14",
+          "title": "Rosh Hashana 5795",
+          "hdate": "1 Tishrei 5795"
+        },
+        {
+          "date": "2034-09-15",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5795"
+        },
+        {
+          "date": "2034-09-23",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5795"
+        },
+        {
+          "date": "2034-09-28",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5795"
+        },
+        {
+          "date": "2034-10-05",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5795"
+        },
+        {
+          "date": "2035-04-24",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5795"
+        },
+        {
+          "date": "2035-04-30",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5795"
+        },
+        {
+          "date": "2035-06-13",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5795"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2034-09-14",
+          "title": "Rosh Hashana 5795",
+          "hdate": "1 Tishrei 5795"
+        },
+        {
+          "date": "2034-09-15",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5795"
+        },
+        {
+          "date": "2034-09-23",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5795"
+        },
+        {
+          "date": "2034-09-28",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5795"
+        },
+        {
+          "date": "2034-09-29",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5795"
+        },
+        {
+          "date": "2034-10-05",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5795"
+        },
+        {
+          "date": "2034-10-06",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5795"
+        },
+        {
+          "date": "2035-04-24",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5795"
+        },
+        {
+          "date": "2035-04-25",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5795"
+        },
+        {
+          "date": "2035-04-30",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5795"
+        },
+        {
+          "date": "2035-05-01",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5795"
+        },
+        {
+          "date": "2035-06-13",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5795"
+        },
+        {
+          "date": "2035-06-14",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5795"
+        }
+      ]
+    },
+    "5796": {
+      "israel": [
+        {
+          "date": "2035-10-04",
+          "title": "Rosh Hashana 5796",
+          "hdate": "1 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-05",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-13",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-18",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-25",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5796"
+        },
+        {
+          "date": "2036-04-12",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5796"
+        },
+        {
+          "date": "2036-04-18",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5796"
+        },
+        {
+          "date": "2036-06-01",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5796"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2035-10-04",
+          "title": "Rosh Hashana 5796",
+          "hdate": "1 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-05",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-13",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-18",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-19",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-25",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5796"
+        },
+        {
+          "date": "2035-10-26",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5796"
+        },
+        {
+          "date": "2036-04-12",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5796"
+        },
+        {
+          "date": "2036-04-13",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5796"
+        },
+        {
+          "date": "2036-04-18",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5796"
+        },
+        {
+          "date": "2036-04-19",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5796"
+        },
+        {
+          "date": "2036-06-01",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5796"
+        },
+        {
+          "date": "2036-06-02",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5796"
+        }
+      ]
+    },
+    "5797": {
+      "israel": [
+        {
+          "date": "2036-09-22",
+          "title": "Rosh Hashana 5797",
+          "hdate": "1 Tishrei 5797"
+        },
+        {
+          "date": "2036-09-23",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-01",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-06",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-13",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5797"
+        },
+        {
+          "date": "2037-03-31",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5797"
+        },
+        {
+          "date": "2037-04-06",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5797"
+        },
+        {
+          "date": "2037-05-20",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5797"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2036-09-22",
+          "title": "Rosh Hashana 5797",
+          "hdate": "1 Tishrei 5797"
+        },
+        {
+          "date": "2036-09-23",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-01",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-06",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-07",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-13",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5797"
+        },
+        {
+          "date": "2036-10-14",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5797"
+        },
+        {
+          "date": "2037-03-31",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5797"
+        },
+        {
+          "date": "2037-04-01",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5797"
+        },
+        {
+          "date": "2037-04-06",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5797"
+        },
+        {
+          "date": "2037-04-07",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5797"
+        },
+        {
+          "date": "2037-05-20",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5797"
+        },
+        {
+          "date": "2037-05-21",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5797"
+        }
+      ]
+    },
+    "5798": {
+      "israel": [
+        {
+          "date": "2037-09-10",
+          "title": "Rosh Hashana 5798",
+          "hdate": "1 Tishrei 5798"
+        },
+        {
+          "date": "2037-09-11",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5798"
+        },
+        {
+          "date": "2037-09-19",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5798"
+        },
+        {
+          "date": "2037-09-24",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5798"
+        },
+        {
+          "date": "2037-10-01",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5798"
+        },
+        {
+          "date": "2038-04-20",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5798"
+        },
+        {
+          "date": "2038-04-26",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5798"
+        },
+        {
+          "date": "2038-06-09",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5798"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2037-09-10",
+          "title": "Rosh Hashana 5798",
+          "hdate": "1 Tishrei 5798"
+        },
+        {
+          "date": "2037-09-11",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5798"
+        },
+        {
+          "date": "2037-09-19",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5798"
+        },
+        {
+          "date": "2037-09-24",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5798"
+        },
+        {
+          "date": "2037-09-25",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5798"
+        },
+        {
+          "date": "2037-10-01",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5798"
+        },
+        {
+          "date": "2037-10-02",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5798"
+        },
+        {
+          "date": "2038-04-20",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5798"
+        },
+        {
+          "date": "2038-04-21",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5798"
+        },
+        {
+          "date": "2038-04-26",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5798"
+        },
+        {
+          "date": "2038-04-27",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5798"
+        },
+        {
+          "date": "2038-06-09",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5798"
+        },
+        {
+          "date": "2038-06-10",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5798"
+        }
+      ]
+    },
+    "5799": {
+      "israel": [
+        {
+          "date": "2038-09-30",
+          "title": "Rosh Hashana 5799",
+          "hdate": "1 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-01",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-09",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-14",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-21",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5799"
+        },
+        {
+          "date": "2039-04-09",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5799"
+        },
+        {
+          "date": "2039-04-15",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5799"
+        },
+        {
+          "date": "2039-05-29",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5799"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2038-09-30",
+          "title": "Rosh Hashana 5799",
+          "hdate": "1 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-01",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-09",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-14",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-15",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-21",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5799"
+        },
+        {
+          "date": "2038-10-22",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5799"
+        },
+        {
+          "date": "2039-04-09",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5799"
+        },
+        {
+          "date": "2039-04-10",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5799"
+        },
+        {
+          "date": "2039-04-15",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5799"
+        },
+        {
+          "date": "2039-04-16",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5799"
+        },
+        {
+          "date": "2039-05-29",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5799"
+        },
+        {
+          "date": "2039-05-30",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5799"
+        }
+      ]
+    },
+    "5800": {
+      "israel": [
+        {
+          "date": "2039-09-19",
+          "title": "Rosh Hashana 5800",
+          "hdate": "1 Tishrei 5800"
+        },
+        {
+          "date": "2039-09-20",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5800"
+        },
+        {
+          "date": "2039-09-28",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5800"
+        },
+        {
+          "date": "2039-10-03",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5800"
+        },
+        {
+          "date": "2039-10-10",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5800"
+        },
+        {
+          "date": "2040-03-29",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5800"
+        },
+        {
+          "date": "2040-04-04",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5800"
+        },
+        {
+          "date": "2040-05-18",
+          "title": "Shavuot",
+          "hdate": "6 Sivan 5800"
+        }
+      ],
+      "diaspora": [
+        {
+          "date": "2039-09-19",
+          "title": "Rosh Hashana 5800",
+          "hdate": "1 Tishrei 5800"
+        },
+        {
+          "date": "2039-09-20",
+          "title": "Rosh Hashana II",
+          "hdate": "2 Tishrei 5800"
+        },
+        {
+          "date": "2039-09-28",
+          "title": "Yom Kippur",
+          "hdate": "10 Tishrei 5800"
+        },
+        {
+          "date": "2039-10-03",
+          "title": "Sukkot I",
+          "hdate": "15 Tishrei 5800"
+        },
+        {
+          "date": "2039-10-04",
+          "title": "Sukkot II",
+          "hdate": "16 Tishrei 5800"
+        },
+        {
+          "date": "2039-10-10",
+          "title": "Shmini Atzeret",
+          "hdate": "22 Tishrei 5800"
+        },
+        {
+          "date": "2039-10-11",
+          "title": "Simchat Torah",
+          "hdate": "23 Tishrei 5800"
+        },
+        {
+          "date": "2040-03-29",
+          "title": "Pesach I",
+          "hdate": "15 Nisan 5800"
+        },
+        {
+          "date": "2040-03-30",
+          "title": "Pesach II",
+          "hdate": "16 Nisan 5800"
+        },
+        {
+          "date": "2040-04-04",
+          "title": "Pesach VII",
+          "hdate": "21 Nisan 5800"
+        },
+        {
+          "date": "2040-04-05",
+          "title": "Pesach VIII",
+          "hdate": "22 Nisan 5800"
+        },
+        {
+          "date": "2040-05-18",
+          "title": "Shavuot I",
+          "hdate": "6 Sivan 5800"
+        },
+        {
+          "date": "2040-05-19",
+          "title": "Shavuot II",
+          "hdate": "7 Sivan 5800"
+        }
+      ]
+    }
+  }
+}
