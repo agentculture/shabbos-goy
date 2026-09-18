@@ -297,3 +297,24 @@ Two consequences worth knowing while that is open:
   was deliberately not taken here: for a template every sibling is cloned from,
   it means committing a derived second copy of every skill doc that drifts from
   the canonical tree the moment a skill is re-vendored.
+
+## Cited code (not skills)
+
+The same cite-don't-import discipline applies to source files. The runtime
+package declares `dependencies = []`, so where a sibling repository had already
+solved a problem we copied the code into this tree and recorded where it came
+from, instead of importing it. These are **copies**: they do not update when
+the upstream does, and drift is caught only by the tests named below.
+
+`../lobes-cli` is `agentculture/lobes-cli`. The branch pinned below,
+`spec/hebrew-realtime`, was at `b18743c` on 2026-09-18, the day these files
+were cited. No commit in this repository modifies that checkout.
+
+| Here | Upstream file | What was taken | What notices drift |
+|---|---|---|---|
+| `shabbos_goy/lobes/ws.py` | `scripts/realtime-smoke.py` (the "Pure helpers" and `WebSocketClient` sections), with `scripts/realtime-he-accept.py` as the duplex reference | The RFC 6455 handshake, the accept-key computation, the mask/unmask XOR, frame build/parse, and the `select`-not-`settimeout` read discipline. Narrowed to an ears-only listener (no audio codec, no phrase matching, no CLI) and given TLS for a `wss://` gateway. | `tests/test_lobes_ws.py` (wire behaviour against a fake server) |
+| `shabbos_goy/audio/pipewire.py` | `scripts/realtime-he-accept.py` | `normalize_pipewire_device_name`, `device_identity`, `validate_device_pair`, `build_capture_argv`, `build_playback_argv` — the same functions, for the same reSpeaker XVF3800 hardware, so a mic/speaker pair that is not one physical device is refused. | `tests/test_audio_pipewire.py` (fake `pw-*` binaries on `PATH`) |
+| `shabbos_goy/lobes/events.py` | `site/src/scripts/realtime-events.ts` (`EVENT_TYPES`, `ERROR_CODES`) | The event-type and error-code vocabulary, itself a hand-mirror of lobes' `lobes/realtime/_session.py`. | `tests/test_lobes_client.py` fixture replay |
+| `tests/fixtures/lobes/event-fixtures.json` | `site/src/scripts/event-fixtures.ts` | One representative payload per event type and per error code, including an ears-only turn and `reason: max_turn`. | the same fixture replay |
+| `shabbos_goy/web/page.py` | `site/src/components/EventStream.astro` and its `global.css` tokens | The visual language only — a dawn palette, a dark variant, a top-down event stream. **Read as a reference, not copied**: none of that site's build tooling comes with it, and the page stays one self-contained string with no external asset. | nothing automatic; it is presentation |
+| `shabbos_goy/cli/` | teken's `python-cli` reference (`teken cli cite`) | The agent-first CLI skeleton: the parser, the stdout/stderr split, the `CliError` exit-code policy, the `explain` catalog shape. | `uv run teken cli doctor . --strict` in CI |
