@@ -243,3 +243,6 @@ skills.local.yaml
 .devague/questions/
 
 .devague/reviews/
+
+# golden-set audio: TTS output, regenerable, never committed (deviation d4)
+tests/golden/audio/
