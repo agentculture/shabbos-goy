@@ -433,7 +433,9 @@ def test_a_multi_threaded_soak_stays_bounded_and_shuts_down_cleanly(tmp_path) ->
 
     with running(listener):
         for worker in range(4):
-            thread = threading.Thread(target=feed, args=(worker,), name=f"feeder-{worker}")
+            thread = threading.Thread(
+                target=feed, args=(worker,), name=f"feeder-{worker}", daemon=True
+            )
             thread.start()
             feeders.append(thread)
         for thread in feeders:
@@ -483,7 +485,7 @@ def test_run_returns_when_the_source_finishes(tmp_path) -> None:
     def go() -> None:
         result["code"] = listener.run()
 
-    thread = threading.Thread(target=go, name="run")
+    thread = threading.Thread(target=go, name="run", daemon=True)
     thread.start()
     try:
         assert wait_until(lambda: listener.pipeline.log_records != [])
