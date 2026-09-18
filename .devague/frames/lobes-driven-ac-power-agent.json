@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-18T17:06:13Z",
-  "updated": "2026-09-18T18:42:25Z",
+  "updated": "2026-09-18T18:51:13Z",
   "claims": [
     {
       "id": "c1",
@@ -1390,6 +1390,17 @@
       "skipped_check": "run the new tests against the empty module and observe failure before implementing",
       "refs": [
         "plan task t7, branch wf/t7 commit 0bba22e"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l4",
+      "code": "grader-unverified",
+      "what": "t11 task agent wrote shabbos_goy/mode.py before its tests (implementation-first, no red run against unwritten code); it disclosed this and did one deliberate-break check that was caught",
+      "skipped_check": "write and run failing tests before implementing",
+      "refs": [
+        "plan task t11, branch wf/t11 commit 5495c55"
       ],
       "origin": "llm",
       "status": "proposed"
