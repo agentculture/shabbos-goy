@@ -1,0 +1,401 @@
+{
+  "_citation": {
+    "source_repo": "agentculture/lobes-cli",
+    "source_branch": "spec/hebrew-realtime",
+    "source_files": [
+      "site/src/scripts/event-fixtures.ts",
+      "site/src/scripts/realtime-events.ts"
+    ],
+    "cited_on": "2026-09-18",
+    "note": "Cite-don't-import: the lobes wire vocabulary (every EventType, every ErrorCode) and one representative payload per event, transcribed by hand from the TypeScript fixtures into JSON. `session_id`/`event_id`/`timestamp_ms` are the envelope `ev()` adds in the source file. Nothing here is imported from lobes-cli at runtime; tests/test_lobes_client.py replays this file through the client's own reader. If lobes-cli changes its wire, this file is what goes stale and the contract test is what notices."
+  },
+  "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+  "event_types": [
+    "session.created",
+    "session.closed",
+    "input_audio_buffer.speech_started",
+    "input_audio_buffer.speech_stopped",
+    "conversation.item.input_audio_transcription.completed",
+    "error",
+    "response.created",
+    "response.text.done",
+    "response.audio.delta",
+    "response.done",
+    "response.interrupted",
+    "session.updated",
+    "response.function_call_arguments.done"
+  ],
+  "error_codes": [
+    "invalid_session_config",
+    "vad_unavailable",
+    "invalid_wire_event",
+    "stt_forward_failed",
+    "generate_failed",
+    "tts_failed",
+    "response_timeout"
+  ],
+  "events": [
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00000000",
+      "timestamp_ms": 1000000,
+      "type": "session.created",
+      "config": {
+        "input_audio_format": "pcm16",
+        "input_sample_rate": 24000,
+        "channels": 1,
+        "turn_detection": "server_vad",
+        "aec_mode": "none",
+        "system_prompt": null,
+        "language": "he"
+      }
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00000050",
+      "timestamp_ms": 1000050,
+      "type": "session.updated",
+      "session": {
+        "tools": [
+          {
+            "type": "function",
+            "name": "get_current_time",
+            "description": "Return the current local time and weekday.",
+            "parameters": {"type": "object", "properties": {}}
+          }
+        ],
+        "tool_choice": "auto",
+        "language": "he"
+      }
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00000400",
+      "timestamp_ms": 1000400,
+      "type": "input_audio_buffer.speech_started",
+      "item_id": "item_0001aaaaaaaaaaaaaaaaaaaa",
+      "at_ms": 128
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00002400",
+      "timestamp_ms": 1002400,
+      "type": "input_audio_buffer.speech_stopped",
+      "item_id": "item_0001aaaaaaaaaaaaaaaaaaaa",
+      "at_ms": 2048,
+      "reason": "silence"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00002900",
+      "timestamp_ms": 1002900,
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_0001aaaaaaaaaaaaaaaaaaaa",
+      "text": "מה מזג האוויר במאדים?"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00003000",
+      "timestamp_ms": 1003000,
+      "type": "response.created",
+      "response_id": "resp_0001eeeeeeeeeeeeeeeeeeee",
+      "item_id": "item_0001aaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00004200",
+      "timestamp_ms": 1004200,
+      "type": "response.text.done",
+      "response_id": "resp_0001eeeeeeeeeeeeeeeeeeee",
+      "text": "בממוצע כשישים מעלות מתחת לאפס, עם סופות אבק שיכולות להימשך שבועות."
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00004300",
+      "timestamp_ms": 1004300,
+      "type": "response.audio.delta",
+      "response_id": "resp_0001eeeeeeeeeeeeeeeeeeee",
+      "item_id": "item_0001aaaaaaaaaaaaaaaaaaaa",
+      "delta": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00004900",
+      "timestamp_ms": 1004900,
+      "type": "response.done",
+      "response_id": "resp_0001eeeeeeeeeeeeeeeeeeee",
+      "timings": {
+        "stt": 410,
+        "generate": 780,
+        "phonikud": 90,
+        "tts": 260,
+        "first_delta": 1180
+      }
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00005200",
+      "timestamp_ms": 1005200,
+      "type": "input_audio_buffer.speech_started",
+      "item_id": "item_0005eeeeeeeeeeeeeeeeeeee",
+      "at_ms": 5000
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00006800",
+      "timestamp_ms": 1006800,
+      "type": "input_audio_buffer.speech_stopped",
+      "item_id": "item_0005eeeeeeeeeeeeeeeeeeee",
+      "at_ms": 6600,
+      "reason": "silence"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00006900",
+      "timestamp_ms": 1006900,
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_0005eeeeeeeeeeeeeeeeeeee",
+      "text": "מה השעה עכשיו?"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00007000",
+      "timestamp_ms": 1007000,
+      "type": "response.created",
+      "response_id": "resp_0003aaaaaaaaaaaaaaaaaaaa",
+      "item_id": "item_0005eeeeeeeeeeeeeeeeeeee"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00007300",
+      "timestamp_ms": 1007300,
+      "type": "response.function_call_arguments.done",
+      "response_id": "resp_0003aaaaaaaaaaaaaaaaaaaa",
+      "item_id": "item_0005eeeeeeeeeeeeeeeeeeee",
+      "call_id": "call_0001aaaaaaaaaaaaaaaaaaaa",
+      "name": "get_current_time",
+      "arguments": "{}"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00007900",
+      "timestamp_ms": 1007900,
+      "type": "response.text.done",
+      "response_id": "resp_0003aaaaaaaaaaaaaaaaaaaa",
+      "text": "השעה עכשיו 14:32, יום שלישי."
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00008300",
+      "timestamp_ms": 1008300,
+      "type": "response.done",
+      "response_id": "resp_0003aaaaaaaaaaaaaaaaaaaa",
+      "timings": {
+        "stt": 210,
+        "generate": 640,
+        "tool_wait": 180,
+        "phonikud": 70,
+        "tts": 240,
+        "first_delta": 900
+      }
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00008600",
+      "timestamp_ms": 1008600,
+      "type": "input_audio_buffer.speech_started",
+      "item_id": "item_0006ffffffffffffffffffff",
+      "at_ms": 8500
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00008900",
+      "timestamp_ms": 1008900,
+      "type": "input_audio_buffer.speech_stopped",
+      "item_id": "item_0006ffffffffffffffffffff",
+      "at_ms": 8800,
+      "reason": "silence"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00008950",
+      "timestamp_ms": 1008950,
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_0006ffffffffffffffffffff",
+      "text": "וגם תגלגל קובייה"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00009200",
+      "timestamp_ms": 1009200,
+      "type": "response.function_call_arguments.done",
+      "response_id": "resp_0004bbbbbbbbbbbbbbbbbbbb",
+      "item_id": "item_0006ffffffffffffffffffff",
+      "call_id": "call_0002bbbbbbbbbbbbbbbbbbbb",
+      "name": "roll_dice",
+      "arguments": "{\"sides\": 6}"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00009350",
+      "timestamp_ms": 1009350,
+      "type": "response.interrupted",
+      "response_id": "resp_0004bbbbbbbbbbbbbbbbbbbb",
+      "truncated": true
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00010000",
+      "timestamp_ms": 1010000,
+      "type": "input_audio_buffer.speech_started",
+      "item_id": "item_0002bbbbbbbbbbbbbbbbbbbb",
+      "at_ms": 9000
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00040000",
+      "timestamp_ms": 1040000,
+      "type": "input_audio_buffer.speech_stopped",
+      "item_id": "item_0002bbbbbbbbbbbbbbbbbbbb",
+      "at_ms": 39000,
+      "reason": "max_turn"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00040500",
+      "timestamp_ms": 1040500,
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_0002bbbbbbbbbbbbbbbbbbbb",
+      "text": "okay actually never mind, tell me about Io instead"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00041800",
+      "timestamp_ms": 1041800,
+      "type": "response.text.done",
+      "response_id": "resp_0002ffffffffffffffffffff",
+      "text": "Io is the most volcanically active body in the solar system—"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00042300",
+      "timestamp_ms": 1042300,
+      "type": "response.interrupted",
+      "response_id": "resp_0002ffffffffffffffffffff",
+      "truncated": true
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00042320",
+      "timestamp_ms": 1042320,
+      "type": "input_audio_buffer.speech_started",
+      "item_id": "item_0003cccccccccccccccccccc",
+      "at_ms": 41200
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00043800",
+      "timestamp_ms": 1043800,
+      "type": "input_audio_buffer.speech_stopped",
+      "item_id": "item_0003cccccccccccccccccccc",
+      "at_ms": 42700,
+      "reason": "silence"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00044200",
+      "timestamp_ms": 1044200,
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_0003cccccccccccccccccccc",
+      "text": "never mind, forget it"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00044900",
+      "timestamp_ms": 1044900,
+      "type": "conversation.item.input_audio_transcription.completed",
+      "item_id": "item_0007gggggggggggggggggggg",
+      "text": ""
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050000",
+      "timestamp_ms": 1050000,
+      "type": "error",
+      "code": "invalid_session_config",
+      "message": "unsupported input_sample_rate 8000; accepted rates are (24000, 16000)"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050100",
+      "timestamp_ms": 1050100,
+      "type": "error",
+      "code": "vad_unavailable",
+      "message": "RuntimeError: failed to load silero_vad from torch.hub"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050150",
+      "timestamp_ms": 1050150,
+      "type": "error",
+      "code": "invalid_wire_event",
+      "message": "invalid_append_event: 'input_audio_buffer.append' requires a base64 string 'audio' field, got None"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050200",
+      "timestamp_ms": 1050200,
+      "type": "error",
+      "code": "stt_forward_failed",
+      "item_id": "item_0004dddddddddddddddddddd",
+      "message": "POST http://stt:8090/v1/audio/transcriptions -> 503 Service Unavailable"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050300",
+      "timestamp_ms": 1050300,
+      "type": "error",
+      "code": "generate_failed",
+      "message": "POST http://gateway:8000/v1/chat/completions -> 404 role_infeasible (hosted_by=thor)"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050400",
+      "timestamp_ms": 1050400,
+      "type": "error",
+      "code": "tts_failed",
+      "message": "POST http://tts:8091/v1/audio/speech -> 500 Internal Server Error"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050500",
+      "timestamp_ms": 1050500,
+      "type": "error",
+      "code": "response_timeout",
+      "message": "tts stage exceeded 60000ms"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050600",
+      "timestamp_ms": 1050600,
+      "type": "error",
+      "code": "quantum_flux_detected",
+      "message": "an error code no lobes release ever sent — the unknown-code path must stay non-fatal"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00050700",
+      "timestamp_ms": 1050700,
+      "type": "conversation.item.teleportation.completed",
+      "item_id": "item_0008hhhhhhhhhhhhhhhhhhhh",
+      "text": "an invented event type — the loop must ignore it and keep reading"
+    },
+    {
+      "session_id": "sess_a1b2c3d4e5f6a7b8c9d0e1f2",
+      "event_id": "event_00051000",
+      "timestamp_ms": 1051000,
+      "type": "session.closed",
+      "reason": "client_disconnect"
+    }
+  ]
+}
