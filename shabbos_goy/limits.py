@@ -21,6 +21,7 @@ imports nothing beyond the standard library, keeping the package's
 
 from __future__ import annotations
 
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -54,25 +55,38 @@ class BoundedRing(Generic[T]):
             raise ValueError("capacity must be >= 1")
         self._capacity = capacity
         self._items: Deque[T] = deque(maxlen=capacity)
+        # One thread appends (the pipeline worker) while others read (the
+        # dashboard's HTTP threads). Iterating a live deque that is being
+        # appended to raises "deque mutated during iteration", so every read
+        # works on a snapshot taken under this lock.
+        self._lock = threading.Lock()
 
     @property
     def capacity(self) -> int:
         return self._capacity
 
     def append(self, item: T) -> None:
-        self._items.append(item)
+        with self._lock:
+            self._items.append(item)
+
+    def snapshot(self) -> list[T]:
+        """The current contents, oldest first, safe to iterate from any thread."""
+        with self._lock:
+            return list(self._items)
 
     def __len__(self) -> int:
-        return len(self._items)
+        with self._lock:
+            return len(self._items)
 
     def __iter__(self):
-        return iter(self._items)
+        return iter(self.snapshot())
 
     def is_full(self) -> bool:
-        return len(self._items) >= self._capacity
+        return len(self) >= self._capacity
 
     def latest(self) -> Optional[T]:
-        return self._items[-1] if self._items else None
+        with self._lock:
+            return self._items[-1] if self._items else None
 
 
 @dataclass(frozen=True)

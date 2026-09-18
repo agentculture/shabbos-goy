@@ -245,3 +245,9 @@ def test_compose_mounts_the_operators_grant_store_read_only():
     mounts = [v for v in service.get("volumes", []) if isinstance(v, str) and "grant" in v]
     assert mounts, "the grant store is not mounted"
     assert all(m.endswith(":ro") for m in mounts), mounts
+    # grant resolves its store through GRANT_HOME; the mount target must match,
+    # and no container path may look like a hard-coded /home/<user>/ path
+    # (steward's portability lint rejects those in committed config).
+    target = mounts[0].rsplit(":", 2)[1]
+    assert service["environment"]["GRANT_HOME"] == target
+    assert not target.startswith("/home/")

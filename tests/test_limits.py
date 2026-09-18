@@ -455,3 +455,35 @@ def test_an_operator_does_not_bypass_the_daily_cap() -> None:
 def test_an_unknown_direction_is_refused() -> None:
     limiter = _power_limiter(FakeClock())
     assert limiter.check("pod", direction="sideways")[0] is False
+
+
+def test_a_bounded_ring_can_be_iterated_while_another_thread_appends() -> None:
+    """Found in CI: `RuntimeError: deque mutated during iteration`.
+
+    Every ring in the listener (log records, recent utterances, the limiter's
+    refusal log, decide latencies) is appended by one thread and read by the
+    dashboard's HTTP threads. Iteration must work on a snapshot.
+    """
+    import threading
+
+    ring: BoundedRing[int] = BoundedRing(4000)
+    for value in range(4000):
+        ring.append(value)
+    stop = threading.Event()
+
+    def hammer() -> None:
+        value = 0
+        while not stop.is_set():
+            ring.append(value)
+            value += 1
+
+    writer = threading.Thread(target=hammer, daemon=True)
+    writer.start()
+    try:
+        for _ in range(400):
+            assert len(list(ring)) <= 4000
+            assert len([item for item in ring]) <= 4000
+    finally:
+        stop.set()
+        writer.join(timeout=5)
+    assert not writer.is_alive()
