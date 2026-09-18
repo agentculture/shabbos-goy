@@ -38,6 +38,7 @@ caller acts on is always exactly ``"weekday"`` or ``"strict"``
 
 from __future__ import annotations
 
+import math
 import subprocess  # nosec B404 - argv-locked, no shell; see clock_is_trusted
 import threading
 from dataclasses import dataclass
@@ -47,7 +48,6 @@ from shabbos_goy.config import Config
 from shabbos_goy.policy import MODES
 from shabbos_goy.zmanim import (
     Location,
-    SunEventNotFound,
     TzeitRule,
     Window,
     ZmanimRules,
@@ -84,9 +84,13 @@ def parse_tzeit_definition(value: object) -> TzeitRule | None:
     Recognises the named table above, plus two explicit forms so a
     community is never limited to the table: ``"minutes:NN"`` and
     ``"degrees:N.N"`` (case-insensitive, e.g. ``"degrees:8.5"``). Anything
-    else -- an unknown name, a malformed explicit form, a non-string value,
-    or a negative number -- returns ``None``: an unrecognised definition
-    means the caller cannot build zmanim rules and must fail to strict.
+    else returns ``None``, and the caller then fails to strict: an unknown
+    name, a malformed explicit form, a non-string value, a non-finite number
+    (``float`` happily parses ``"nan"`` and ``"inf"``, which would otherwise
+    reach ``timedelta``/the solar maths and raise there), or a number outside
+    the usable range :meth:`TzeitRule.validate` enforces -- notably a
+    depression angle at or below the sunset geometry, which would end the
+    window before the holy day is out.
     """
     if not isinstance(value, str) or not value:
         return None
@@ -100,6 +104,8 @@ def parse_tzeit_definition(value: object) -> TzeitRule | None:
             try:
                 number = float(raw)
             except ValueError:
+                return None
+            if not math.isfinite(number):
                 return None
             try:
                 return factory(number).validate()
@@ -130,6 +136,12 @@ def _build_location(config: Config) -> Location | None:
 def _build_rules(config: Config) -> ZmanimRules | None:
     offset = config.candle_lighting_offset_minutes
     if isinstance(offset, bool) or not isinstance(offset, (int, float)):
+        return None
+    # Never truncate: ``int(-0.5)`` is ``0``, which would pass validation and
+    # silently open the window at sunset instead of rejecting the value. A
+    # fractional or non-finite offset is a config error, and a config error
+    # is strict mode.
+    if not math.isfinite(offset) or offset != int(offset):
         return None
     tzeit_rule = parse_tzeit_definition(config.tzeit_definition)
     if tzeit_rule is None:
@@ -168,6 +180,14 @@ def compute_zmanim_mode(now: datetime, config: Config) -> tuple[str, tuple[str, 
     a location where zmanim itself is undefined (:class:`SunEventNotFound`,
     e.g. polar latitudes) -- all resolve to ``("strict", ())``: the same
     fail-closed rule as an untrusted clock, never toward acting.
+
+    The zmanim calculation is wrapped in a deliberately broad ``except``.
+    Anything it can raise -- ``SunEventNotFound``, a plain ``ValueError``
+    from an unusable rule, an ``OverflowError`` from arithmetic on an
+    out-of-range number -- means "this config does not yield a window I can
+    trust", and the only safe answer to that is strict. Letting an exception
+    escape would instead take down mode resolution (and with it the
+    listener), which fails toward nothing gating actions at all.
     """
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
@@ -185,7 +205,7 @@ def compute_zmanim_mode(now: datetime, config: Config) -> tuple[str, tuple[str, 
 
     try:
         window = _current_window(now, location, rules)
-    except SunEventNotFound:
+    except Exception:  # noqa: BLE001 - see the docstring: any failure is strict
         return "strict", ()
 
     if window is not None:
@@ -231,7 +251,7 @@ def window_summary(now: datetime, config: Config) -> dict:
                 "next": _window_dict(following) if following is not None else None,
             }
         return {"available": True, "current": None, "next": _window_dict(window)}
-    except (SunEventNotFound, ValueError):
+    except Exception:  # noqa: BLE001 - same rule as compute_zmanim_mode
         return {**unavailable, "reason": "sun_event_not_found"}
 
 

@@ -132,6 +132,22 @@ class Config:
     def ok(self) -> bool:
         return self.error is None
 
+    def _block(self, key: str) -> dict:
+        """The JSON object at ``key``, or ``{}``.
+
+        Every dict-shaped accessor goes through here. ``load_config`` only
+        checks that the document's *root* is an object, so any nested value
+        can be a list, a string or a number — and a caller doing ``.get`` on
+        that raises ``AttributeError``, which for the listener is a crash at
+        construction time rather than a fail-closed start. An empty dict is
+        the safe answer: every reader of these blocks already treats a
+        missing key as "use the built-in default".
+        """
+        if not self.ok:
+            return {}
+        value = self.raw.get(key)
+        return value if isinstance(value, dict) else {}
+
     @property
     def whitelist(self) -> dict:
         """The effective actuation whitelist: tool name -> {pods, actions}.
@@ -140,14 +156,11 @@ class Config:
         list — removing a tool key or a pod id from the config file is
         sufficient, by itself, to remove it here.
         """
-        if not self.ok:
-            return {}
-        wl = self.raw.get("whitelist")
-        return wl if isinstance(wl, dict) else {}
+        return self._block("whitelist")
 
     @property
     def location(self) -> dict:
-        return self.raw.get("location", {}) if self.ok else {}
+        return self._block("location")
 
     @property
     def candle_lighting_offset_minutes(self) -> object:
@@ -164,7 +177,7 @@ class Config:
 
     @property
     def rate_limits(self) -> dict:
-        return self.raw.get("rate_limits", {}) if self.ok else {}
+        return self._block("rate_limits")
 
     @property
     def strict_mode_delay_seconds(self) -> object:
@@ -172,7 +185,7 @@ class Config:
 
     @property
     def volume(self) -> dict:
-        return self.raw.get("volume", {}) if self.ok else {}
+        return self._block("volume")
 
     @property
     def join_gap_ms(self) -> object:
@@ -180,7 +193,7 @@ class Config:
 
     @property
     def ring_sizes(self) -> dict:
-        return self.raw.get("ring_sizes", {}) if self.ok else {}
+        return self._block("ring_sizes")
 
     @property
     def dashboard_bind_address(self) -> object:
@@ -227,16 +240,18 @@ class Config:
         return _fraction(self.raw.get("min_confidence")) if self.ok else None
 
     @property
+    def grant(self) -> dict:
+        """The ``grant`` block: secret NAMES only, never secret values."""
+        return self._block("grant")
+
+    @property
     def grant_lobes_secret(self) -> str | None:
         """The ``grant`` secret NAME that holds the lobes gateway key, or ``None``.
 
         ``{"grant": {"lobes_api_key": "LOBES_GATEWAY_API_KEY"}}``: see
         :mod:`shabbos_goy.grant_inject`. Validated like the Sensibo one.
         """
-        if not self.ok:
-            return None
-        block = self.raw.get("grant")
-        name = block.get("lobes_api_key") if isinstance(block, dict) else None
+        name = self.grant.get("lobes_api_key")
         if isinstance(name, str) and _GRANT_NAME_RE.match(name):
             return name
         return None
@@ -251,10 +266,7 @@ class Config:
         a plain upper-case identifier is dropped here (and refused again in the
         adapter).
         """
-        if not self.ok:
-            return None
-        block = self.raw.get("grant")
-        name = block.get("sensibo_api_key") if isinstance(block, dict) else None
+        name = self.grant.get("sensibo_api_key")
         if isinstance(name, str) and _GRANT_NAME_RE.match(name):
             return name
         return None
@@ -262,10 +274,7 @@ class Config:
     @property
     def context_window(self) -> dict:
         """The rolling context window's bounds block."""
-        if not self.ok:
-            return {}
-        value = self.raw.get("context_window")
-        return value if isinstance(value, dict) else {}
+        return self._block("context_window")
 
     @property
     def context_max_items(self) -> int | None:
@@ -282,10 +291,7 @@ class Config:
     @property
     def audio(self) -> dict:
         """The PipeWire block: which nodes this agent captures and plays on."""
-        if not self.ok:
-            return {}
-        value = self.raw.get("audio")
-        return value if isinstance(value, dict) else {}
+        return self._block("audio")
 
     @property
     def mic_node(self) -> str | None:
