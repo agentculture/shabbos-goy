@@ -19,7 +19,7 @@
     "min_interval_seconds": 600,
     "off_min_interval_seconds": 60,
     "on_after_off_min_interval_seconds": 240,
-    "daily_cap": 48,
+    "daily_cap": 24,
     "retry_window_seconds": 300,
     "retry_max_attempts": 5
   },
