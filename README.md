@@ -1,84 +1,89 @@
 # shabbos-goy
 
-Hebrew-speaking speech-to-speech agent that helps observant Jews on Shabbat and Yom Kippur without breaking them: it never takes direct commands, only infers intent from indirect remarks (e.g. 'I wish it was cold' -> turn on the AC).
+A Hebrew-speaking, speech-to-speech household agent that helps observant Jews
+on Shabbat and Yom Kippur without breaking them. It **never takes direct
+commands**. It only infers intent from indirect remarks, e.g. "הלוואי שהיה קר"
+("I wish it was cold") → turn on the AC.
 
-## What you get
+> **About the name.** *Shabbos goy* is the familiar Yiddish term for the
+> traditional role of a non-Jew who helps a Jewish household on Shabbat, often
+> in response to a hint rather than a request. The name describes that role;
+> it is not meant as a slur.
+>
+> **No rabbinic approval.** This project makes **no claim of rabbinic
+> approval (*hechsher*)** and does not decide halacha. Whether and how a device
+> like this may be used on Shabbat or Yom Kippur is an open question. **Ask
+> your own rav.** The permitted actions live in configuration so a community
+> can narrow them to match its posek.
 
-- **An agent-first CLI** cited from [teken](https://github.com/agentculture/teken)
-  (`afi-cli`) — the runtime package has no third-party dependencies.
-- **A mesh identity** — `culture.yaml` (`suffix` + `backend`) and the matching
-  resident prompt file (`CLAUDE.md`, since this template runs
-  `backend: claude`). The mesh resident is one of **two separate
-  selections** over this clone — see
-  [Two selections, not one](#two-selections-not-one) below.
-- **Four harness prompt files**, one per agent harness, each read by exactly
-  one of them (see [Prompt files by harness](#prompt-files-by-harness) below).
-  All four harnesses are usable interactively regardless of which one
-  `culture.yaml` names as the mesh resident.
-- **The canonical guildmaster skill kit** (11 skills) under `.claude/skills/`,
-  vendored cite-don't-import. See [`docs/skill-sources.md`](docs/skill-sources.md).
-- **A build + deploy baseline** — pytest, lint, the agent-first rubric gate, and
-  PyPI Trusted Publishing wired into GitHub Actions.
+## Status
 
-## Prompt files by harness
+**Early scaffold.** The repository was provisioned from
+`culture-agent-template` and so far contains only the agent-first CLI baseline
+(identity, `learn`, `explain`, `overview`, `doctor`). The build brief is
+[issue #1](https://github.com/agentculture/shabbos-goy/issues/1). Everything
+under [How it will work](#how-it-will-work-planned) is **planned**.
 
-Four harnesses, four root files, no shared base — each file is read by
-exactly one harness:
+## How it will work (planned)
 
-| Harness | File(s) |
-|---------|---------|
-| Claude Code | [`CLAUDE.md`](CLAUDE.md) |
-| Pi / associate | [`AGENTS.override.md`](AGENTS.override.md) + [`.pi/SYSTEM.md`](.pi/SYSTEM.md) |
-| colleague | [`AGENTS.colleague.md`](AGENTS.colleague.md) |
-| Qwen Code | [`QWEN.md`](QWEN.md) |
+### The one rule: hints, never commands
 
-**Claude Code** — `CLAUDE.md` is the fullest write-up of the repo's
-conventions; read it first.
+| What someone says | Class | What the agent does |
+|---|---|---|
+| "חם פה" / "It's so hot in here" | remark | may cool the room |
+| "הלוואי שהיה קר" / "I wish it was cold" | wish | may turn on the AC |
+| "תדליק את המזגן" / "Turn on the AC" | imperative | **nothing** |
+| "אתה יכול להדליק את האור?" / "Can you turn on the light?" | request | **nothing** |
+| "למה המזגן לא דלוק?" / "Why isn't the AC on?" | rebuke | **nothing** |
 
-**Pi / associate** — `AGENTS.override.md` replaces this directory's
-`AGENTS.md`/`CLAUDE.md` in Pi's context layer, so Pi does not inherit
-`CLAUDE.md`. `.pi/SYSTEM.md` replaces Pi's default system prompt with the
-non-coding `associate` identity (read/find/summarize only).
+- **No wake word and no confirmation questions.** Both would turn the exchange
+  into a command. When unsure, it does nothing.
+- **Commands are dropped, never queued**, including across restarts.
+- It may speak a short, neutral Hebrew remark ("המזגן פועל", "the AC is on")
+  that does not invite a reply.
+- The rule is enforced by a **tested Hebrew utterance classifier** in this
+  repo, not by a prompt. Its headline metric is how rarely it acts on a
+  command.
 
-**colleague** — colleague's prompt cascade is `AGENTS.md` →
-`AGENTS.colleague.md` → `AGENTS.colleague.<model>.md`. This repo ships only
-the middle layer: there is no `AGENTS.md` (a shared base across harnesses was
-considered and rejected) and no per-model override file.
+### Pipeline
 
-**Qwen Code** — Qwen Code reads `QWEN.md` and `AGENTS.md`; since there is no
-`AGENTS.md`, `QWEN.md` is its sole source of guidance.
+```text
+microphone → lobes (local Hebrew ASR, ears-only) → transcript
+          → classifier → Shabbat/Yom Kippur calendar gate (zmanim)
+          → whitelisted tool call (AC via sensibo-cli) → optional neutral remark (TTS)
+```
 
-There is intentionally **no `AGENTS.md`** at the root — each harness gets an
-unrelated file rather than cascading from a shared base.
+- **Speech** runs locally on the lobes Hebrew realtime stack (ivrit.ai Whisper,
+  local TTS). Audio stays on the device and is never recorded. Logs keep only
+  the classified intent and the action taken.
+- **Climate control via tool calling.** Actions are declared as tools
+  (function name + JSON-schema arguments). The first tool backend is
+  [`sensibo-cli`](https://github.com/agentculture/sensibo-cli) for Sensibo
+  smart-AC control. Every tool call, whether it comes from a rule or from a
+  model, passes through the classifier, the calendar gate and the
+  configured whitelist (devices, modes, temperature range) before anything
+  actuates. Sensibo is a cloud service, so AC control needs internet access.
+- **Calendar-aware.** Shabbat/Yom Kippur mode turns on and off automatically
+  from zmanim for a configured location. Everything is configured before
+  Shabbat, so nothing has to be toggled during it.
 
-## Two selections, not one
+### Deployment: Docker, survives reboots
 
-It is tempting to read "switch harness" as one decision. It is actually two,
-and this template exists partly to keep them separate:
+It will run as a Docker Compose service on the machine that owns the
+microphone (currently a DGX Spark), with `restart: unless-stopped` and the
+Docker daemon enabled at boot. After a power cut it comes back by itself and
+works out the current mode from the clock, with no one touching it. Secrets
+(the Sensibo API key, the lobes gateway key) and private config (location,
+whitelist, device ids) stay outside the repository: a gitignored env file and
+a read-only mount of `$XDG_CONFIG_HOME/shabbos-goy` on the host.
 
-1. **The interactive harness** — which binary you run (`claude`, `pi`,
-   `colleague`, `qwen`). `cd` into the clone and run any of them; all four
-   are live simultaneously, and none of them requires editing a file or
-   flipping a switch. A harness can be force-selected for one invocation
-   (e.g. a CI smoke check) without ever touching `culture.yaml` — see
-   [`docs/automation-contract.md`](docs/automation-contract.md).
-2. **The mesh resident** — the single `backend` `culture.yaml` declares,
-   which is what the Culture daemon starts and what `steward doctor`
-   checks. `guild harness use <name>` changes only this.
-
-`culture.yaml`'s `backend` affects (2) only. It never affects which harness
-you can invoke interactively in (1). See
-[`docs/harness-selection.md`](docs/harness-selection.md) for the full
-writeup, including who reads this config and why existing siblings are not
-retrofitted by this arc.
-
-## Quickstart
+## Quickstart (what exists today)
 
 ```bash
 uv sync
 uv run pytest -n auto                 # run the test suite
-uv run shabbos-goy whoami  # identity from culture.yaml
-uv run shabbos-goy learn   # self-teaching prompt (add --json)
+uv run shabbos-goy whoami             # identity from culture.yaml
+uv run shabbos-goy learn              # self-teaching prompt (add --json)
 uv run teken cli doctor . --strict    # the agent-first rubric gate CI runs
 ```
 
@@ -92,29 +97,36 @@ uv run teken cli doctor . --strict    # the agent-first rubric gate CI runs
 | `overview` | Read-only descriptive snapshot of the agent. |
 | `doctor` | Check the agent-identity invariants (prompt-file-present, backend-consistency). |
 | `cli overview` | Describe the CLI surface itself. |
+| `classify "<text>"` | *(planned)* Class, inferred intent, and whether it would act. Dry. |
+| `zmanim --location …` | *(planned)* The current Shabbat/Yom Kippur mode window. |
+| `actions` | *(planned)* The action whitelist in effect. |
+| `listen` | *(planned)* The ambient loop that the container runs. |
 
-Every command supports `--json`. Results go to stdout, errors/diagnostics to
-stderr (never mixed). Exit codes: `0` success, `1` user error, `2` environment
-error, `3+` reserved.
+Every command supports `--json`. Results go to stdout and errors/diagnostics
+to stderr (never mixed). Exit codes: `0` success, `1` user error, `2`
+environment error, `3+` reserved. Any verb that actuates is **dry-run by
+default**, and `--apply` actuates.
 
-## Make it your own
+## Agent harnesses
 
-1. Rename the package `shabbos_goy/` and the `shabbos-goy`
-   CLI/dist name throughout `pyproject.toml`, the package, `tests/`,
-   `sonar-project.properties`, and this `README.md`. The name is hard-coded in
-   ~100 places, so list every occurrence first — see the `git grep` discovery
-   command in [`CLAUDE.md`](CLAUDE.md), the authoritative rename procedure.
-2. Edit `culture.yaml` with your `suffix` and `backend`.
-3. Rewrite `CLAUDE.md` for your agent and run `/init`. Rewrite the other three
-   harness files (`AGENTS.override.md` + `.pi/SYSTEM.md`, `AGENTS.colleague.md`,
-   `QWEN.md`) too if your agent uses those harnesses — don't let them drift out
-   of sync with `CLAUDE.md`.
-4. Re-vendor only the skills you need from guildmaster (see
-   [`docs/skill-sources.md`](docs/skill-sources.md)).
+This is an AgentCulture mesh agent. `culture.yaml` declares
+`backend: claude`, so [`CLAUDE.md`](CLAUDE.md) is the mesh resident's prompt
+and the fullest write-up of the repo's design and conventions. Read it first.
 
-See [`CLAUDE.md`](CLAUDE.md) for the full conventions (version-bump-every-PR,
-the `cicd` PR lane, deploy setup).
+Four harnesses can work in this repo interactively, each reading its own file.
+There is intentionally no shared `AGENTS.md`:
+
+| Harness | File(s) |
+|---------|---------|
+| Claude Code | [`CLAUDE.md`](CLAUDE.md) |
+| Pi / associate | [`AGENTS.override.md`](AGENTS.override.md) + [`.pi/SYSTEM.md`](.pi/SYSTEM.md) |
+| colleague | [`AGENTS.colleague.md`](AGENTS.colleague.md) |
+| Qwen Code | [`QWEN.md`](QWEN.md) |
+
+Which binary you run chooses the interactive harness. `culture.yaml`'s
+`backend` chooses only the mesh resident. See
+[`docs/harness-selection.md`](docs/harness-selection.md).
 
 ## License
 
-Apache 2.0 — see [`LICENSE`](LICENSE).
+Apache 2.0. See [`LICENSE`](LICENSE).

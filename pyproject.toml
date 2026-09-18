@@ -1,6 +1,6 @@
 [project]
 name = "shabbos-goy"
-version = "0.9.0"
+version = "0.9.1"
 description = "Hebrew-speaking speech-to-speech agent that helps observant Jews on Shabbat and Yom Kippur without breaking them: it never takes direct commands, only infers intent from indirect remarks (e.g. 'I wish it was cold' -> turn on the AC)."
 readme = "README.md"
 license = "Apache-2.0"
