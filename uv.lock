@@ -155,7 +155,7 @@ wheels = [
 ]
 
 [[package]]
-name = "culture-agent-template"
+name = "shabbos-goy"
 version = "0.9.0"
 source = { editable = "." }
 
