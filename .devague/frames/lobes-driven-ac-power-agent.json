@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-18T17:06:13Z",
-  "updated": "2026-09-18T18:51:13Z",
+  "updated": "2026-09-18T20:13:23Z",
   "claims": [
     {
       "id": "c1",
@@ -1401,6 +1401,17 @@
       "skipped_check": "write and run failing tests before implementing",
       "refs": [
         "plan task t11, branch wf/t11 commit 5495c55"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l5",
+      "code": "grader-unverified",
+      "what": "t13 task agent wrote implementation and tests together, without observing a red run per criterion; it disclosed this, and reported six test/implementation mismatches found by running the suite",
+      "skipped_check": "write and run failing tests before implementing",
+      "refs": [
+        "plan task t13, branch wf/t13 commit ebc0d7d"
       ],
       "origin": "llm",
       "status": "proposed"
