@@ -1,0 +1,132 @@
+# shabbos-goy — the ambient listener, packaged for the host that owns the
+# microphone (the DGX Spark today; see CLAUDE.md's Deployment section).
+#
+# --------------------------------------------------------------------------
+# Networking decision (t16's brief asks for this to be recorded here, not
+# just in a PR description): HOST NETWORKING, not a published port.
+#
+#   (a) network_mode: host  <-- CHOSEN
+#   (b) bridge networking + `ports: ["<tailnet-ip>:8080:8080"]`
+#
+# (b) was rejected because Docker resolves a `ports:` bind address at
+# container CREATE time: if the tailnet interface is not up yet (this
+# service starts at boot, before `tailscaled` is guaranteed to have an
+# address — see CLAUDE.md's "Clock trust"/self-healing requirements), the
+# container fails to start at all, and `restart: unless-stopped` cannot fix
+# a container that never started.
+#
+# (a) has no such problem: with `network_mode: host` the *process* opens the
+# listening socket itself, at whatever moment it chooses, on whatever
+# interface config names — and the dashboard code already retries its bind
+# when that address is not up yet (see shabbos_goy/web/bind.py,
+# shabbos_goy/web/server.py: `dashboard_bind_address` from config, with a
+# retry loop). The container starts immediately regardless of Tailscale's
+# state; the dashboard becomes reachable once the tailnet address exists.
+#
+# The one thing this costs: `host.docker.internal` is unnecessary (nice,
+# since it isn't reachable at all under `network_mode: host` on Linux) and
+# every "which host is lobes on" env var below is `localhost`, because the
+# container shares the host's network namespace outright. If lobes ever
+# moves to a different machine, this decision must be revisited (bridge +
+# `extra_hosts: ["host.docker.internal:host-gateway"]` is the fallback, see
+# deviation d1 in the task brief this file was built from).
+#
+# `network_mode: host` also means: no `ports:` block (meaningless with host
+# networking), and the loopback control endpoint (127.0.0.1:8787) and the
+# heartbeat/healthcheck all resolve exactly as they do outside a container.
+# --------------------------------------------------------------------------
+#
+# Compose does NOT restart a container merely for being reported
+# `unhealthy` — restart: unless-stopped only reacts to the *process exiting*.
+# The healthcheck below is therefore a report for `docker inspect`/an
+# operator, not a supervisor by itself. What does bring a wedged listener
+# back is its own exit: when the lobes socket stays open but no frame
+# arrives within the client's watchdog window, the listener logs
+# `lobes_stalled` and exits 3, and restart: unless-stopped starts it again.
+# That covers a frozen realtime session only. A stall elsewhere (for
+# example a deadlocked worker thread) still shows up only as `unhealthy`,
+# and lobes being down is NOT a stall: the listener keeps retrying with
+# backoff instead of restart-looping while models load after a reboot.
+name: shabbos-goy
+
+services:
+  shabbos-goy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UID: ${SHABBOS_GOY_UID:-1000}
+        GID: ${SHABBOS_GOY_GID:-1000}
+    image: shabbos-goy
+    container_name: shabbos-goy
+    # Same uid/gid as the host user who owns the PipeWire socket below —
+    # must match the build args above, and the host user running Tailscale
+    # if this is bound to a tailnet address per the decision above.
+    user: "${SHABBOS_GOY_UID:-1000}:${SHABBOS_GOY_GID:-1000}"
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - docker/shabbos-goy.env
+    environment:
+      # Config is bind-mounted read-only below; point straight at the file
+      # so no XDG resolution ambiguity exists inside the container.
+      SHABBOS_GOY_CONFIG: /config/config.json
+      # Where the grant secrets store is mounted (see volumes). Unused when the
+      # keys come from the env file.
+      GRANT_HOME: /grant
+      # tmpfs (see below) — never survives a reboot, by design (invariant #3
+      # in CLAUDE.md: no queued action, no resumable state).
+      SHABBOS_GOY_HEARTBEAT: /tmp/shabbos-goy/heartbeat.json
+      # Same runtime dir the host user's PipeWire session uses — must match
+      # the socket bind-mounted below.
+      XDG_RUNTIME_DIR: /run/user/${SHABBOS_GOY_UID:-1000}
+      PIPEWIRE_RUNTIME_DIR: /run/user/${SHABBOS_GOY_UID:-1000}
+      # host networking (see decision above): lobes' realtime + senses ports
+      # are reachable at localhost, not host.docker.internal. Override in
+      # docker/shabbos-goy.env only if lobes ever moves off this host.
+    volumes:
+      # Private config (location for zmanim, the action whitelist, Sensibo
+      # pod ids) — read-only, never written to by the container.
+      - ${XDG_CONFIG_HOME:-${HOME}/.config}/shabbos-goy:/config:ro
+      # The operator's `grant` secrets store, read-only, for a grant-backed
+      # deployment (config names the secrets; no key in any env file). Omit
+      # this mount if the keys come from docker/shabbos-goy.env instead.
+      # grant finds it through GRANT_HOME (set above). Its reads take no lock
+      # (grant's store.py), but this is UNVERIFIED until the on-box drill.
+      - ${XDG_DATA_HOME:-${HOME}/.local/share}/grant:/grant:ro
+      # The HOST PipeWire session (decision c42) — a socket, not a device
+      # node: no /dev/snd passthrough. Mounted read-write because a PipeWire
+      # client socket is bidirectional (stream negotiation replies go back
+      # over the same socket the client connects to).
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}/pipewire-0:/run/user/${SHABBOS_GOY_UID:-1000}/pipewire-0
+    # Root filesystem is read-only: the listener persists nothing by design
+    # (verified by reading shabbos_goy/runtime/listener.py — the ONLY disk
+    # write anywhere in the runtime/pipeline/decider/audio code is
+    # Heartbeat.write(), which targets the tmpfs path above; everything else
+    # is a socket or subprocess pipe). `/tmp` is given its own tmpfs below
+    # because a read-only root would otherwise make even that heartbeat
+    # write fail.
+    read_only: true
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      # Reads the heartbeat file and exits 0/1; starts nothing (see
+      # shabbos_goy/cli/_commands/listen.py's --healthcheck flag).
+      test: ["CMD", "shabbos-goy", "listen", "--healthcheck"]
+      # A listener that may wait MINUTES for lobes to load its models after
+      # a reboot must not be marked unhealthy while that is still happening
+      # — hence the long start_period. Once past it, checks are frequent
+      # enough that a real wedge is caught within a couple of minutes.
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5m
+    # Applying is an explicit operator choice, never the default — see
+    # CLAUDE.md's "Every tool call goes through classifier -> calendar gate
+    # -> whitelist -> ... -> dry-run/--apply". Uncomment to actuate:
+    # command: ["shabbos-goy", "listen", "--apply"]

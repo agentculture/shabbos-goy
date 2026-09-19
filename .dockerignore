@@ -1,0 +1,44 @@
+# Keep the build context small and free of anything that must never enter
+# an image layer (secrets, git history, vendored skill trees, test
+# fixtures/golden audio, worktrees). Mirrors, but does not duplicate,
+# .gitignore — this only controls what `docker build` sends to the daemon.
+
+.git/
+.github/
+.gitignore
+
+# Local agent-tooling / harness state — never needed inside the image.
+.teken/
+.devex/
+.agex/
+.devague/
+.colleague/*
+.eidetic/
+.claude/
+.pi/
+.qwen/
+.idea/
+.vscode/
+
+# Tests, docs, scripts: none of it ships in the runtime image.
+tests/
+docs/
+scripts/
+CHANGELOG.md
+README.md.bak
+
+# Python build/runtime junk.
+__pycache__/
+*.py[codz]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+uv.lock
+
+# Never bake real secrets or a private config directory into an image.
+docker/shabbos-goy.env

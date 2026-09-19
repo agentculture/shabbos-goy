@@ -5,6 +5,122 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-19
+
+The first domain release: the repository is no longer a scaffold. The ambient
+listener, the decision pipeline and the operator surfaces are on disk with
+tests that need no microphone, no lobes server and no Sensibo account.
+**Runtime dependencies stay empty** (`dependencies = []`): the WebSocket wire,
+the zmanim maths, the dashboard and the HTTP client to the local model are all
+standard library, and `sensibo-cli` is composed as a subprocess rather than
+imported. `pyyaml`, `pytest` and `teken` remain dev-only.
+
+### Added
+
+- **`grant` key injection.** Config may name `grant` secrets
+  (`{"grant": {"sensibo_api_key": …, "lobes_api_key": …}}`). The Sensibo key is
+  injected per `sensibo` call by a closed `grant run --inject` prefix around
+  the locked argv and never enters this process; the lobes key is obtained by
+  re-exec under `grant`. `grant` is called as a subprocess, so runtime
+  dependencies stay empty.
+- **Prompt `p2`.** The model returns `{class, state, need, confidence}`: what
+  it heard and what would serve the speaker, as comparatives. This code maps
+  `need` to the intent and refuses a hint whose `state` and `need` disagree.
+  Found live: the previous prompt labelled one cold phrasing `cool` in about
+  1 identical run in 12, which would switch the AC on for a cold person.
+- **Asymmetric power limits.** Power off after a 60 s debounce, power on
+  240 s after the last off, a daily cap; operator controls bypass the
+  intervals but not the cap. Found live: a symmetric 10-minute lockout refused
+  two correctly heard cold remarks.
+- Golden set: 295 rows, and acting with an intent the row forbids is its own
+  release-blocking threshold (`wrong_actions_max = 0`).
+- `tests/conftest.py`: no test can see the host's config or re-exec under
+  `grant`.
+- `docs/halacha-open-questions.md` — the questions this project deliberately
+  does not answer, recorded as questions: what the device is halachically
+  (non-Jew, timer, *grama*, none of these), speaking near an always-listening
+  device, which hints are permitted, powering the AC **off** from a cold hint,
+  the deliberate strict-mode delay, using the dashboard or the CLI on Shabbat
+  or Yom Tov, a language model making the judgement, Yom Kippur, and Yom Tov.
+  No rulings and no endorsement-sounding copy; the README continues to state
+  that there is no *hechsher* and that users should ask their own rav.
+- A "Cited code (not skills)" ledger in `docs/skill-sources.md` recording the
+  source files copied under cite-don't-import — lobes-cli's WebSocket layer
+  (`scripts/realtime-smoke.py`), its PipeWire device helpers
+  (`scripts/realtime-he-accept.py`), its event vocabulary and fixtures
+  (`site/src/scripts/*.ts`) and its dashboard visual reference — with repo,
+  branch (`spec/hebrew-realtime` at `b18743c`), date and what notices drift.
+- A deployment checklist in `README.md` in which **every operator step is done
+  before candle lighting** — config, keys, volume, a pod read, `preflight`,
+  and checking the printed zmanim window by eye — including the instruction to
+  **unset `TTS_DEBUG_TEXT` on the lobes box** before household use.
+
+### Changed
+
+- **The core invariant is re-scoped to speech.** `README.md`, `CLAUDE.md`,
+  `AGENTS.override.md`, `AGENTS.colleague.md` and `QWEN.md` change together:
+  the unqualified "never takes a direct command" is replaced by "no spoken
+  command acts in strict mode". Strict mode is Shabbat, Yom Kippur and Yom Tov
+  (Israel/diaspora by config); weekday mode obeys spoken commands and hints.
+  The CLI and the dashboard are documented as **operator UIs** that work in
+  every mode and may force strict mode on or switch it off inside a zmanim
+  window, with memory-only overrides that do not survive a restart.
+- **The decider is documented as a local language model.** Each utterance plus
+  a trimmed in-memory rolling context goes to the lobes `senses` role (Gemma)
+  on the same box, which returns a label. The docs state plainly that this
+  repo's code treats that label as untrusted input and still enforces the mode
+  gate, the whitelist, power-only argument validation, a confidence floor, the
+  rate limits, the strict-mode delay and an already-in-that-state no-op, and
+  that a model that is down, slow or malformed means do nothing.
+- **`CLAUDE.md` invariant #4 rewritten.** "The classifier is the product" no
+  longer matches the code: the rules are out of the runtime and survive only
+  as a test oracle. The invariant now says what is true — the code refuses
+  anything *labelled* a command, and whether commands get that label is
+  evidenced by the golden set (275 rows, three entrances, zero strict-mode
+  false positives release-blocking, re-run whenever the prompt version, the
+  model or lobes changes).
+- **Privacy, honestly stated:** transcript text does travel to the local model
+  over the local gateway. It still never reaches a cloud service, a disk or a
+  log line, and the dashboard's transcript view is a bounded in-memory ring.
+  The hardware consequence is stated too: the local model has to be running,
+  so an ears-only deployment on a box without one is no longer possible.
+- **`README.md` states that weekday mode obeys anyone in earshot** and that
+  the narrow whitelist (AC power on/off, the agent's own volume) is the only
+  control, and that the tokenless Tailscale-only dashboard can be operated by
+  **every device on the tailnet**.
+- `(planned)` markers removed from what shipped, with an explicit **not yet
+  verified** list kept in `README.md` and `CLAUDE.md`: the live golden-set run
+  against the real model and speech stack, PipeWire inside a container, a live
+  `--apply`, a reconnect in place, and a reboot drill. Docker is described as
+  a Compose service (`docker-compose.yml`) without inventing details.
+- `QWEN.md`'s stale `sensibo set <pod> --mode cool --target 24` example is
+  gone: AC actuation is **power on/off only**, and the adapter cannot build
+  `--mode`, `--target`, `--fan` or `--swing` at all.
+- Audio is documented as the host PipeWire session (`pw-record` / `pw-play` /
+  `wpctl`, device chosen by name) rather than raw ALSA, and zmanim as pure
+  stdlib rather than a third-party calendar library.
+
+### Fixed
+
+From the PR review (Qodo, SonarCloud, three model reviews) and the first live run:
+
+- **Config values now fail toward strict mode.** A tzeit angle at or below the
+  sunset geometry, a non-finite number, an unknown timezone, or a fractional or
+  negative candle-lighting offset each used to resolve toward weekday or crash
+  mode resolution. Any exception inside the zmanim calculation is now strict.
+  The CLI's describing verbs share `mode.py`'s parsers instead of a second copy.
+- A failed actuation no longer spends the rate limit, and is reported as
+  `error`, not `dry_run`. Check, act and record are atomic across the voice
+  and dashboard paths.
+- A reconnect resets the audio timeline, so the new session's first utterance
+  is not dropped. A scripted WAV run now ends by itself and honours SIGTERM.
+- `pw-record` children are reaped on every session end. WebSocket frames are
+  bounded (1 MiB). The CLI control client always targets the loopback endpoint.
+- The heartbeat no longer defaults to a predictable path under `/tmp`.
+- A broken config keeps the listener running fail-closed (no crash loop) and
+  says so once: `event=config_error`.
+- The Docker image installs a pinned `grant`.
+
 ## [0.9.1] - 2026-09-18
 
 ### Changed

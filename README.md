@@ -1,117 +1,308 @@
 # shabbos-goy
 
-A Hebrew-speaking, speech-to-speech household agent that helps observant Jews
-on Shabbat and Yom Kippur without breaking them. It **never takes direct
-commands**. It only infers intent from indirect remarks, e.g. "הלוואי שהיה קר"
-("I wish it was cold") → turn on the AC.
+A Hebrew-speaking household agent that listens in a room and switches the air
+conditioner's power. On Shabbat, Yom Kippur and Yom Tov it acts **only on
+indirect speech** — a remark, a wish, a complaint about being uncomfortable —
+and never on a spoken command: "הלוואי שהיה קר" ("I wish it was cold") may turn
+the AC on, while "תדליק את המזגן" ("turn on the AC") is dropped.
+
+This README is written for two readers:
+
+- **the household** — the people in the room, who say nothing to the device
+  and touch nothing during the day;
+- **the operator** — one person who sets everything up **before** candle
+  lighting, and who has a CLI and a dashboard for the rest of the week.
 
 > **About the name.** *Shabbos goy* is the familiar Yiddish term for the
 > traditional role of a non-Jew who helps a Jewish household on Shabbat, often
 > in response to a hint rather than a request. The name describes that role;
-> it is not meant as a slur.
+> it is not meant as a slur, and it is not a claim that the analogy holds.
 >
-> **No rabbinic approval.** This project makes **no claim of rabbinic
-> approval (*hechsher*)** and does not decide halacha. Whether and how a device
-> like this may be used on Shabbat or Yom Kippur is an open question. **Ask
-> your own rav.** The permitted actions live in configuration so a community
-> can narrow them to match its posek.
+> **No rabbinic approval.** This project makes **no claim of rabbinic approval
+> (*hechsher*)** and does not decide halacha. Whether and how a device like
+> this may be used on Shabbat, Yom Kippur or Yom Tov is an open question.
+> **Ask your own rav.** The questions this project deliberately does not
+> answer are listed in
+> [`docs/halacha-open-questions.md`](docs/halacha-open-questions.md). The
+> permitted actions live in configuration, so a community can narrow them.
 
 ## Status
 
-**Early scaffold.** The repository was provisioned from
-`culture-agent-template` and so far contains only the agent-first CLI baseline
-(identity, `learn`, `explain`, `overview`, `doctor`). The build brief is
-[issue #1](https://github.com/agentculture/shabbos-goy/issues/1). Everything
-under [How it will work](#how-it-will-work-planned) is **planned**.
+The agent is built and runs end to end from fixtures. It has **not** been run
+through a full household Shabbat, and several claims below are verified only
+by tests, not on the hardware.
 
-## How it will work (planned)
+Shipped and tested with no microphone, no lobes server and no Sensibo account:
 
-### The one rule: hints, never commands
+- the ears-only lobes realtime client, the transcript joiner, the decider, the
+  decision pipeline, the zmanim mode resolver, the Sensibo and PipeWire
+  adapters, the rate limits and the strict-mode delay;
+- the CLI (`classify`, `zmanim`, `actions`, `preflight`, `ac`, `volume`,
+  `mode`, `listen`) and the Tailscale-only dashboard;
+- the golden set: 295 committed Hebrew rows with the outcome each expects, and
+  the scoring code CI runs offline.
 
-| What someone says | Class | What the agent does |
-|---|---|---|
-| "חם פה" / "It's so hot in here" | remark | may cool the room |
-| "הלוואי שהיה קר" / "I wish it was cold" | wish | may turn on the AC |
-| "תדליק את המזגן" / "Turn on the AC" | imperative | **nothing** |
-| "אתה יכול להדליק את האור?" / "Can you turn on the light?" | request | **nothing** |
-| "למה המזגן לא דלוק?" / "Why isn't the AC on?" | rebuke | **nothing** |
+**Not yet verified** (do not read anything below as proven on hardware):
 
-- **No wake word and no confirmation questions.** Both would turn the exchange
-  into a command. When unsure, it does nothing.
-- **Commands are dropped, never queued**, including across restarts.
-- It may speak a short, neutral Hebrew remark ("המזגן פועל", "the AC is on")
-  that does not invite a reply.
-- The rule is enforced by a **tested Hebrew utterance classifier** in this
-  repo, not by a prompt. Its headline metric is how rarely it acts on a
-  command.
+- the golden set has **not** yet been run live against the real model and the
+  real speech stack on the box; the release-blocking number (zero strict-mode
+  false positives on commands) is therefore not yet measured;
+- PipeWire capture and playback from inside a container, against the host's
+  own PipeWire session;
+- a live `--apply` run against a real Sensibo pod;
+- reconnecting to lobes after the gateway restarts, in place;
+- a host reboot with the container returning to the correct mode unattended;
+- classifier behaviour on children's speech, accented speech, guests, or
+  mixed Hebrew/English/Yiddish.
 
-### Pipeline
+## The invariant: no spoken command, in strict mode
+
+**Strict mode** is Shabbat, Yom Kippur and Yom Tov, computed from zmanim for
+the configured location. **Weekday mode** is everything else.
+
+| What someone says | Class | Strict mode | Weekday mode |
+|---|---|---|---|
+| "חם פה" / "It's hot in here" | remark | may act | may act |
+| "הלוואי שהיה קר" / "I wish it was cold" | wish | may act | may act |
+| "קשה לי לישון בחום הזה" / "Hard to sleep in this heat" | discomfort | may act | may act |
+| "תדליק את המזגן" / "Turn on the AC" | imperative | **nothing** | acts |
+| "אתה יכול להדליק את המזגן" / "Can you turn on the AC" | request | **nothing** | acts |
+| "למה המזגן לא דלוק" / "Why isn't the AC on" | rebuke | **nothing** | acts |
+| anything else | unrelated | nothing | nothing |
+
+This invariant is about **speech overheard by a listening box**. It is not
+about the operator's own tools:
+
+- **No wake word, no confirmation question.** Both would turn the exchange
+  into a command. When unsure, the agent does nothing and says nothing.
+- **A refused command is dropped, never queued** — including across a crash or
+  a reboot. The agent persists no pending action, no transcript buffer and no
+  mode override.
+- **In strict mode the agent acts after a short delay** (configurable, about
+  15 seconds by default), held in memory only.
+- **Spoken output is neutral, and only on weekdays.** In strict mode the agent
+  says nothing at all.
+- **The CLI and the dashboard are operator tools.** They work in every mode,
+  including strict mode, and can force strict mode on or switch it off inside
+  a zmanim window. A person pressing a button has not spoken a command to the
+  agent. Whether a person may press it on Shabbat is
+  [a question for a rav](docs/halacha-open-questions.md), not a claim this
+  project makes.
+
+### Weekday mode obeys anyone in earshot
+
+On a weekday the agent acts on commands, and it does not know who is
+speaking. Anyone within earshot — a child, a guest, a voice from a phone the
+model does not recognise as such — can switch the AC power or change the
+agent's volume. **The whitelist is the only control.** It is why the
+whitelist is narrow (AC power on/off and the agent's own volume, nothing
+else), why it is configuration rather than code, and why it must stay narrow
+if more actuators are ever added.
+
+## How it works
 
 ```text
-microphone → lobes (local Hebrew ASR, ears-only) → transcript
-          → classifier → Shabbat/Yom Kippur calendar gate (zmanim)
-          → whitelisted tool call (AC via sensibo-cli) → optional neutral remark (TTS)
+microphone (PipeWire)
+  -> lobes /v1/realtime, ears-only        local Hebrew ASR; no tools, no response.create
+  -> transcript joiner                    re-joins a sentence the ASR split across a pause
+  -> decider: the lobes `senses` role     a local Gemma returns {class, intent, confidence}
+  -> this repo's gates                    confidence floor -> mode x class gate -> intent
+                                          -> whitelist -> argument validation -> rate limits
+                                          -> already-in-that-state? -> strict-mode delay
+  -> sensibo-cli / PipeWire volume        dry-run unless --apply
+  -> optional neutral Hebrew remark       weekdays only
 ```
 
-- **Speech** runs locally on the lobes Hebrew realtime stack (ivrit.ai Whisper,
-  local TTS). Audio stays on the device and is never recorded. Logs keep only
-  the classified intent and the action taken.
-- **Climate control via tool calling.** Actions are declared as tools
-  (function name + JSON-schema arguments). The first tool backend is
-  [`sensibo-cli`](https://github.com/agentculture/sensibo-cli) for Sensibo
-  smart-AC control. Every tool call, whether it comes from a rule or from a
-  model, passes through the classifier, the calendar gate and the
-  configured whitelist (devices, modes, temperature range) before anything
-  actuates. Sensibo is a cloud service, so AC control needs internet access.
-- **Calendar-aware.** Shabbat/Yom Kippur mode turns on and off automatically
-  from zmanim for a configured location. Everything is configured before
-  Shabbat, so nothing has to be toggled during it.
+### The model labels; this repository decides
 
-### Deployment: Docker, survives reboots
+Each utterance, plus a trimmed in-memory window of recent ones, is sent to a
+**local language model** — the lobes `senses` role (Gemma) on the same box —
+which returns a label: a class, an inferred intent and a confidence. No tool is
+declared to it and nothing asks it to act; its answer is data.
 
-It will run as a Docker Compose service on the machine that owns the
-microphone (currently a DGX Spark), with `restart: unless-stopped` and the
-Docker daemon enabled at boot. After a power cut it comes back by itself and
-works out the current mode from the clock, with no one touching it. Secrets
-(the Sensibo API key, the lobes gateway key) and private config (location,
-whitelist, device ids) stay outside the repository: a gitignored env file and
-a read-only mount of `$XDG_CONFIG_HOME/shabbos-goy` on the host.
+This repository's code treats that label as **untrusted input**. It
+re-validates the shape, applies a minimum confidence (0.6 by default), runs
+the mode-by-class gate, maps the intent to a tool, checks the configured
+whitelist, validates the argument, applies the rate limits, skips the action
+if the device is already in that state, and waits out the strict-mode delay.
+If the model is down, slow, malformed or inventive, the result is the same:
+**do nothing**.
 
-## Quickstart (what exists today)
+Two consequences worth stating plainly:
+
+- **"A spoken command never acts in strict mode" is not proven
+  deterministically.** The code refuses anything *labelled* a command, and
+  that refusal is exhaustively tested. Whether commands actually get that
+  label is a property of the model and the prompt, and it is **measured**, not
+  assumed — by the golden set (`tests/golden/README.md`): 295 rows through
+  three entrances, with zero strict-mode false positives as a
+  release-blocking threshold, re-run whenever the prompt version, the model or
+  lobes changes. That live run has not happened yet.
+- **The language model has to be running.** An ears-only deployment on a small
+  box with no LLM is no longer possible: the agent needs both the speech stack
+  and the `senses` role.
+
+### What it can actuate
+
+| Hint | Intent | Action |
+|---|---|---|
+| the room is hot | `cool` | AC **power on** |
+| the room is cold | `warm` | AC **power off** |
+| it is too quiet | `louder` | the agent's own volume up one step |
+| it is too loud | `quieter` | the agent's own volume down one step |
+| is the AC on | `status` | a spoken answer, **weekdays only** |
+
+AC control is **power on/off only** — never mode, temperature, fan or swing.
+The adapter cannot build any other `sensibo` flag. `sensibo-cli` is called as a
+subprocess (never imported), so this package keeps `dependencies = []`. Sensibo
+is a cloud service, so actuation needs internet access even though speech
+stays local.
+
+### Zmanim
+
+Candle lighting to *tzeit hakochavim* is computed in pure standard library
+(NOAA solar maths plus Hebrew-calendar arithmetic), checked against published
+vectors. The candle-lighting offset, the tzeit definition and Israel/diaspora
+are configuration. Adjacent holy days merge into one window. If the clock
+cannot be trusted (no NTP sync after boot) or the location is missing, the
+agent fails **toward strict mode and toward not acting**, never toward acting.
+
+### The dashboard
+
+A stdlib `http.server` page with no build step and no external asset, showing
+the mode and next window, the lobes connection state, AC status, and recent
+utterances with class, intent, gate verdict, action and timings. Its buttons
+drive the same whitelist, the same validation, the same rate limits and the
+same adapters as speech.
+
+It binds **loopback or a Tailscale address only** — never `0.0.0.0`, never a
+LAN address — and carries **no token**: tailnet membership is the
+authentication. That means **every device on the tailnet can press its
+buttons**, including switching AC power. Requests whose `Host` or `Origin`
+names somewhere else are refused before routing, and GET never changes state.
+
+### Privacy
+
+- Audio stays on the device and is never written to disk.
+- Transcript text goes to the **local** model over the local gateway. It never
+  goes to a cloud service, never to disk, and never into a log line.
+- Logs carry the class, the intent, the gate verdict and the action — never
+  transcript text, never a pod id (a stable alias is logged instead), never a
+  key. Docker keeps container stdout, so this covers what the service prints.
+- The dashboard serves recent transcript text from a **bounded in-memory
+  ring**, deliberately, as bug context. It is gone on restart.
+
+## Quickstart
 
 ```bash
 uv sync
-uv run pytest -n auto                 # run the test suite
-uv run shabbos-goy whoami             # identity from culture.yaml
-uv run shabbos-goy learn              # self-teaching prompt (add --json)
-uv run teken cli doctor . --strict    # the agent-first rubric gate CI runs
+uv run pytest -n auto                        # the whole suite: no hardware, no network
+uv run shabbos-goy classify "חם פה" --json   # decide, never act (needs a decider; see below)
+uv run shabbos-goy zmanim                    # the current mode and the next strict window
+uv run shabbos-goy actions                   # the whitelist in effect
+uv run shabbos-goy listen --script <events.jsonl> \
+  --decider replay --replay-file tests/fixtures/decider/replay.json
 ```
+
+`classify` and `listen` ask the `senses` role by default, which needs the
+environment variables below. For an offline run, pass `--decider replay` with a
+recorded answers file; `listen --script` takes a JSONL events file or a WAV and
+runs the same loop with no microphone, no server and no socket.
+
+## Setting it up, before candle lighting
+
+Every step here is the **operator's**, and every one of them is done before
+Shabbat starts. Nothing in this list may be needed during the day, because
+doing it during the day would be the thing this project exists to avoid.
+
+1. **Write the config.** `$XDG_CONFIG_HOME/shabbos-goy/config.json`
+   (`tests/fixtures/config.example.json` is the full shape, with placeholder
+   values). It holds the location and timezone, the candle-lighting offset,
+   the tzeit definition, Israel or diaspora, the whitelist (which tools, which
+   Sensibo pod ids, which arguments), the rate limits (power **off** needs
+   only a 60 s debounce, power **on** waits 240 s after the last off so the
+   compressor is not short-cycled, plus a daily cap; the CLI and dashboard
+   bypass the intervals but not the cap), the strict-mode delay,
+   the volume bounds and the dashboard bind address.
+2. **Set the secrets in the environment**, never in a tracked file:
+   `SHABBOS_GOY_LOBES_URL` and `SHABBOS_GOY_LOBES_API_KEY` (or lobes' own
+   `GATEWAY_API_KEY`) for the speech stack and the `senses` role, and
+   `SENSIBO_API_KEY` for the AC. There is no default host, port or key
+   anywhere in this package. **Or keep both keys in
+   [`grant`](https://github.com/agentculture/grant)**, the per-user secrets
+   manager, and name the secrets in the config:
+   `{"grant": {"sensibo_api_key": "SENSIBO_API_KEY", "lobes_api_key": "LOBES_GATEWAY_API_KEY"}}`.
+   The Sensibo key is then injected into each `sensibo` child process and
+   never enters this one; the lobes key is obtained by the process
+   re-executing itself under `grant run --inject`, so it lives only in the
+   listener's environment and in no file. A key already in the environment
+   always wins. `preflight` checks `grant` for the secret's metadata only.
+3. **Unset `TTS_DEBUG_TEXT` on the lobes box.** It logs spoken text and is on
+   for development. Turn it off before household use.
+4. **Set the volume.** The default is silent. In strict mode the agent says
+   nothing regardless.
+5. **Check the pod.** `shabbos-goy ac status` reads without writing.
+6. **Run the preflight**: `uv run shabbos-goy preflight`. It exits 0 only when
+   every check passes and names the failures otherwise: the lobes key, the
+   `senses` role answering and deciding, the Sensibo key, a whitelisted pod,
+   the audio node, clock sync, and a valid location.
+7. **Read the printed window by eye.** `shabbos-goy zmanim` prints the next
+   strict window in local time. Check it against your own zmanim before
+   relying on it.
+8. **Start the service and leave it alone.**
+
+## Deployment
+
+The listener runs as a Compose service on the host that owns the microphone
+(a DGX Spark today) — see `docker-compose.yml`. It runs `shabbos-goy listen`,
+restarts unless stopped, and its healthcheck reads a heartbeat that proves
+transcripts are actually arriving rather than that the process is alive.
+
+Startup is stateless by design: the mode is recomputed from the clock and
+zmanim on every boot, the configured volume is re-applied, lobes and Sensibo
+are retried with backoff rather than crash-looping, and nothing queued
+survives a restart. A missing key is one logged line and a retry, because a
+container that exits on a missing variable takes the household's Shabbat with
+it.
+
+Secrets come from a gitignored env file; private config is bind-mounted
+read-only from `$XDG_CONFIG_HOME/shabbos-goy`. The container drills — PipeWire
+inside a container, a live `--apply`, a reconnect and a reboot — are
+**not yet done**.
 
 ## CLI
 
 | Verb | What it does |
 |------|--------------|
-| `whoami` | Report this agent's nick, version, backend, and model from `culture.yaml`. |
-| `learn` | Print a structured self-teaching prompt. |
+| `classify "<text>"` | Class, intent, confidence and the gate's verdict. Never acts. |
+| `zmanim` | The current mode, the window kinds, and the next strict window. |
+| `actions` | The whitelist in effect and the intent-to-tool mapping. |
+| `preflight` | Every precondition for strict mode, in one read-only run. |
+| `ac status` / `ac power` | Read the pod, or switch its power. Dry-run unless `--apply`. |
+| `volume get` / `volume set` | The agent's own volume. Dry-run unless `--apply`. |
+| `mode show` / `mode set` | The resolved mode, and the in-memory override. |
+| `listen` | The ambient loop. What the container runs. `--script` replays a file with no hardware. |
+| `whoami` | Nick, version, backend and model from `culture.yaml`. |
+| `learn` | A structured self-teaching prompt. |
 | `explain <path>` | Markdown docs for any noun/verb path. |
-| `overview` | Read-only descriptive snapshot of the agent. |
-| `doctor` | Check the agent-identity invariants (prompt-file-present, backend-consistency). |
-| `cli overview` | Describe the CLI surface itself. |
-| `classify "<text>"` | *(planned)* Class, inferred intent, and whether it would act. Dry. |
-| `zmanim --location …` | *(planned)* The current Shabbat/Yom Kippur mode window. |
-| `actions` | *(planned)* The action whitelist in effect. |
-| `listen` | *(planned)* The ambient loop that the container runs. |
+| `overview` / `cli overview` | A snapshot of the agent, or of the CLI surface. |
+| `doctor` | The agent-identity invariants. |
 
-Every command supports `--json`. Results go to stdout and errors/diagnostics
-to stderr (never mixed). Exit codes: `0` success, `1` user error, `2`
-environment error, `3+` reserved. Any verb that actuates is **dry-run by
+`ac`, `volume` and `mode` talk to the running listener's loopback control
+endpoint rather than calling an adapter directly, so the CLI can never bypass
+the listener's whitelist, rate limits or delay. With no listener running they
+exit 2 and say so (`mode show` falls back to a local zmanim computation).
+
+Every command supports `--json`. Results go to stdout and errors and
+diagnostics to stderr, never mixed. Exit codes: `0` success, `1` user error,
+`2` environment error, `3+` reserved. **Any verb that actuates is dry-run by
 default**, and `--apply` actuates.
 
 ## Agent harnesses
 
-This is an AgentCulture mesh agent. `culture.yaml` declares
-`backend: claude`, so [`CLAUDE.md`](CLAUDE.md) is the mesh resident's prompt
-and the fullest write-up of the repo's design and conventions. Read it first.
+This is an AgentCulture mesh agent. `culture.yaml` declares `backend: claude`,
+so [`CLAUDE.md`](CLAUDE.md) is the mesh resident's prompt and the fullest
+write-up of the design and conventions. Read it first.
 
 Four harnesses can work in this repo interactively, each reading its own file.
 There is intentionally no shared `AGENTS.md`:

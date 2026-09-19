@@ -9,11 +9,13 @@ Qwen Code session.
 
 ## What this project is
 
-`shabbos-goy` is a **Hebrew-speaking, speech-to-speech household agent** that
-helps observant Jews on Shabbat and Yom Kippur without the user breaking the
-day. It **never acts on a direct command**. It only infers intent from
-indirect remarks ("הלוואי שהיה קר" / "I wish it was cold" → turn on the AC).
-The build brief is issue #1 on `agentculture/shabbos-goy`.
+`shabbos-goy` is a **Hebrew-speaking household agent** that listens ambiently
+in a room and switches an air conditioner's power. In **strict mode** —
+Shabbat, Yom Kippur and Yom Tov, computed from zmanim for a configured
+location — it acts only on intent inferred from indirect remarks ("הלוואי
+שהיה קר" / "I wish it was cold" → AC on) and **never on a spoken command**. On
+a weekday it obeys spoken commands too. The build brief is issue #1 on
+`agentculture/shabbos-goy`.
 
 It is an AgentCulture mesh agent, provisioned from `culture-agent-template`,
 and a sibling of [`guildmaster`](https://github.com/agentculture/guildmaster)
@@ -52,31 +54,48 @@ requires nor changes that declaration. The declaration and the resident prompt
 together satisfy the two invariants `steward doctor` verifies:
 **prompt-file-present** and **backend-consistency** (`claude` ↔ `CLAUDE.md`).
 
-## Design (planned; nothing below is built yet)
+## Design (built; not yet verified on hardware)
 
 `CLAUDE.md` holds the full design. In short:
 
-- **Core invariant, enforced by a tested classifier, not a prompt:**
-  imperatives, requests and rebukes are never acted on, and never queued for
-  later (including across a restart). There is no wake word and no
-  confirmation question. When unsure, it does nothing. The headline metric is
-  the false-positive rate on commands, measured on ASR-transcribed Hebrew.
-- **Pipeline:** microphone → lobes Hebrew realtime session in **ears-only**
-  mode (it never sends `response.create`) → transcript joiner → classifier →
-  zmanim calendar gate → whitelisted **tool call** → optional neutral spoken
-  remark via batch TTS.
-- **Tool calling / climate:** actions are declared as tools (flat
-  `name`/`description`/`parameters` shape). The first backend is `sensibo-cli`
-  (`sensibo set <pod> --mode cool --target 24 [--apply] --json`). Every call,
-  from a rule or from a model, passes classifier → gate → whitelist → argument
-  validation in this repo's code. The whitelist is config, not code. Sensibo is
+- **Core invariant, about speech:** in strict mode imperatives, requests and
+  rebukes are never acted on, and never queued for later (including across a
+  restart). There is no wake word and no confirmation question. When unsure,
+  it does nothing. The refusals are a tested contract in this repo's code; how
+  reliably speech gets the right label is measured by the golden set
+  (`tests/golden/`, 295 rows), whose headline number is the false-positive
+  rate on commands, measured on ASR-transcribed Hebrew. Zero is
+  release-blocking, and that live run has not happened yet.
+- **The CLI and the dashboard are operator UIs** and sit outside the
+  invariant: they work in every mode, including strict, and may force strict
+  mode on or switch it off inside a zmanim window. Overrides live in memory
+  only, so the zmanim-computed mode returns after any restart.
+- **Pipeline:** PipeWire capture → lobes Hebrew realtime session in
+  **ears-only** mode (it never sends `response.create`) → transcript joiner →
+  a local model that labels the utterance (the lobes `senses` role, Gemma) →
+  confidence floor → the mode x class gate → intent to tool → whitelist →
+  argument validation → rate limits → strict-mode delay → the adapter →
+  optional neutral spoken remark via batch TTS, on weekdays only.
+- **The model labels; this repo's code decides.** The label is untrusted
+  input, and every failure (down, slow, malformed) means do nothing.
+- **Tool calling / climate:** the only AC action is **power on/off** —
+  `sensibo set <pod> --power on|off [--apply] --json`, called as a subprocess.
+  The adapter cannot build `--mode`, `--target`, `--fan` or `--swing` at all.
+  Plus the agent's own volume. The whitelist is config, not code. Sensibo is
   cloud-only.
-- **Deployment:** a Docker Compose service with `restart: unless-stopped`,
-  `/dev/snd` passthrough (ALSA card chosen by name), secrets from a gitignored
-  env file, and private config mounted read-only from `$XDG_CONFIG_HOME/shabbos-goy`.
-  Startup is stateless: it recomputes the mode from the clock and zmanim, and
-  if unsure it fails toward acting on nothing.
-- **Halacha is flagged, not decided.** No claim of rabbinic approval.
+- **Zmanim** are computed in pure standard library (NOAA sun maths plus
+  Hebrew-calendar arithmetic); no dependency was added. Yom Tov is strict by
+  default, Israel/diaspora is config, and an untrusted clock fails toward
+  strict mode.
+- **Deployment:** a Compose service (see `docker-compose.yml`) with
+  `restart: unless-stopped`, the **host PipeWire session** for audio
+  (`pw-record` / `pw-play` / `wpctl`, device chosen by name), secrets from a
+  gitignored env file, and private config mounted read-only from
+  `$XDG_CONFIG_HOME/shabbos-goy`. Startup is stateless: it recomputes the mode
+  from the clock and zmanim, and if unsure it fails toward acting on nothing.
+  The on-box drills are not yet done.
+- **Halacha is flagged, not decided.** No claim of rabbinic approval; the open
+  questions live in `docs/halacha-open-questions.md`.
 
 ## The CLI
 
@@ -90,8 +109,21 @@ The CLI is cited (cite-don't-import) from teken's `python-cli` reference
 - `shabbos-goy overview` — descriptive snapshot of the agent.
 - `shabbos-goy doctor` — check the agent-identity invariants.
 - `shabbos-goy cli overview` — describe the CLI surface itself.
-- *(planned)* `classify "<text>"`, `zmanim --location …`, `actions`,
-  `listen`. Any actuating verb is dry-run by default, and `--apply` actuates.
+
+Domain verbs:
+
+- `classify "<text>"` — class, intent, confidence and the gate's verdict.
+  Never acts.
+- `zmanim` — the current mode, the window kinds, the next strict window.
+- `actions` — the whitelist in effect and the intent-to-tool map.
+- `preflight` — every precondition for strict mode, read-only.
+- `ac status` / `ac power`, `volume get` / `volume set`, `mode show` /
+  `mode set` — these proxy to a running listener's loopback control endpoint,
+  so the CLI can never bypass its whitelist, rate limits or delay.
+- `listen` — the ambient loop, and what the container runs; `--script`
+  replays a JSONL events file or a WAV with no hardware.
+
+Any actuating verb is dry-run by default, and `--apply` actuates.
 
 Conventions: every command supports `--json`; results go to stdout, errors and
 diagnostics to stderr (never mixed); exit codes are `0` success, `1` user
@@ -117,12 +149,20 @@ from guildmaster instead.
 ## Layout
 
 ```text
-shabbos_goy/   agent-first CLI (cited from teken's python-cli reference)
+shabbos_goy/
   cli/                    parser, error/output contract, _commands/ (verbs)
   explain/                markdown catalog for `explain`
-tests/                    pytest smoke + introspection tests
+  decider/                the model-backed labeller (prompt, Gemma client, replay, context)
+  classifier/             the retired rule cascade — test oracle only, never imported at runtime
+  lobes/                  ears-only realtime client (ws wire, env config, session)
+  zmanim/                 stdlib sun maths, Hebrew calendar, strict windows
+  actuators/ audio/       sensibo-cli and PipeWire adapters
+  runtime/ web/           the listener's threads, and the dashboard
+  pipeline.py policy.py   the gates, and the mode x class table
+tests/                    pytest (fixtures-only); tests/golden/ is the measured evidence
 .claude/skills/           vendored guildmaster skill kit (cite-don't-import)
-docs/skill-sources.md     skill provenance ledger
+docs/                     specs/ + plans/ (historical), halacha-open-questions.md,
+                          skill-sources.md (skill provenance + cited source files)
 culture.yaml              mesh identity (suffix + backend)
 .github/workflows/        tests + deploy (PyPI Trusted Publishing)
 ```

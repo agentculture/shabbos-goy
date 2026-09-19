@@ -302,3 +302,163 @@ def test_a_non_http_scheme_is_not_treated_as_an_endpoint(tmp_path: Path) -> None
     """The endpoint check is scoped to http(s) URLs, as documented."""
     findings = _write_and_scan(tmp_path, '{"endpoint": "unix:///var/run/thing.sock"}\n')
     assert findings == []
+
+
+# ---------------------------------------------------------------------------
+# t9: realtime (ws/wss) URLs, and host-like values in YAML / env-example /
+# Markdown code blocks — the file shapes the JSON-only endpoint check never
+# examines. Every "bad" example string below is built at runtime by string
+# concatenation (never a literal committed non-localhost host/URL) so this
+# test file itself keeps scanning clean, per the task brief.
+# ---------------------------------------------------------------------------
+
+
+def _scan_all(tmp_path: Path, filename: str, content: str) -> list:
+    planted = tmp_path / filename
+    planted.write_text(content, encoding="utf-8")
+    text = planted.read_text(encoding="utf-8")
+    findings = []
+    findings.extend(scan_secrets._scan_credentials(str(planted), text))
+    findings.extend(scan_secrets._scan_endpoints(str(planted), text))
+    findings.extend(scan_secrets._scan_realtime_urls(str(planted), text))
+    findings.extend(scan_secrets._scan_config_hosts(str(planted), text))
+    return findings
+
+
+def test_bare_ws_url_with_a_real_host_is_caught(tmp_path: Path) -> None:
+    """Positive case: a concrete non-localhost ws:// URL sitting in prose,
+    the shape the plain JSON-only endpoint check never looked at."""
+    bad_host = "internal" + "." + "corp" + "." + "example" + ".net"
+    text = f"Connect to ws://{bad_host}:8001/v1/realtime for the session.\n"
+    findings = _scan_all(tmp_path, "notes.md", text)
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]
+
+
+def test_bare_wss_url_with_a_real_host_is_caught(tmp_path: Path) -> None:
+    bad_host = "gateway" + "-" + "prod" + "." + "example" + ".com"
+    text = f"wss://{bad_host}/v1/realtime\n"
+    findings = _scan_all(tmp_path, "notes.txt", text)
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]
+
+
+def test_ws_url_in_a_markdown_inline_code_span_is_caught(tmp_path: Path) -> None:
+    """The same shape CLAUDE.md's real "Connect:" bullet uses, but with a
+    concrete host instead of the allowed `<lobes-host>` placeholder."""
+    bad_host = "10" + "." + "0" + "." + "0" + "." + "9"
+    text = f"- **Connect:** `ws://{bad_host}:8001/v1/realtime?language=he`\n"
+    findings = _scan_all(tmp_path, "doc.md", text)
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]
+
+
+def test_allowed_localhost_ws_url_is_not_flagged(tmp_path: Path) -> None:
+    findings = _scan_all(tmp_path, "notes.md", "ws://localhost:8001/v1/realtime\n")
+    assert findings == []
+
+
+def test_angle_bracket_placeholder_ws_url_is_not_flagged(tmp_path: Path) -> None:
+    """The documented placeholder shape (CLAUDE.md's real "Connect:" bullet)
+    must keep scanning clean."""
+    text = (
+        "- **Connect:** `ws://<lobes-host>:8001/v1/realtime"
+        "?language=he&input_sample_rate=16000`\n"
+    )
+    findings = _scan_all(tmp_path, "doc.md", text)
+    assert findings == []
+
+
+def test_yaml_host_key_with_a_real_url_is_caught(tmp_path: Path) -> None:
+    bad_host = "internal" + "." + "example" + ".net"
+    text = f'baseUrl: "https://{bad_host}/v1"\n'
+    findings = _scan_all(tmp_path, "config.yaml", text)
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]
+
+
+def test_yaml_host_key_with_localhost_is_allowed(tmp_path: Path) -> None:
+    findings = _scan_all(tmp_path, "config.yaml", 'baseUrl: "http://localhost:8000/v1"\n')
+    assert findings == []
+
+
+def test_yaml_host_key_with_angle_bracket_placeholder_is_allowed(tmp_path: Path) -> None:
+    findings = _scan_all(tmp_path, "config.yaml", "host: ws://<lobes-host>:8001/v1/realtime\n")
+    assert findings == []
+
+
+def test_env_example_endpoint_with_a_real_url_is_caught(tmp_path: Path) -> None:
+    bad_host = "gateway" + "-" + "prod" + "." + "example" + ".com"
+    text = f"LOBES_ENDPOINT_URL_LOOKS_UNUSED=irrelevant\nendpoint=wss://{bad_host}:8001\n"
+    findings = _scan_all(tmp_path, ".env.example", text)
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]
+
+
+def test_env_example_localhost_is_allowed(tmp_path: Path) -> None:
+    findings = _scan_all(tmp_path, ".env.example", "url=http://127.0.0.1:8001\n")
+    assert findings == []
+
+
+def test_markdown_fenced_code_block_host_key_with_a_real_url_is_caught(tmp_path: Path) -> None:
+    bad_host = "internal" + "." + "corp" + ".net"
+    text = "Example config:\n\n```yaml\n" f'host: "https://{bad_host}/v1"\n' "```\n"
+    findings = _scan_all(tmp_path, "doc.md", text)
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]
+
+
+def test_markdown_prose_outside_a_fenced_code_block_is_not_key_scanned(tmp_path: Path) -> None:
+    """The key-scoped host check (4) only looks inside fenced code blocks in
+    Markdown; a plain-prose mention of `host: https://...` outside a fence
+    is not examined by it (the global ws/wss check (3) is what would catch a
+    literal ws(s):// URL anywhere, and this line has none)."""
+    bad_host = "internal" + "." + "corp" + ".net"
+    text = f'Some docs might write host: "https://{bad_host}/v1" inline, in prose.\n'
+    findings = scan_secrets._scan_config_hosts("doc.md", text)
+    assert findings == []
+
+
+def test_generic_word_host_placeholder_in_prose_is_not_flagged(tmp_path: Path) -> None:
+    """`ws://host:8001` is how this repo's own spec docs illustrate the gap
+    this task closes; the bare word "host" is a placeholder, not a real
+    hostname, and must not itself become a false positive."""
+    findings = _scan_all(tmp_path, "notes.md", "ws://host:8001 in any tracked file\n")
+    assert findings == []
+
+
+def test_repo_checked_in_realtime_placeholder_line_scans_clean() -> None:
+    """CLAUDE.md's actual "Connect:" bullet, read from the real tracked
+    file, must itself pass every check (this is a regression guard for the
+    exact line, in addition to the full clean-repo test above)."""
+    claude_md = REPO_ROOT / "CLAUDE.md"
+    text = claude_md.read_text(encoding="utf-8")
+    connect_lines = [line for line in text.splitlines() if "ws://<lobes-host>" in line]
+    assert connect_lines, "CLAUDE.md no longer documents the ws://<lobes-host> placeholder"
+    findings = []
+    for line in connect_lines:
+        findings.extend(scan_secrets._scan_realtime_urls("CLAUDE.md", line))
+        findings.extend(scan_secrets._scan_config_hosts("CLAUDE.md", line))
+    assert findings == []
+
+
+# -- integration fix (workforce wave 1): code and test files mention realtime
+# URLs that are not concrete hosts; they must not drown the real findings ------
+
+
+def test_scheme_prefix_in_prose_is_not_a_host(tmp_path: Path) -> None:
+    text = 'raise ValueError("must start with ws://, wss://, http:// or https://")\n'
+    assert _scan_all(tmp_path, "config.py", text) == []
+
+
+def test_format_string_template_host_is_not_flagged(tmp_path: Path) -> None:
+    text = 'url = f"ws://{server.host}:{server.port}/v1/realtime"\n'
+    assert _scan_all(tmp_path, "test_client.py", text) == []
+
+
+def test_reserved_tld_hosts_are_placeholders(tmp_path: Path) -> None:
+    for tld in ("invalid", "example", "test"):
+        text = "ws://lobes-host." + tld + ":8001/v1/realtime\n"
+        assert _scan_all(tmp_path, f"notes-{tld}.md", text) == [], tld
+
+
+def test_concrete_single_label_host_is_still_caught(tmp_path: Path) -> None:
+    """A real machine name with no dot (the shape a LAN or tailnet host has)
+    must stay a finding; only the closed placeholder word list is exempt."""
+    bad_host = "media" + "box" + "-" + "7f3a"
+    findings = _scan_all(tmp_path, "notes.md", f"ws://{bad_host}:8001/v1/realtime\n")
+    assert any(f.kind == "endpoint" for f in findings), [str(f) for f in findings]

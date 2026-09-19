@@ -47,6 +47,14 @@ jobs:
       - name: scan for committed secrets and non-localhost endpoints
         run: python3 scripts/scan-secrets.py
 
+      # Offline validation only — no image build, no container start (t16).
+      # The example env is copied into place purely so `env_file:` resolves;
+      # every value in it is a placeholder (see docker/shabbos-goy.env.example).
+      - name: docker compose config validates
+        run: |
+          cp docker/shabbos-goy.env.example docker/shabbos-goy.env
+          docker compose config -q
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'

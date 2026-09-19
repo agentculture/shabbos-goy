@@ -1,0 +1,1171 @@
+{
+  "plan_slug": "lobes-driven-ac-power-agent",
+  "schema_version": 2,
+  "created": "2026-09-18T19:31:33Z",
+  "updated": "2026-09-18T22:33:24Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "the decider is Gemma directly: each utterance plus a rolling context goes to the lobes senses role (Gemma-4-26B-A4B), which returns a structured decision (class, intent, confidence); this repo's code treats it as untrusted input and still enforces policy.may_act, whitelist, power-only argument validation, rate limits and the strict-mode delay; if senses is down, slow or malformed the agent does nothing",
+      "task_ref": "t12",
+      "reason": "user decision 2026-09-18: the product must not rest on a pre-set group of phrasings; an agent has to decide",
+      "affects": [
+        "t13",
+        "t14",
+        "t18",
+        "c1",
+        "c16",
+        "c19",
+        "c5"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "risky",
+      "seq": 1
+    },
+    {
+      "id": "d2",
+      "what": "the rule/lexicon classifier built in t10 is removed from the runtime and kept only as a test oracle and as the seed corpus of the golden set; the guarantee that a spoken command never acts in strict mode is no longer proven deterministically but evidenced by the golden set run against the real model (temperature 0, zero strict-mode actions on command fixtures as a hard threshold)",
+      "task_ref": "t10",
+      "reason": "user decision 2026-09-18: chose to remove the rules from the runtime, re-affirmed after the consequence was spelled out",
+      "affects": [
+        "t12",
+        "c16",
+        "h13",
+        "c34",
+        "h27",
+        "c28",
+        "h21"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "risky",
+      "seq": 2
+    },
+    {
+      "id": "d3",
+      "what": "the agent carries a trimmed rolling context window (recent utterances, current mode and AC state) into each model call, in memory only, gone on restart; this is the intended meaning of the 25h requirement",
+      "task_ref": "t12",
+      "reason": "user clarification 2026-09-18: c29 was about an agent's accumulated context, which the first spec reading reduced to buffer bounds",
+      "affects": [
+        "t6",
+        "c29",
+        "h22"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 3
+    },
+    {
+      "id": "d4",
+      "what": "t17 becomes a local golden set: a committed manifest of utterances with expected class, intent and would-act; TTS-only audio kept local (gitignored, regenerable); two entrances, audio through the full path and text sent directly to Gemma, run against the real model on the box under a pytest marker that never runs in CI; default CI runs use a fake decider replaying recorded decisions",
+      "task_ref": "t17",
+      "reason": "user request 2026-09-18: a golden set for local tests so integration is tested on the real model",
+      "affects": [
+        "c28",
+        "h21",
+        "h1"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "acceptable",
+      "seq": 4
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o1",
+      "test_ref": "tests/test_listen_cli.py -k fixtures_only_end_to_end",
+      "behavior_text": "transcript -> joiner -> decider -> gates -> sensibo argv runs with no microphone, lobes server or Sensibo account",
+      "contract_text": "transcript -> joiner -> decider -> gates -> sensibo argv runs with no microphone, lobes server or Sensibo account",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 1 passed, 8 deselected in 0.54s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 5
+    },
+    {
+      "id": "e2",
+      "obligation_ref": "o2",
+      "test_ref": "tests/test_actuators_sensibo.py",
+      "behavior_text": "the only sensibo flags that can ever be produced are --power on|off, --apply and --json; hostile pod ids start no process",
+      "contract_text": "the only sensibo flags that can ever be produced are --power on|off, --apply and --json; hostile pod ids start no process",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 77 passed in 0.42s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 6
+    },
+    {
+      "id": "e3",
+      "obligation_ref": "o3",
+      "test_ref": "tests/test_config.py",
+      "behavior_text": "removing a tool or pod id from config removes it from the effective whitelist; a broken config fails closed",
+      "contract_text": "removing a tool or pod id from config removes it from the effective whitelist; a broken config fails closed",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 31 passed in 0.02s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 7
+    },
+    {
+      "id": "e4",
+      "obligation_ref": "o4",
+      "test_ref": "tests/test_lobes_client.py",
+      "behavior_text": "the client answers PING, never sends response.create or tools, drops empty transcripts, survives every cited event shape",
+      "contract_text": "the client answers PING, never sends response.create or tools, drops empty transcripts, survives every cited event shape",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "main agent disabled the ears-only guard and the PONG reply in turn at merge; a test failed each time; pytest exit 0: 14 passed in 0.25s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 8
+    },
+    {
+      "id": "e5",
+      "obligation_ref": "o5",
+      "test_ref": "tests/test_lobes_client.py -k killed_mid_turn or backoff or nothing_is_written or 401",
+      "behavior_text": "server killed mid-turn: capped backoff, interrupted turn yields no action, nothing written that a restart could replay",
+      "contract_text": "server killed mid-turn: capped backoff, interrupted turn yields no action, nothing written that a restart could replay",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 4 passed, 10 deselected in 0.02s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 9
+    },
+    {
+      "id": "e6",
+      "obligation_ref": "o6",
+      "test_ref": "tests/test_joiner.py",
+      "behavior_text": "pause-split halves join; overflow, reconnect and missing-at_ms never emit a fragment",
+      "contract_text": "pause-split halves join; overflow, reconnect and missing-at_ms never emit a fragment",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 14 passed in 0.01s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 10
+    },
+    {
+      "id": "e7",
+      "obligation_ref": "o7",
+      "test_ref": "tests/test_audio_pipewire.py",
+      "behavior_text": "PipeWire argv by node name, same-device pair enforced, volume clamped, default silent, option-shaped targets refused",
+      "contract_text": "PipeWire argv by node name, same-device pair enforced, volume clamped, default silent, option-shaped targets refused",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 52 passed in 0.50s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 11
+    },
+    {
+      "id": "e8",
+      "obligation_ref": "o8",
+      "test_ref": "tests/test_docker_packaging.py",
+      "behavior_text": "compose has restart unless-stopped, json-file rotation, ro config, env_file, PipeWire socket, non-root, pinned sensibo-cli, healthcheck",
+      "contract_text": "compose has restart unless-stopped, json-file rotation, ro config, env_file, PipeWire socket, non-root, pinned sensibo-cli, healthcheck",
+      "evidence_type": "automated",
+      "strength": "coverage",
+      "strength_basis": "static assertions over the YAML and Dockerfile; the container was never started; pytest exit 0: 21 passed in 0.08s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 12
+    },
+    {
+      "id": "e9",
+      "obligation_ref": "o9",
+      "test_ref": "tests/test_scan_secrets.py",
+      "behavior_text": "scan-secrets flags a concrete ws/wss or config host and still scans the repo clean",
+      "contract_text": "scan-secrets flags a concrete ws/wss or config host and still scans the repo clean",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 56 passed in 0.29s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 13
+    },
+    {
+      "id": "e10",
+      "obligation_ref": "o10",
+      "test_ref": "tests/test_cli_catalog.py tests/test_cli_ac.py tests/test_cli_volume.py tests/test_cli_preflight.py tests/test_cli_mode.py tests/test_cli_classify.py",
+      "behavior_text": "every parser path has an explain entry, nouns have overview, actuating verbs are dry-run without --apply, preflight names the failing check",
+      "contract_text": "every parser path has an explain entry, nouns have overview, actuating verbs are dry-run without --apply, preflight names the failing check",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 33 passed in 0.58s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 14
+    },
+    {
+      "id": "e11",
+      "obligation_ref": "o11",
+      "test_ref": "tests/test_policy.py tests/test_pipeline.py -k policy or strict or imperative or log or exception or persisted",
+      "behavior_text": "an imperative/request/rebuke label never reaches an actuator in strict mode, nothing is queued, logs carry no transcript text",
+      "contract_text": "an imperative/request/rebuke label never reaches an actuator in strict mode, nothing is queued, logs carry no transcript text",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "agent-reported mutation of the may_act gate was caught (4 failures); not re-run by the main agent; pytest exit 0: 31 passed, 30 deselected in 0.03s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 15
+    },
+    {
+      "id": "e12",
+      "obligation_ref": "o12",
+      "test_ref": "tests/test_pipeline.py -k volume",
+      "behavior_text": "weekday volume imperative acts, strict ignores it, a strict-mode loudness remark lowers volume after the delay",
+      "contract_text": "weekday volume imperative acts, strict ignores it, a strict-mode loudness remark lowers volume after the delay",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 5 passed, 36 deselected in 0.02s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 16
+    },
+    {
+      "id": "e13",
+      "obligation_ref": "o13",
+      "test_ref": "tests/test_mode.py -k override or new_process",
+      "behavior_text": "CLI and dashboard share one in-memory override that can force strict or weekday inside a window; a new process has none",
+      "contract_text": "CLI and dashboard share one in-memory override that can force strict or weekday inside a window; a new process has none",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 13 passed, 24 deselected in 0.05s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 17
+    },
+    {
+      "id": "e14",
+      "obligation_ref": "o14",
+      "test_ref": "tests/test_policy.py",
+      "behavior_text": "every cell of the policy table; unknown values and an untrusted clock never act",
+      "contract_text": "every cell of the policy table; unknown values and an untrusted clock never act",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 20 passed in 0.01s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 18
+    },
+    {
+      "id": "e15",
+      "obligation_ref": "o15",
+      "test_ref": "tests/test_actuators_sensibo.py -k status",
+      "behavior_text": "status() never passes --apply and reports unknown on any failure",
+      "contract_text": "status() never passes --apply and reports unknown on any failure",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 21 passed, 56 deselected in 0.30s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 19
+    },
+    {
+      "id": "e16",
+      "obligation_ref": "o16",
+      "test_ref": "tests/test_limits.py tests/test_decider_context.py -k soak or bounded or trim",
+      "behavior_text": "ring, limiter and the decider context window stay bounded over a simulated 25h+ stream and still work at the end",
+      "contract_text": "ring, limiter and the decider context window stay bounded over a simulated 25h+ stream and still work at the end",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 12 passed, 17 deselected in 0.04s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 20
+    },
+    {
+      "id": "e17",
+      "obligation_ref": "o17",
+      "test_ref": "tests/test_lobes_client.py tests/test_listen_runtime.py -k frozen",
+      "behavior_text": "a frozen lobes session makes the process exit non-zero so the restart policy recovers it",
+      "contract_text": "a frozen lobes session makes the process exit non-zero so the restart policy recovers it",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "the listener half was missing until the main agent found it at merge of t16 and fixed it test-first; pytest exit 0: 2 passed, 46 deselected in 1.12s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 21
+    },
+    {
+      "id": "e18",
+      "obligation_ref": "o18",
+      "test_ref": "tests/test_limits.py -k interval or cap or refus",
+      "behavior_text": "minimum interval and daily cap refuse and log; a refused action is never replayed",
+      "contract_text": "minimum interval and daily cap refuse and log; a refused action is never replayed",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 7 passed, 11 deselected in 0.01s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 22
+    },
+    {
+      "id": "e19",
+      "obligation_ref": "o19",
+      "test_ref": "tests/test_pipeline.py -k own_playback or own_voice or speaking",
+      "behavior_text": "transcripts overlapping own playback plus a tail are discarded while audio keeps streaming",
+      "contract_text": "transcripts overlapping own playback plus a tail are discarded while audio keeps streaming",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "agent-reported mutation was caught (2 failures); pytest exit 0: 3 passed, 38 deselected in 0.03s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 23
+    },
+    {
+      "id": "e20",
+      "obligation_ref": "o20",
+      "test_ref": "tests/test_classifier_corpus.py",
+      "behavior_text": "the corpus carries >= 10 fixtures per negative category and the rule oracle acts on none",
+      "contract_text": "the corpus carries >= 10 fixtures per negative category and the rule oracle acts on none",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "evidence about the RULE ORACLE only; after deviation d2 the rules are not the runtime decider; pytest exit 0: 210 passed in 0.20s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 24
+    },
+    {
+      "id": "e21",
+      "obligation_ref": "o21",
+      "test_ref": "tests/test_limits.py -k retry",
+      "behavior_text": "a failed actuation is retried only inside a bounded in-memory window and never after a restart",
+      "contract_text": "a failed actuation is retried only inside a bounded in-memory window and never after a restart",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 4 passed, 14 deselected in 0.01s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 25
+    },
+    {
+      "id": "e22",
+      "obligation_ref": "o22",
+      "test_ref": "tests/test_cli_preflight.py",
+      "behavior_text": "exits 0 only if every check passes, exits 2 naming the failed check, never actuates",
+      "contract_text": "exits 0 only if every check passes, exits 2 naming the failed check, never actuates",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 6 passed in 0.27s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 26
+    },
+    {
+      "id": "e23",
+      "obligation_ref": "o23",
+      "test_ref": "tests/test_pipeline.py tests/test_listen_runtime.py tests/test_decider_gemma.py -k marker or leak or prints",
+      "behavior_text": "a forced exception with a marker transcript leaks the marker to neither stdout nor stderr",
+      "contract_text": "a forced exception with a marker transcript leaks the marker to neither stdout nor stderr",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 3 passed, 115 deselected in 1.13s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 27
+    },
+    {
+      "id": "e24",
+      "obligation_ref": "o24",
+      "test_ref": "tests/test_zmanim_sun.py tests/test_zmanim_hebrew.py tests/test_zmanim_windows.py",
+      "behavior_text": "sunset, candle lighting, tzeit and holy-day dates agree with Hebcal vectors within 2 minutes under TZ=UTC, both sides of the DST change",
+      "contract_text": "sunset, candle lighting, tzeit and holy-day dates agree with Hebcal vectors within 2 minutes under TZ=UTC, both sides of the DST change",
+      "evidence_type": "automated",
+      "strength": "fidelity",
+      "strength_basis": "vectors fetched from Hebcal's public API; the main agent also spot-checked RH/YK 5787 and tonight's Jerusalem sunset against independent knowledge; pytest exit 0: 343 passed in 0.49s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 28
+    },
+    {
+      "id": "e25",
+      "obligation_ref": "o25",
+      "test_ref": "tests/test_lobes_client.py -k fixture or invented or playback",
+      "behavior_text": "every cited event type and error code replays without crashing; unknown events are tolerated; audio flows during playback",
+      "contract_text": "every cited event type and error code replays without crashing; unknown events are tolerated; audio flows during playback",
+      "evidence_type": "automated",
+      "strength": "fidelity",
+      "strength_basis": "fixtures cited from lobes-cli event-fixtures.ts, not recorded from a live session; pytest exit 0: 3 passed, 11 deselected in 0.06s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 29
+    },
+    {
+      "id": "e26",
+      "obligation_ref": "o26",
+      "test_ref": "tests/test_web_endpoints.py tests/test_web_controls.py tests/test_web_guards.py",
+      "behavior_text": "stdlib-only server shows mode, window, connection, AC status, utterances, decider state; controls share whitelist, limits and adapters with voice",
+      "contract_text": "stdlib-only server shows mode, window, connection, AC status, utterances, decider state; controls share whitelist, limits and adapters with voice",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 61 passed in 28.33s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 30
+    },
+    {
+      "id": "e27",
+      "obligation_ref": "o27",
+      "test_ref": "tests/test_web_endpoints.py -k ring or never_logged or transcript",
+      "behavior_text": "transcript text is served from a bounded in-memory ring and appears in no log stream or file; empty after restart",
+      "contract_text": "transcript text is served from a bounded in-memory ring and appears in no log stream or file; empty after restart",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 2 passed, 23 deselected in 1.54s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 31
+    },
+    {
+      "id": "e28",
+      "obligation_ref": "o28",
+      "test_ref": "tests/test_web_bind.py tests/test_web_security.py",
+      "behavior_text": "non-tailnet binds refused, GET never changes state, foreign Origin and spoofed Host refused, no key in any response",
+      "contract_text": "non-tailnet binds refused, GET never changes state, foreign Origin and spoofed Host refused, no key in any response",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "agent-reported mutations of both boundaries were caught (11 and 28 failures); pytest exit 0: 81 passed in 25.74s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 32
+    },
+    {
+      "id": "e29",
+      "obligation_ref": "o29",
+      "test_ref": "tests/test_listen_runtime.py -k dashboard",
+      "behavior_text": "a bind failure is retried and a handler exception does not stop the loop",
+      "contract_text": "a bind failure is retried and a handler exception does not stop the loop",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 5 passed, 29 deselected in 3.05s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 33
+    },
+    {
+      "id": "e30",
+      "obligation_ref": "o30",
+      "test_ref": "tests/test_mode.py tests/test_pipeline.py -k new_process or not_written or persisted",
+      "behavior_text": "a dashboard- or CLI-set mode is memory-only; a fresh process computes the zmanim mode",
+      "contract_text": "a dashboard- or CLI-set mode is memory-only; a fresh process computes the zmanim mode",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "pytest exit 0: 4 passed, 74 deselected in 0.07s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:11:02",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 34
+    },
+    {
+      "id": "e31",
+      "obligation_ref": "o35",
+      "test_ref": "tests/test_decider_gemma.py tests/test_decider_core.py",
+      "behavior_text": "the Gemma decider's output is untrusted: hostile, malformed or failed responses all become NO_DECISION and never raise; request carries model senses, temperature 0, no tools",
+      "contract_text": "the Gemma decider's output is untrusted: hostile, malformed or failed responses all become NO_DECISION and never raise; request carries model senses, temperature 0, no tools",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "against an in-process fake HTTP server only; the real senses role has never been called; agent-reported mutation of class validation was caught; pytest exit 0: 62 passed in 1.43s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:12:50",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 35
+    },
+    {
+      "id": "e32",
+      "obligation_ref": "o36",
+      "test_ref": "tests/test_decider_replay.py -k imports or offender",
+      "behavior_text": "no runtime module imports shabbos_goy.classifier, and the import walker demonstrably catches an offender",
+      "contract_text": "no runtime module imports shabbos_goy.classifier, and the import walker demonstrably catches an offender",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "the test suite itself plants an offender and proves the walker catches it; pytest exit 0: 2 passed, 8 deselected in 0.07s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:12:50",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 36
+    },
+    {
+      "id": "e33",
+      "obligation_ref": "o37",
+      "test_ref": "tests/test_decider_context.py",
+      "behavior_text": "the context window is trimmed by count, age and rendered size, holds text only in memory, and survives a 26h simulated stream bounded",
+      "contract_text": "the context window is trimmed by count, age and rendered size, holds text only in memory, and survives a 26h simulated stream bounded",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "injected clock; pytest exit 0: 11 passed in 0.03s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:12:50",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 37
+    },
+    {
+      "id": "e34",
+      "obligation_ref": "o38",
+      "test_ref": "tests/test_golden_runner.py tests/test_golden_manifest.py",
+      "behavior_text": "the runner scores outcomes, enforces thresholds and exit codes, and records replays, against fakes; this is NOT the claim's numbers on the real model",
+      "contract_text": "the runner scores outcomes, enforces thresholds and exit codes, and records replays, against fakes; this is NOT the claim's numbers on the real model",
+      "evidence_type": "automated",
+      "strength": "coverage",
+      "strength_basis": "machinery only: no live run exists, so the success signal itself remains unchecked; pytest exit 0: 81 passed, 1 skipped in 2.61s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:12:50",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 38
+    },
+    {
+      "id": "e35",
+      "obligation_ref": "o39",
+      "test_ref": "tests/test_listen_control.py",
+      "behavior_text": "a CLI --apply cannot escalate a listener that was started dry-run",
+      "contract_text": "a CLI --apply cannot escalate a listener that was started dry-run",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "drives the real t13 CLI verbs against the real control server on 127.0.0.1; pytest exit 0: 11 passed in 5.13s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T00:12:50",
+        "commit": "268feec"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 39
+    },
+    {
+      "id": "e36",
+      "obligation_ref": "o40",
+      "test_ref": "tests/test_actuators_sensibo_grant.py tests/test_actuators_sensibo.py",
+      "behavior_text": "the grant prefix is a closed shape around the locked argv; a hostile secret name starts no process; the key never enters this process",
+      "contract_text": "the grant prefix is a closed shape around the locked argv; a hostile secret name starts no process; the key never enters this process",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "fake grant and fake sensibo on PATH; pytest exit 0: 94 passed in 0.46s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "220b389"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 40
+    },
+    {
+      "id": "e37",
+      "obligation_ref": "o41",
+      "test_ref": "tests/test_grant_reexec.py",
+      "behavior_text": "verbs that need the lobes key re-exec under grant when config names a secret; env wins; a guard prevents loops; a missing grant binary is not a crash",
+      "contract_text": "verbs that need the lobes key re-exec under grant when config names a secret; env wins; a guard prevents loops; a missing grant binary is not a crash",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "injected execvpe; never replaces the test process; pytest exit 0: 11 passed in 0.04s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "220b389"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 41
+    },
+    {
+      "id": "e38",
+      "obligation_ref": "o42",
+      "test_ref": "tests/test_limits.py tests/test_pipeline.py tests/test_web_controls.py -k interval or compressor or debounce or operator or cold_remark or daily or cap or shares",
+      "behavior_text": "power OFF needs only a debounce, power ON waits the compressor interval since the last OFF, operators bypass intervals but not the daily cap and still count for voice",
+      "contract_text": "power OFF needs only a debounce, power ON waits the compressor interval since the last OFF, operators bypass intervals but not the daily cap and still count for voice",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "written test-first after the live finding; pytest exit 0: 17 passed, 86 deselected in 1.06s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "220b389"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 42
+    },
+    {
+      "id": "e39",
+      "obligation_ref": "o43",
+      "test_ref": "tests/test_cli_preflight.py",
+      "behavior_text": "preflight asks grant for metadata only, never the value, and names both remedies when neither source exists",
+      "contract_text": "preflight asks grant for metadata only, never the value, and names both remedies when neither source exists",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "; pytest exit 0: 10 passed in 0.28s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "220b389"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 43
+    },
+    {
+      "id": "e40",
+      "obligation_ref": "o44",
+      "test_ref": "tests/test_cli_classify.py tests/test_grant_reexec.py tests/test_listen_cli.py",
+      "behavior_text": "no test sees the host config or re-execs under grant, so the fixtures-only path stays fixtures-only on a configured developer box",
+      "contract_text": "no test sees the host config or re-execs under grant, so the fixtures-only path stays fixtures-only on a configured developer box",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "run on a box whose real config names grant secrets; before tests/conftest.py the classify tests replaced the pytest worker; pytest exit 0: 25 passed in 2.15s",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "220b389"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 44
+    },
+    {
+      "id": "e41",
+      "obligation_ref": "o45",
+      "test_ref": "live session on the operator's box, 2026-09-19",
+      "behavior_text": "a Hebrew remark that the room is hot powered the real AC on with nobody addressing the device: heard by the reSpeaker, transcribed by lobes Whisper, labelled remark/cool by Gemma in 478 ms, delayed 15 s in strict mode, then verdict=acted; Sensibo state read back as on (was off)",
+      "contract_text": "a Hebrew remark that the room is hot powered the real AC on with nobody addressing the device: heard by the reSpeaker, transcribed by lobes Whisper, labelled remark/cool by Gemma in 478 ms, delayed 15 s in strict mode, then verdict=acted; Sensibo state read back as on (was off)",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "listener log class=remark verdict=delayed then class=delayed verdict=acted action=ac_power_on; zero-write status read before/after; operator confirmed 'Works!'; the reboot half of this claim is still unchecked",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "e8a5dd4"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 45
+    },
+    {
+      "id": "e42",
+      "obligation_ref": "o46",
+      "test_ref": "live session on the operator's box, 2026-09-19",
+      "behavior_text": "a spoken imperative to switch the AC on was labelled imperative by the real Gemma and refused (gate_refused) during a real Shabbat window; a spoken prompt-injection sentence sent as text was labelled imperative and refused",
+      "contract_text": "a spoken imperative to switch the AC on was labelled imperative by the real Gemma and refused (gate_refused) during a real Shabbat window; a spoken prompt-injection sentence sent as text was labelled imperative and refused",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "one spoken utterance and nine text probes through the real senses model; this is an observation of a handful of inputs, NOT the golden set",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "d09a434"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 46
+    },
+    {
+      "id": "e43",
+      "obligation_ref": "o47",
+      "test_ref": "live session on the operator's box, 2026-09-19",
+      "behavior_text": "after the first power change further hints were refused as rate_limited and never replayed",
+      "contract_text": "after the first power change further hints were refused as rate_limited and never replayed",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "listener log verdict=rate_limited x4 across two runs",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "e8a5dd4"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 47
+    },
+    {
+      "id": "e44",
+      "obligation_ref": "o48",
+      "test_ref": "live session on the operator's box, 2026-09-19",
+      "behavior_text": "the real Gemma labelled the text 'too cold here' (with an interjection) as intent cool, which maps to power ON: the opposite of the decided mapping cold -> OFF",
+      "contract_text": "the real Gemma labelled the text 'too cold here' (with an interjection) as intent cool, which maps to power ON: the opposite of the decided mapping cold -> OFF",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "text probe via classify --mode strict against gemma:p1; two spoken cold remarks in the same session were labelled warm correctly, so the error is phrase-dependent",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "d09a434"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 48
+    },
+    {
+      "id": "e45",
+      "obligation_ref": "o49",
+      "test_ref": "live session on the operator's box, 2026-09-19",
+      "behavior_text": "the configured volume was NOT re-applied at start-up on the real box: every listener start logged startup_volume_failed VolumeCommandError",
+      "contract_text": "the configured volume was NOT re-applied at start-up on the real box: every listener start logged startup_volume_failed VolumeCommandError",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "wpctl is given a node NAME where it needs a node id or alias; fakes accepted names, the real wpctl does not",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "e8a5dd4"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 49
+    },
+    {
+      "id": "e46",
+      "obligation_ref": "o50",
+      "test_ref": "live session on the operator's box, 2026-09-19",
+      "behavior_text": "a 'listen --script file.wav' run against the real lobes session did not end when the file ended and ignored SIGTERM (needed SIGKILL)",
+      "contract_text": "a 'listen --script file.wav' run against the real lobes session did not end when the file ended and ignored SIGTERM (needed SIGKILL)",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "four scripted runs hung past a 90 s timeout; one process survived SIGTERM",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "d09a434"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 50
+    },
+    {
+      "id": "e47",
+      "obligation_ref": "o51",
+      "test_ref": "live session on the operator's box, 2026-09-19",
+      "behavior_text": "capture from the reSpeaker through the host PipeWire session works from the listener process; the monitor speaker is inaudible to the mic (RMS 1075 ambient vs 1196 while playing)",
+      "contract_text": "capture from the reSpeaker through the host PipeWire session works from the listener process; the monitor speaker is inaudible to the mic (RMS 1075 ambient vs 1196 while playing)",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "this is host-level only and says nothing about the container claim, which stays unchecked",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-19T01:33:02",
+        "commit": "e8a5dd4"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 51
+    }
+  ],
+  "deltas": [
+    {
+      "id": "b1",
+      "kind": "amended",
+      "behavior_text": "what kind of speech an utterance is gets decided by a local language model (lobes senses, Gemma) returning class/intent/confidence, not by a rule cascade; this repo's code still refuses anything labelled a command in strict mode",
+      "caused_by": [
+        "d1"
+      ],
+      "evidence_refs": [
+        "e31"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b2",
+      "kind": "removed",
+      "behavior_text": "the deterministic guarantee that a spoken command is recognised as a command: the rule/lexicon classifier is no longer in the runtime path and serves only as a test oracle",
+      "caused_by": [
+        "d2"
+      ],
+      "evidence_refs": [
+        "e32"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b3",
+      "kind": "added",
+      "behavior_text": "a trimmed rolling context window of recent utterances, mode and AC state is sent with every model call; in memory only, gone on restart",
+      "caused_by": [
+        "d3"
+      ],
+      "evidence_refs": [
+        "e33"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b4",
+      "kind": "added",
+      "behavior_text": "a local golden set (275-row manifest, runner with text, audio-batch and audio-realtime entrances, thresholds, replay recording) exists; it has NOT been run against the real model",
+      "caused_by": [
+        "d4"
+      ],
+      "evidence_refs": [
+        "e34"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b5",
+      "kind": "added",
+      "behavior_text": "the listener exits with code 3 when the lobes session freezes, so the restart policy recovers it; previously sys.exit on the reader thread ended only that thread and run() returned 0",
+      "caused_by": [
+        "c31"
+      ],
+      "evidence_refs": [
+        "e17"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b6",
+      "kind": "added",
+      "behavior_text": "operator controls from the CLI are capped by the listener's own --apply flag: a dry-run listener cannot be made to actuate from the CLI",
+      "caused_by": [
+        "c13"
+      ],
+      "evidence_refs": [
+        "e35"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b7",
+      "kind": "amended",
+      "behavior_text": "dashboard and CLI controls skip the mode gate and the already-in-state check by design, while sharing the whitelist, argument validation and rate limiter with the voice path",
+      "caused_by": [
+        "c46"
+      ],
+      "evidence_refs": [
+        "e26"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b8",
+      "kind": "added",
+      "behavior_text": "the Sensibo key is injected per call by the operator's grant secrets manager (closed 'grant run --inject' prefix around the locked argv); the key never enters this process, a config file or a compose env file",
+      "caused_by": [
+        "c12"
+      ],
+      "evidence_refs": [
+        "e36"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b9",
+      "kind": "added",
+      "behavior_text": "the lobes gateway key is obtained by re-exec under grant when config names a secret, so it exists only in the listener's process environment",
+      "caused_by": [
+        "c12"
+      ],
+      "evidence_refs": [
+        "e37"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b10",
+      "kind": "amended",
+      "behavior_text": "the actuation rate limit is asymmetric for AC power: OFF after a 60 s debounce, ON 240 s after the last OFF, daily cap 48 in the example config; other actions keep the symmetric interval",
+      "caused_by": [
+        "c32"
+      ],
+      "evidence_refs": [
+        "e38",
+        "e43"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b11",
+      "kind": "amended",
+      "behavior_text": "operator controls (CLI, dashboard) bypass the intervals but not the daily cap, and their actions still count for the voice path",
+      "caused_by": [
+        "c46"
+      ],
+      "evidence_refs": [
+        "e38"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b12",
+      "kind": "amended",
+      "behavior_text": "on the real box the configured start-up volume is not applied (wpctl needs a node id or alias, not a node name); the listener logs the failure and carries on",
+      "caused_by": [
+        "c8"
+      ],
+      "evidence_refs": [
+        "e45"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b13",
+      "kind": "amended",
+      "behavior_text": "a scripted WAV run does not terminate by itself and ignores SIGTERM on the real lobes session",
+      "caused_by": [
+        "c1"
+      ],
+      "evidence_refs": [
+        "e46"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b14",
+      "kind": "amended",
+      "behavior_text": "with the real model, at least one cold phrasing is labelled with the opposite intent (cool), which would power the AC on for a person who is cold",
+      "caused_by": [
+        "c22"
+      ],
+      "evidence_refs": [
+        "e44"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    }
+  ],
+  "supersessions": []
+}

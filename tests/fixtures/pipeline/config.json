@@ -1,0 +1,44 @@
+{
+  "location": {
+    "lat": 31.78,
+    "lon": 35.22,
+    "timezone": "Asia/Jerusalem"
+  },
+  "candle_lighting_offset_minutes": 18,
+  "tzeit_definition": "3_medium_stars",
+  "region": "israel",
+  "whitelist": {
+    "sensibo": {
+      "pods": ["PODFAKE1"],
+      "actions": {
+        "power": ["on", "off"]
+      }
+    },
+    "volume": {
+      "pods": ["self"],
+      "actions": {
+        "step": ["up", "down"]
+      }
+    }
+  },
+  "rate_limits": {
+    "min_interval_seconds": 600,
+    "daily_cap": 12,
+    "retry_window_seconds": 300,
+    "retry_max_attempts": 5
+  },
+  "strict_mode_delay_seconds": 15,
+  "min_confidence": 0.6,
+  "volume": {
+    "level": 0.0,
+    "muted": true,
+    "min": 0.0,
+    "max": 0.7,
+    "step": 0.1
+  },
+  "join_gap_ms": 500,
+  "ring_sizes": {
+    "transcript_buffer": 20,
+    "action_log": 200
+  }
+}

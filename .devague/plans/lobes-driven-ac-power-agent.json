@@ -1,0 +1,1039 @@
+{
+  "slug": "lobes-driven-ac-power-agent",
+  "title": "lobes-driven AC power agent",
+  "frame_slug": "lobes-driven-ac-power-agent",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-18T18:20:50Z",
+  "updated": "2026-09-18T19:12:44Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "shabbos-goy listens through the lobes Hebrew realtime session (ears-only), and in Shabbat / Yom Kippur mode switches the AC power on or off only when it infers the wish from indirect speech; it can report AC status, stays quiet by default with an adjustable own-volume, and survives reboots unattended",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "the full path transcript -> joiner -> classifier -> mode gate -> whitelist -> sensibo argv runs in tests with no microphone, no lobes server and no Sensibo account",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "AC actuation is POWER ON/OFF ONLY via `sensibo set <pod> --power on|off [--apply] --json`; the adapter builds an argv that can never contain --mode/--target/--fan/--swing (tested), because sensibo-cli set.py:116-131 uses the single-field PATCH acStates/on only when exactly one field differs and a full-state POST otherwise",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "a test enumerates every argv the adapter can produce and asserts the only sensibo flags are --power on|off, --apply and --json; tool arguments other than power are rejected by validation before any subprocess starts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "requirement",
+      "text": "the whitelist is JSON config (zero runtime deps; pyyaml is dev-only per pyproject.toml) listing tools + Sensibo pod ids; for now the only representable tool arguments are power=on|off",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "deleting a tool or pod id from the JSON whitelist makes 'actions' stop listing it and makes the gate refuse it, with no code change; a malformed whitelist fails closed (nothing acts)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "the lobes client is ears-only and stdlib-only: copy the WebSocket layer of lobes-cli scripts/realtime-smoke.py (handshake, masking, framing, PING->PONG), stream PCM16 incl. silence on its own thread, never send response.create or declare tools, ignore empty-text transcripts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "a wire-level test against a fake WebSocket server proves the client answers PING with PONG, never emits response.create or session.update tools, and drops empty-text transcripts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "resilience is client-side: lobes sessions have no resume (docs/realtime-pipeline.md:597-609) and uvicorn drops peers that miss a pong (~20s), so the listener reconnects with backoff, treats any disconnect as a lost turn (nothing acts on it), and holds no state across restarts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "a test kills the fake server mid-turn: the client reconnects with capped backoff, the interrupted turn produces no action, and no file is written that a restart could replay",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "requirement",
+      "text": "a transcript joiner re-joins pause-split sentences using speech_stopped.at_ms -> next speech_started.at_ms gaps (Spark runs VAD_SILENCE_MS=500, no per-session VAD override exists in _session.py parse_session_config); a half sentence never acts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "fixtures with a split sentence (gap below the join threshold) classify as one utterance; a dangling half ('\u05d4\u05dc\u05d5\u05d5\u05d0\u05d9 \u05e9') never acts, including when the second half never arrives or arrives after a reconnect",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "requirement",
+      "text": "own-voice output is a thin PipeWire adapter in this repo (pw-play for TTS audio, PipeWire volume control for level/mute) targeting the reSpeaker XVF3800 node by name, the same device for capture and playback so AEC has its reference; the configured volume is re-applied at start-up; default is silent/near-silent; /v1/audio/speech has no volume parameter so level is applied locally",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "volume get/set/mute target the card by name 'Array', the configured level is re-applied at start-up, the default configuration speaks nothing, and the adapter is exercised in tests through a fake amixer/aplay",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c10",
+      "kind": "requirement",
+      "text": "Docker Compose service copies climate-cli house style (python:3.12-slim, non-root uid 1000 matching the host user, restart: unless-stopped, json-file 10m x 3, ro config bind mount from ~/.config/shabbos-goy, gitignored env file + .example) and newly establishes: the host user's PipeWire socket mounted into the container with pw-record/pw-play installed, pip-pinned sensibo-cli in the image, reaching the lobes gateway on host port 8001 via host.docker.internal/host-gateway, and a healthcheck proving transcripts/keepalive are live",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "docker compose config validates in CI; the image runs as non-root, contains a pinned sensibo-cli, has json-file rotation and restart: unless-stopped; the healthcheck goes unhealthy when no pong/transcript activity has been seen within its window",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c11",
+      "kind": "boundary",
+      "text": "lobes-cli is not modified: no tools declared to the session, no VAD override requested, BlueTTS weights never redistributed or defaulted; TTS_DEBUG_TEXT must be turned off on the Spark by the operator before household use (HANDOFF.md:149 records it ON)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "no commit in this repo touches ../lobes-cli, no tool declarations are sent to lobes, and the README deployment checklist tells the operator to unset TTS_DEBUG_TEXT",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c12",
+      "kind": "boundary",
+      "text": "lobes host, GATEWAY_API_KEY and SENSIBO_API_KEY live only in env/private config; scripts/scan-secrets.py does not catch ws:// URLs or non-JSON files, so this is by discipline (or the scanner is extended)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "scan-secrets (extended to ws/wss and non-JSON config, or an equivalent test) fails on a tracked non-localhost realtime URL; lobes host and both keys are read only from env/private config",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c13",
+      "kind": "requirement",
+      "text": "new verbs (classify, zmanim, actions, listen, plus ac/volume/mode nouns) follow the scaffold contract: register(sub), parser_class=type(p) on nested subparsers, an overview sub-verb per noun, --json everywhere, explain catalog entries, actuating verbs dry-run unless --apply; catalog _ROOT and learn text get a domain rewrite",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "teken cli doctor . --strict passes; every new verb and noun has an explain catalog entry and --json; a test walks the parser and fails on a verb without a catalog entry; actuating verbs change nothing without --apply",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c14",
+      "kind": "requirement",
+      "text": "the domain story changes are propagated to README.md, CLAUDE.md, AGENTS.override.md, AGENTS.colleague.md and QWEN.md together, and docs/halacha-open-questions.md is created (it does not exist yet)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "one PR updates README.md, CLAUDE.md, AGENTS.override.md, AGENTS.colleague.md and QWEN.md together (QWEN.md's '--mode cool --target 24' example removed) and adds docs/halacha-open-questions.md with no endorsement-sounding copy",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c16",
+      "kind": "boundary",
+      "text": "in Shabbat/Yom Kippur mode imperatives, requests and rebukes never act, are never queued, and nothing is asked back; logs carry classified intent + action only, never audio or transcript text",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "table-driven tests over the fixture corpus assert strict mode yields no action for imperative/request/rebuke, no queued or persisted pending action exists anywhere, no code path speaks a question, and log lines contain class + action but never transcript text",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c17",
+      "kind": "requirement",
+      "text": "volume control: weekday mode accepts direct spoken volume commands; Shabbat/Yom Kippur mode changes volume only on inferred hints; CLI/config always available beforehand",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "tests: weekday + '\u05ea\u05e0\u05de\u05d9\u05da \u05d0\u05ea \u05d4\u05d5\u05d5\u05dc\u05d9\u05d5\u05dd' changes volume; strict mode + the same utterance changes nothing; strict mode + a loudness remark lowers it; volume steps are bounded by config",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c18",
+      "kind": "requirement",
+      "text": "mode = zmanim-automatic plus a manual override available equally from the CLI and the dashboard; either may force strict mode on or switch it off, even inside a zmanim window; the override is held in memory only, so the zmanim-computed mode returns after any restart",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h41",
+      "kind": "honesty",
+      "text": "tests: inside a simulated zmanim window both the CLI and the dashboard can set weekday mode and can force strict mode, through one shared policy function; after a process restart the mode is the zmanim-computed one and no file holds the override",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c19",
+      "kind": "requirement",
+      "text": "weekday mode obeys direct commands and hints, with the same power-only whitelist and the same ears-only lobes session; the classifier verdict plus the current mode decide whether a class may act",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "a single mode x class policy table drives the gate and is asserted cell by cell; weekday imperative/request/rebuke/hint act, strict mode acts on hints only; an untrusted clock selects the strict column",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c20",
+      "kind": "requirement",
+      "text": "AC power state is read via the zero-write dry-run 'sensibo set --power' diff until sensibo-cli exposes acState upstream",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "the status reader only ever runs sensibo without --apply (asserted on argv), parses 'changes' to derive on/off, reports 'unknown' on any non-zero exit, and is isolated behind one function so sensibo-cli#15 can replace it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c25",
+      "kind": "audience",
+      "text": "an observant household (first: the operator's own home on the DGX Spark) that wants the AC handled on Shabbat/Yom Kippur without addressing a device, and the operator who sets everything up beforehand; secondary: mesh agents/maintainers who drive the CLI",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "every step a household member experiences needs no interaction with the device during the day; every operator step (location, whitelist, pod id, volume, keys) is documented as done before candle lighting",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c26",
+      "kind": "after_state",
+      "text": "a Compose service listens ambiently through lobes; a Hebrew remark that the room is hot powers the AC on and a remark that it is cold powers it off, with nobody addressing the device; commands are dropped in strict mode and obeyed on weekdays; after a power cut it resumes the right mode with no human touch",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h19",
+      "kind": "honesty",
+      "text": "the after-state is shown by a recorded dry-run drill from fixtures and one live --apply run on the operator's pod, and the reboot claim by an actual host reboot with the container coming back in the correct mode",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c27",
+      "kind": "before_state",
+      "text": "the repo is a CLI scaffold with no domain code; on Shabbat the household either leaves the AC fixed for 25 hours or relies on a timer, and nothing can react to how the room actually feels",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h20",
+      "kind": "honesty",
+      "text": "the README Status text matches the code on disk at merge time: nothing described as shipped is still planned",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c28",
+      "kind": "success_signal",
+      "text": "on the fixture corpus, transcribed through lobes batch Whisper, strict mode acts on 0 of the imperative/request/rebuke fixtures (>= 60 such fixtures, false-positive rate 0%) while acting on >= 70% of hint fixtures; the listener reconnects within 60 s of a lobes restart and the container returns to the correct mode after a host reboot with 0 human actions",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h21",
+      "kind": "honesty",
+      "text": "the benchmark uses ASR-transcribed audio (not typed text) for the headline number, the corpus and thresholds are committed, and a regression that makes any command fixture act in strict mode fails CI",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c29",
+      "kind": "requirement",
+      "text": "the agent runs 25h+ straight and hears a lot; it must survive accumulated context by compaction/trimming rather than keeping everything: any context it holds (transcript join buffer, event log, and the context of any model in the loop) is bounded and trimmed, and long history is not important to keep",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h22",
+      "kind": "honesty",
+      "text": "nothing the agent holds grows with session length: after a simulated 25h+ stream, memory/context size is under a fixed configured bound, old context has been trimmed or compacted, and classification of a fresh hint still works",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c30",
+      "kind": "requirement",
+      "text": "[challenge/hardware] audio I/O must coexist with the host PipeWire session: probe 'fuser /dev/snd/*' shows user pipewire (pid 3189) holding pcmC1D0c and pcmC1D0p of card Array, so raw 'hw:Array' capture from a container will hit EBUSY; the audio backend (PipeWire socket mount vs releasing the card from PipeWire for exclusive ALSA use) is chosen deliberately and tested on the box",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h23",
+      "kind": "honesty",
+      "text": "on the Spark, with the host PipeWire session running, the container captures 16 kHz PCM and plays a WAV through card Array for 10 minutes with no EBUSY and with AEC reference intact; the same works after a reboot with nobody logged in",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c31",
+      "kind": "requirement",
+      "text": "[challenge/operations] a stalled listener must exit non-zero by an internal watchdog (no pong/audio-send/transcript activity within a window): Compose restart policies act on exit, not on an 'unhealthy' healthcheck, so a healthcheck alone never restarts a wedged process",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h24",
+      "kind": "honesty",
+      "text": "a test freezes the fake server (socket open, no frames): the process exits non-zero within the watchdog window, and a Compose drill shows it restarted",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c32",
+      "kind": "requirement",
+      "text": "[challenge/containment] actuation is rate-limited in config: a minimum interval between power changes (compressor protection, two people disagreeing hot/cold) and a cap on actions per day; when a limit is hit the agent does nothing and logs it. This is the only containment available on Shabbat, since nobody can command it to stop",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h25",
+      "kind": "honesty",
+      "text": "tests: a second power change inside the minimum interval is refused and logged; the daily cap refuses the N+1th action; both limits come from config and are in-memory only, resetting toward 'allowed' never toward a replay of a refused action",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c33",
+      "kind": "requirement",
+      "text": "[challenge/failure-modes] the agent never acts on its own voice: transcripts that overlap its TTS playback (plus a tail) are discarded, so a spoken '\u05d4\u05de\u05d6\u05d2\u05df \u05e4\u05d5\u05e2\u05dc' cannot be re-heard as a remark",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h26",
+      "kind": "honesty",
+      "text": "a test plays a TTS phrase while a fixture transcript with the same text arrives: it is discarded; a genuine hint arriving after the tail window still acts",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c34",
+      "kind": "requirement",
+      "text": "[challenge/unstated-assumptions] the fixture corpus must include non-acting look-alikes as first-class negatives: negation ('\u05dc\u05d0 \u05d7\u05dd \u05e4\u05d4'), questions to a person ('\u05d7\u05dd \u05dc\u05da?'), reported/quoted speech ('\u05d0\u05de\u05e8\u05ea\u05d9 \u05dc\u05d5 \u05e9\u05d7\u05dd \u05e4\u05d4'), past/future tense, third-party audio (TV, a guest on the phone) and learning/davening text; in doubt the class is 'unrelated'",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h27",
+      "kind": "honesty",
+      "text": "the committed corpus has at least 10 fixtures in each negative category named in the claim, and strict mode acts on 0 of them",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c35",
+      "kind": "requirement",
+      "text": "[challenge/failure-modes] a failed actuation (Sensibo cloud or internet down, non-zero exit) is retried only within a short bounded in-memory window and then dropped; it is never persisted and never retried after a restart",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h28",
+      "kind": "honesty",
+      "text": "tests: a failing sensibo subprocess is retried at most the configured number of times inside the window, then dropped; killing and restarting the process mid-retry produces no actuation",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c36",
+      "kind": "requirement",
+      "text": "[challenge/observability] a pre-Shabbat preflight ('shabbos-goy doctor' extension or 'preflight' verb) verifies in one run: lobes /health + key accepted, Sensibo key + pod reachable, card Array present, clock synchronised, location set, and prints the next strict-mode window so the operator can check the zmanim by eye before candle lighting",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h29",
+      "kind": "honesty",
+      "text": "preflight exits 0 only when every check passes, exits 2 naming the failing check otherwise, supports --json, never actuates, and prints the next window in local time",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c37",
+      "kind": "requirement",
+      "text": "[challenge/privacy] error paths are covered by the no-transcript-text logging rule: exceptions and tracebacks raised while handling an utterance must not carry transcript text to stdout/stderr (Docker retains both)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h30",
+      "kind": "honesty",
+      "text": "a test forces an exception inside the utterance handler with a marker transcript and asserts the marker appears in neither stdout nor stderr",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c38",
+      "kind": "requirement",
+      "text": "[challenge/time] zmanim are computed in UTC from latitude/longitude and converted with an explicit configured timezone: the host is Asia/Jerusalem but a python:3.12-slim container defaults to UTC, and Israel leaves DST on 2026-10-25; candle-lighting offset (18/40 min) and the tzeit definition are config, with test vectors on both sides of a DST change",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h31",
+      "kind": "honesty",
+      "text": "zmanim test vectors cover at least 3 locations and dates on both sides of the 2026-10-25 DST change, agree with a published source to within 2 minutes, and pass with the process TZ set to UTC",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c41",
+      "kind": "boundary",
+      "text": "[challenge/security] on weekdays anyone within earshot can switch AC power; this is accepted because the whitelist is power-only, and is the reason the whitelist must stay narrow when actuators are added",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h32",
+      "kind": "honesty",
+      "text": "README states plainly that weekday mode obeys anyone in earshot and that the whitelist is the control",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c45",
+      "kind": "requirement",
+      "text": "[challenge/adjacent-systems] the lobes wire contract test in this repo is built from the shapes in lobes-cli site/src/scripts/event-fixtures.ts (cited, not imported: every EventType and ErrorCode, the ears-only turn, reason max_turn), and the client treats unknown event types and error codes as ignorable-and-logged rather than fatal; the listener keeps streaming mic audio during its own playback and only discards the overlapping transcripts (it never mutes the mic automatically, matching lobes' no-mic-mute rule)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h33",
+      "kind": "honesty",
+      "text": "a test replays every cited fixture event through the client: ears-only events produce transcripts, all response.* and tool events are ignored without action, every error code is handled by name, an invented event type does not crash the loop; a test asserts audio frames keep flowing while TTS playback is active",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c46",
+      "kind": "requirement",
+      "text": "the agent has a web app dashboard, modelled on the lobes realtime web app as reference: a debug tool and control surface with bug context, accessible over the network via Tailscale",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h34",
+      "kind": "honesty",
+      "text": "the dashboard is served by stdlib only (dependencies stay []), shows mode + next window, connection state, AC status, recent utterances with class/intent/gate verdict/action/timings and errors, and its controls drive the same whitelist and adapters as voice (AC power on/off, volume, force strict mode, preflight), so nothing the whitelist forbids is reachable from it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c50",
+      "kind": "boundary",
+      "text": "[dashboard/privacy] transcript text lives only in a bounded in-memory ring (trimmed per c29) that feeds the dashboard; it is never written to disk, never logged to stdout/stderr, and is gone on restart; the no-transcript-text rule for logs (c16, c37) is unchanged",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h35",
+      "kind": "honesty",
+      "text": "a test feeds marker transcripts through the listener with the dashboard enabled: the marker is returned by the dashboard's recent-utterances endpoint, appears in neither stdout, stderr nor any file under the container's writable paths, the ring never exceeds its configured size, and it is empty after a restart",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c51",
+      "kind": "requirement",
+      "text": "[dashboard/security] the dashboard listens only on the host's Tailscale address, never 0.0.0.0 or the LAN; it shows no secret (keys, gateway host credentials); state-changing endpoints are POST-only and reject cross-origin requests, so a web page opened on a tailnet device cannot switch the AC",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h36",
+      "kind": "honesty",
+      "text": "tests: the server refuses to start on 0.0.0.0 or a non-tailnet address unless config explicitly says so; a GET never changes state; a POST with a foreign Origin is refused; no response body contains the API key or gateway key (marker test)",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c52",
+      "kind": "requirement",
+      "text": "[dashboard/resilience] the dashboard can never stop the agent listening or acting: if its address is not up yet at boot (tailscaled later than Docker) or the server crashes, the listener carries on and the dashboard bind is retried",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h37",
+      "kind": "honesty",
+      "text": "tests: with the dashboard address unavailable the listener still classifies and acts and the bind is retried; an exception in a dashboard handler does not stop the listener loop",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c54",
+      "kind": "boundary",
+      "text": "[dashboard/halacha] whether using the dashboard on Shabbat/Yom Tov is permitted is the user's question for their rav; it is listed in docs/halacha-open-questions.md and the README describes the dashboard as an operator tool, not as a Shabbat-compatible feature",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h39",
+      "kind": "honesty",
+      "text": "docs/halacha-open-questions.md lists the dashboard-on-Shabbat question and the README wording contains no claim that the dashboard is permitted on Shabbat",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c56",
+      "kind": "requirement",
+      "text": "[dashboard/mode] a mode set from the dashboard is held in memory only: after a restart or power cut the agent returns to the mode computed from zmanim (strict inside a window), so an override can never silently outlive a reboot into a laxer mode",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h40",
+      "kind": "honesty",
+      "text": "a test sets weekday mode from the dashboard inside a simulated window, restarts the process, and finds strict mode; no file holds the dashboard-set mode",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "Policy table: utterance classes, modes and the mode x class gate",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/policy.py defines the classes (imperative, request, rebuke, remark, wish, discomfort, unrelated), the modes (weekday, strict) and one may_act(mode, klass) function; tests/test_policy.py asserts every cell: weekday acts on all but unrelated, strict acts only on remark/wish/discomfort",
+        "an unknown class or mode returns False (never acts) and a clock-untrusted flag selects the strict column"
+      ],
+      "deps": [],
+      "covers": [
+        "c19",
+        "h16"
+      ],
+      "instruction": "Pure stdlib, no I/O. This table is the single source every other module and both UIs call; do not duplicate the rule anywhere else."
+    },
+    {
+      "id": "t2",
+      "summary": "JSON config and whitelist loader that fails closed",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/config.py loads JSON from the XDG config dir (path overridable by env and flag); tests/test_config.py: removing a tool or pod id removes it from the effective whitelist with no code change",
+        "a missing, unreadable or malformed config yields an empty whitelist and a named CliError for CLI callers; the only representable AC argument is power on|off, anything else is a validation error",
+        "config carries: location lat/lon/timezone, candle-lighting offset, tzeit definition, israel|diaspora, pod ids, rate limits, strict-mode delay, volume level and step bounds, join gap, ring sizes, dashboard bind address"
+      ],
+      "deps": [],
+      "covers": [
+        "c3",
+        "h3"
+      ],
+      "instruction": "Stdlib json only (pyyaml is dev-only). Ship tests/fixtures/config.example.json with placeholder values; never a real pod id, host or key."
+    },
+    {
+      "id": "t3",
+      "summary": "Stdlib zmanim: sunset, candle lighting, tzeit, Hebrew calendar, holy-day windows",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/zmanim/ computes in UTC from lat/lon and converts with an explicit IANA timezone via zoneinfo; tests pass with TZ=UTC",
+        "test vectors for at least 3 locations and for dates on both sides of 2026-10-25 agree with a published source to within 2 minutes; the vectors file cites its source",
+        "Hebrew calendar conversion yields correct Gregorian dates for Yom Kippur and every Yom Tov for 5786-5800 (vector-tested), honours israel|diaspora second days, and windows_for(date) returns strict windows for Shabbat, Yom Kippur and Yom Tov, merging adjacent days"
+      ],
+      "deps": [],
+      "covers": [
+        "c38",
+        "h31"
+      ],
+      "instruction": "NOAA solar position formulas for sunset; candle-lighting offset and tzeit (fixed minutes or depression angle) come from config. No third-party packages. Keep calendar and sun maths in separate files."
+    },
+    {
+      "id": "t4",
+      "summary": "Transcript joiner for pause-split sentences",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/joiner.py joins transcripts whose speech_stopped.at_ms to next speech_started.at_ms gap is below the configured threshold; tests/test_joiner.py: a split hint classifies as one utterance",
+        "a dangling half never reaches the classifier as actionable: not when the second half never arrives, not after a reconnect (at_ms restarts), and empty-text transcripts are ignored; buffer size is bounded"
+      ],
+      "deps": [],
+      "covers": [
+        "c7",
+        "h6"
+      ],
+      "instruction": "Pure state machine over events with at_ms; flush on timeout using an injected clock so tests need no sleeping."
+    },
+    {
+      "id": "t5",
+      "summary": "Sensibo adapter: argv-locked power control and zero-write status read",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/actuators/sensibo.py builds argv only from a closed set; tests enumerate every producible argv and assert the only sensibo flags are --power on|off, --apply and --json",
+        "status() never passes --apply (asserted), derives on/off from the dry-run changes diff, merges temperature/humidity from sensibo read, and returns unknown on any non-zero exit; it is one function so sensibo-cli#15 can replace it",
+        "power(on|off, apply=False) is dry-run by default, treats any non-zero exit as did-not-act, uses a subprocess timeout above sensibo's own backoff, and is tested with a fake sensibo executable on PATH"
+      ],
+      "deps": [],
+      "covers": [
+        "c2",
+        "h2",
+        "c20",
+        "h17"
+      ],
+      "instruction": "subprocess.run with list args, no shell. Never log the pod id at info level. Do not import the sensibo package."
+    },
+    {
+      "id": "t6",
+      "summary": "Rate limits, strict-mode delay, bounded retry and bounded context",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/limits.py: minimum interval between power changes and a daily cap, both from config, in memory only; a refused action is logged and never replayed",
+        "a delayed-action timer (strict mode, default 15 s) and a bounded retry window for failed actuations live in memory and are provably empty after a restart (no file written)",
+        "a BoundedRing type caps every buffer the agent holds; a soak test feeds a synthetic 25h+ event stream through ring, joiner-sized buffers and limiter using an injected clock and asserts sizes stay under their bounds and a fresh hint still passes"
+      ],
+      "deps": [],
+      "covers": [
+        "c32",
+        "h25",
+        "c35",
+        "h28",
+        "c29",
+        "h22"
+      ],
+      "instruction": "Injected clock everywhere; no sleeping in tests. No persistence of any kind."
+    },
+    {
+      "id": "t7",
+      "summary": "Stdlib lobes realtime client: ears-only, reconnecting, watchdog",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/lobes/ holds a stdlib RFC 6455 client cited from lobes-cli scripts/realtime-smoke.py (recorded in docs/skill-sources.md or a CITATION comment); tests run against an in-process fake WebSocket server",
+        "answers PING with PONG; never emits response.create or tool declarations (asserted on every frame sent); drops empty-text transcripts; every event shape and error code from lobes site/src/scripts/event-fixtures.ts is replayed (cited into tests/fixtures/) and an invented event type does not crash the loop",
+        "server killed mid-turn: reconnects with capped backoff, the interrupted turn yields no action, nothing is written that a restart could replay; a 401 is a named environment error with backoff, not a crash loop",
+        "server frozen (socket open, no frames): the watchdog makes the process exit non-zero within its window; audio frames keep flowing while a playback-active flag is set"
+      ],
+      "deps": [],
+      "covers": [
+        "c5",
+        "h4",
+        "c6",
+        "h5",
+        "c45",
+        "h33",
+        "c31",
+        "h24"
+      ],
+      "instruction": "Host and key come from env only. Keep the wire layer (ws.py) separate from the session logic (client.py)."
+    },
+    {
+      "id": "t8",
+      "summary": "PipeWire audio adapter: capture, playback, own volume",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/audio/pipewire.py builds pw-record and pw-play argv targeting the reSpeaker node by name, refuses a mic/speaker pair on different devices, and gets/sets/mutes volume through PipeWire; all tested with fake pw-* executables",
+        "the configured level is re-applied at start-up, volume steps are clamped to config bounds, and the default configuration plays nothing"
+      ],
+      "deps": [],
+      "covers": [
+        "c8",
+        "h7"
+      ],
+      "instruction": "Per decision c42 read every amixer/aplay mention in older honesty conditions as its PipeWire equivalent. Mirror normalize_pipewire_device_name from lobes realtime-he-accept.py and cite it."
+    },
+    {
+      "id": "t9",
+      "summary": "Extend scan-secrets to realtime URLs and non-JSON config",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "scripts/scan-secrets.py flags a tracked non-localhost ws:// or wss:// URL and host-like values in YAML, env-example and Markdown code blocks; tests/test_scan_secrets.py covers a positive and an allowed-localhost case",
+        "the repo as committed still scans clean"
+      ],
+      "deps": [],
+      "covers": [
+        "c12",
+        "h10"
+      ],
+      "instruction": "Keep the existing checks unchanged; add an allowlist for documentation placeholders written in angle brackets."
+    },
+    {
+      "id": "t10",
+      "summary": "Hebrew classifier and fixture corpus",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/classifier/ returns class, inferred intent (cool, warm, louder, quieter, status, none) and a confidence; in doubt the class is unrelated",
+        "tests/fixtures/corpus.jsonl is committed with at least 60 command fixtures (imperative, request, rebuke), hint fixtures for hot and cold, and at least 10 fixtures in each negative category: negation, question to a person, reported speech, other tense, third-party audio, learning/davening text",
+        "table-driven tests: strict mode acts on 0 command fixtures and 0 negative fixtures; hint recall on typed text is at least 70 percent; no code path produces a question as spoken output"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c16",
+        "h13",
+        "c34",
+        "h27"
+      ],
+      "instruction": "Rules and lexicon first (deterministic, testable, zero deps): normalise niqqud and final letters, detect imperative and future-second-person verb forms, request frames, rebuke frames, wish frames and state adjectives. Include ASR-error variants seen in lobes docs. Keep the interface narrow so a model-backed classifier could be swapped in later behind the same function."
+    },
+    {
+      "id": "t11",
+      "summary": "Mode resolver: zmanim-computed mode, in-memory override, clock trust",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/mode.py returns strict inside any zmanim window and weekday outside; an untrusted clock or missing location returns strict",
+        "one shared set_override function serves CLI and dashboard: both can force strict and can set weekday inside a simulated window; the override is memory-only, and a new process computes the zmanim mode with no file holding the override"
+      ],
+      "deps": [
+        "t2",
+        "t3"
+      ],
+      "covers": [
+        "c18",
+        "h41",
+        "c56",
+        "h40"
+      ],
+      "instruction": "Clock trust: check NTP sync via timedatectl when available, else a sanity floor on the year; inject the check for tests."
+    },
+    {
+      "id": "t12",
+      "summary": "Decision pipeline: transcript to action, end to end on fixtures",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/pipeline.py wires joiner, classifier, mode gate, whitelist, limits and the sensibo/volume adapters; tests drive it from fixture events with no microphone, lobes server or Sensibo account",
+        "hot hint powers on, cold hint powers off, already-in-state does nothing and says nothing; weekday volume imperative changes volume, strict mode ignores it, a strict-mode loudness remark lowers it",
+        "transcripts overlapping own playback plus a tail are discarded while a later genuine hint still acts",
+        "log lines carry class, intent, gate verdict and action only; a forced exception with a marker transcript leaks the marker to neither stdout nor stderr; recent utterance text goes only to the in-memory ring"
+      ],
+      "deps": [
+        "t1",
+        "t2",
+        "t4",
+        "t5",
+        "t6",
+        "t8",
+        "t10",
+        "t11"
+      ],
+      "covers": [
+        "c1",
+        "h1",
+        "c17",
+        "h14",
+        "c33",
+        "h26",
+        "c37",
+        "h30"
+      ],
+      "instruction": "Everything actuating stays dry-run unless apply=True is passed down from the CLI. Wrap the utterance handler so exception messages are replaced by a type name before logging."
+    },
+    {
+      "id": "t13",
+      "summary": "Domain CLI verbs, preflight, explain catalog and learn rewrite",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "verbs classify, zmanim, actions, preflight and nouns ac (status, power), volume (get, set), mode (show, set), each noun with an overview sub-verb, nested parsers using parser_class=type(p), all supporting --json",
+        "a test walks the built parser and fails on any verb or noun without an explain catalog entry; catalog root and learn text describe the domain; teken cli doctor . --strict passes",
+        "ac power and volume set change nothing without --apply; preflight exits 0 only if lobes health and key, Sensibo key and pod, audio node, clock sync and location all pass, exits 2 naming the failed check, never actuates, and prints the next strict window in local time"
+      ],
+      "deps": [
+        "t12"
+      ],
+      "covers": [
+        "c13",
+        "h11",
+        "c36",
+        "h29"
+      ],
+      "instruction": "One file per verb under shabbos_goy/cli/_commands/. mode set talks to a running listener through its local control endpoint; with no listener it explains that overrides are memory-only."
+    },
+    {
+      "id": "t14",
+      "summary": "listen verb: the ambient runtime loop",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos-goy listen starts capture, the lobes client, the pipeline and (if configured) the dashboard thread; --script with a WAV or an events file runs the same loop with no hardware; dry-run unless --apply",
+        "with the dashboard address unavailable the listener still classifies and acts and the bind is retried; an exception in a dashboard handler does not stop the loop",
+        "a heartbeat on tmpfs or a local health endpoint reflects recent pong/audio/transcript activity for the container healthcheck"
+      ],
+      "deps": [
+        "t7",
+        "t8",
+        "t12",
+        "t13",
+        "t15"
+      ],
+      "covers": [
+        "c52",
+        "h37"
+      ],
+      "instruction": "Threads: mic feeder, reader, pipeline worker, dashboard. Shared state only through the pipeline queue and the bounded ring; document the locking."
+    },
+    {
+      "id": "t15",
+      "summary": "Tailscale-only stdlib dashboard with controls and bug context",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "shabbos_goy/web/ serves with http.server only: mode and next window, connection state, AC status, recent utterances with text, class, intent, gate verdict, action, timings, and errors; controls for AC power, volume, mode and preflight call the same whitelist, limits and adapters as voice",
+        "refuses to bind 0.0.0.0 or a non-tailnet address unless config explicitly allows; GET never changes state; POST with a foreign Origin is refused; no response contains either key (marker test)",
+        "marker transcripts appear in the recent-utterances endpoint and in no log stream or file; the ring never exceeds its size and is empty after a restart"
+      ],
+      "deps": [
+        "t11",
+        "t12"
+      ],
+      "covers": [
+        "c46",
+        "h34",
+        "c50",
+        "h35",
+        "c51",
+        "h36"
+      ],
+      "instruction": "Single static HTML page plus JSON endpoints, no build step, no external assets. Use the lobes site event-stream page as the visual reference only."
+    },
+    {
+      "id": "t16",
+      "summary": "Docker packaging: image, Compose service, healthcheck",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "Dockerfile (python:3.12-slim, non-root uid matching the host user, pinned sensibo-cli, pipewire client tools) and docker-compose.yml (restart: unless-stopped, json-file 10m x 3, ro config mount, env_file, PipeWire socket mount, host-gateway to the lobes port, dashboard reachable on the tailnet address only)",
+        "docker compose config validates in CI; docker/shabbos-goy.env.example is committed and the real env file is gitignored; the healthcheck goes unhealthy when the heartbeat is stale"
+      ],
+      "deps": [
+        "t14",
+        "t15"
+      ],
+      "covers": [
+        "c10",
+        "h8"
+      ],
+      "instruction": "Decide host networking versus a published port bound to the tailnet address and record why in the compose file comments; the listener must start even if that address is not up yet."
+    },
+    {
+      "id": "t17",
+      "summary": "ASR-transcribed benchmark of the corpus",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "a script or pytest marker transcribes corpus audio through lobes POST /v1/audio/transcriptions and caches transcripts under tests/fixtures/asr/; the default test run uses the cache and needs no server",
+        "CI asserts strict mode acts on 0 of at least 60 ASR-transcribed command fixtures and reports hint recall against the 70 percent threshold; thresholds live in a committed file",
+        "a local golden set lives under tests/golden/: golden.jsonl gives every case an id, the Hebrew text, the expected class set, expected intent and the expected act/no-act decision in strict and weekday mode, including multi-segment cases (a pause-split hint, a hint followed by a command) that exercise the joiner",
+        "one stdlib script drives the REAL lobes models from that set: synth (POST /v1/audio/speech), record (operator voice through PipeWire), transcribe (POST /v1/audio/transcriptions), stream (WAV through the live /v1/realtime session using this repo's own lobes client and joiner) and report (classify, gate, compare); report exits non-zero on any strict-mode action for a command or negative case",
+        "audio never enters git (tests/golden/audio/ is gitignored; operator recordings stay on the box); transcript caches are committed per audio source so the default pytest run re-checks the golden decisions with no server, and live checks run only under an explicit marker with the lobes URL and key in the environment"
+      ],
+      "deps": [
+        "t10"
+      ],
+      "covers": [
+        "c28",
+        "h21"
+      ],
+      "instruction": "Audio source is an open risk: start with TTS-synthesised audio via POST /v1/audio/speech, then replace with operator recordings. Never commit household recordings of other people."
+    },
+    {
+      "id": "t18",
+      "summary": "Docs: re-scope the invariant to speech, halacha doc, five prompt files, version bump",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "README.md, CLAUDE.md, AGENTS.override.md, AGENTS.colleague.md and QWEN.md change together: the invariant reads as spoken commands in strict mode, CLI and dashboard are described as operator UIs, the QWEN.md --mode cool --target 24 example is gone, shipped sections lose their (planned) marker and nothing unshipped is described as shipped",
+        "docs/halacha-open-questions.md exists and lists: device status, speaking near a listening device, permitted hints, powering OFF from a cold hint, the deliberate delay, dashboard use on Shabbat, Yom Kippur and Yom Tov; no endorsement-sounding copy anywhere",
+        "README states that weekday mode obeys anyone in earshot and the whitelist is the control, lists every operator step as done before candle lighting, and its deployment checklist tells the operator to unset TTS_DEBUG_TEXT; no commit touches ../lobes-cli",
+        "version bumped with the version-bump skill and CHANGELOG notes that runtime dependencies stay empty; markdownlint passes"
+      ],
+      "deps": [
+        "t13",
+        "t15",
+        "t16"
+      ],
+      "covers": [
+        "c14",
+        "h12",
+        "c54",
+        "h39",
+        "c41",
+        "h32",
+        "c11",
+        "h9",
+        "c27",
+        "h20",
+        "c25",
+        "h18"
+      ],
+      "instruction": "Write for both readers named in c25: the household and the operator."
+    },
+    {
+      "id": "t19",
+      "summary": "On-box drills with the operator: PipeWire, live apply, reconnect, reboot",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "docs/drills/ records, with date and outputs: 10 minutes of container capture and playback through the reSpeaker with the host PipeWire session running and no EBUSY; one live --apply power change on the operator's pod",
+        "a lobes restart is followed by reconnection within 60 s; a host reboot brings the container back in the correct mode with 0 human actions and working audio with nobody logged in"
+      ],
+      "deps": [
+        "t16"
+      ],
+      "covers": [
+        "c26",
+        "h19",
+        "c30",
+        "h23"
+      ],
+      "instruction": "Needs the operator and the hardware; run on a weekday. Record failures as they are."
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "classifier approach: rules and lexicon first; recall on colloquial, Yeshivish or children's speech may fall short of 70 percent and need a model-backed classifier behind the same interface (which would then need context trimming per c29)",
+      "kind": "unknown_nonblocking",
+      "task_id": "t10",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "fixture audio source: TTS-synthesised audio is a weaker proxy than human recordings for ASR errors; who records the operator corpus is undecided (frame park v3)",
+      "kind": "unknown_nonblocking",
+      "task_id": "t17",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "lobes wire lives on the unmerged branch spec/hebrew-realtime; cited fixtures can drift until lobes-cli merges and releases",
+      "kind": "unknown_nonblocking",
+      "task_id": "t7",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "thread concurrency around the pipeline queue, bounded ring and rate limiter was not examinable during the challenge pass (no code existed); t14 must document locking and the soak test must run multi-threaded",
+      "kind": "unknown_nonblocking",
+      "task_id": "t14",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r5",
+      "text": "container networking: binding the dashboard to the tailnet address needs either host networking or a published port on that address; tailscaled may start after Docker at boot, and Tailscale ACLs were not examined (no token, so every tailnet device can control AC power)",
+      "kind": "unknown_nonblocking",
+      "task_id": "t16",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r6",
+      "text": "PipeWire socket inside a container depends on the host user session (linger is enabled) and a matching uid; unproven until the t19 drill",
+      "kind": "unknown_nonblocking",
+      "task_id": "t19",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r7",
+      "text": "cross-origin POST refusal on iOS Safari was not examined; verify from the operator's phone during drills",
+      "kind": "unknown_nonblocking",
+      "task_id": "t15",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r8",
+      "text": "sensibo-cli#15 (acState on a read path) is open; the dry-run diff stopgap stays until it lands",
+      "kind": "follow_up",
+      "task_id": "t5",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r9",
+      "text": "zmanim correctness: a calendar or sunset bug fails toward weekday mode on a holy day; vectors must come from an independent published source, and the operator checks the preflight window by eye before each Shabbat until trusted",
+      "kind": "unknown_nonblocking",
+      "task_id": "t3",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r10",
+      "text": "stale Sensibo state or a physical-remote change between status read and write; AC behaviour after a mains cut is outside the agent (frame park v4)",
+      "kind": "out_of_scope",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": []
+}
