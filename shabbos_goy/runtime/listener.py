@@ -443,8 +443,8 @@ class Listener:
 
     # Every argument below is a keyword-only dependency-injection seam with a
     # default, relied on by the test suite; grouping them would hide the seams.
-    def __init__(  # NOSONAR python:S107
-        self,
+    def __init__(
+        self,  # NOSONAR - S107 is anchored on the parameter list; reason above
         *,
         config: Config,
         decider: Any,
