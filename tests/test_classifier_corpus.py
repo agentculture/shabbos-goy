@@ -58,7 +58,8 @@ def test_corpus_ids_are_unique_and_fields_are_valid():
     assert len(ids) == len(set(ids))
     for row in CORPUS:
         assert row["category"] in {"command", "hint", "negative"}
-        assert isinstance(row["text"], str) and row["text"].strip()
+        assert isinstance(row["text"], str)
+        assert row["text"].strip()
         assert isinstance(row["expect_act_strict"], bool)
         assert row.get("expect_class", "unrelated") in CLASSES
         assert row.get("expect_intent", "none") in INTENTS

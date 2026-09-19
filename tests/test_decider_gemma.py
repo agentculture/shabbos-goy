@@ -71,7 +71,8 @@ def test_request_shape_model_temperature_path_and_bearer() -> None:
     payload = request.json_body
     assert payload["model"] == "senses"
     assert payload["temperature"] == 0
-    assert isinstance(payload["max_tokens"], int) and payload["max_tokens"] <= 256
+    assert isinstance(payload["max_tokens"], int)
+    assert payload["max_tokens"] <= 256
     assert payload["messages"][0]["role"] == "system"
     assert payload["messages"][0]["content"] == SYSTEM_PROMPT
     # Ears-only: we never declare tools to the model and never ask it to act.
@@ -423,5 +424,6 @@ def test_config_rejects_non_http_scheme() -> None:
 def test_decider_refuses_a_non_http_base_url() -> None:
     from shabbos_goy.lobes.config import LobesConfigError
 
+    config = SensesConfig(base_url="file:///etc/passwd")
     with pytest.raises(LobesConfigError):
-        GemmaDecider(SensesConfig(base_url="file:///etc/passwd"))
+        GemmaDecider(config)

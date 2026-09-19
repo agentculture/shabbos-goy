@@ -49,7 +49,8 @@ def test_a_consistent_hint_maps_need_to_intent(state, need, intent) -> None:
 def test_an_inverted_hint_is_no_decision(klass, state, need) -> None:
     """The observed failure: a cold complaint answered with the cooling direction."""
     decision = _decide({"class": klass, "state": state, "need": need, "confidence": 0.9})
-    assert decision.klass == NO_DECISION.klass and decision.intent == "none"
+    assert decision.klass == NO_DECISION.klass
+    assert decision.intent == "none"
     assert decision.reason == "state_need_mismatch"
 
 

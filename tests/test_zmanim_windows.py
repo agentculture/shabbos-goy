@@ -94,8 +94,9 @@ def test_tzeit_by_fixed_minutes_matches_published():
 
 
 def test_tzeit_rule_rejects_an_unknown_kind():
+    rule = TzeitRule(kind="vibes", value=3)
     with pytest.raises(ValueError):
-        TzeitRule(kind="vibes", value=3).validate()
+        rule.validate()
 
 
 def test_shabbat_window_runs_from_friday_candles_to_saturday_tzeit():
@@ -127,8 +128,9 @@ def test_window_contains_is_half_open():
 
 def test_window_contains_requires_an_aware_moment():
     window = windows_for(date(2026, 10, 24), JERUSALEM, ISRAEL_RULES)[0]
+    naive_moment = datetime(2026, 10, 24, 12, 0)
     with pytest.raises(ValueError):
-        window.contains(datetime(2026, 10, 24, 12, 0))
+        window.contains(naive_moment)
 
 
 def test_yom_kippur_is_its_own_window_kind():
@@ -159,7 +161,8 @@ def test_diaspora_second_day_extends_the_window_israel_ends_earlier():
     """Sukkot: Israel stops Saturday night, the diaspora runs to Sunday night."""
     israel = windows_for(date(2026, 9, 26), JERUSALEM, ISRAEL_RULES)
     diaspora = windows_for(date(2026, 9, 26), NEW_YORK, DIASPORA_RULES)
-    assert len(israel) == 1 and len(diaspora) == 1
+    assert len(israel) == 1
+    assert len(diaspora) == 1
     assert israel[0].days == (date(2026, 9, 26),)
     assert diaspora[0].days == (date(2026, 9, 26), date(2026, 9, 27))
     assert windows_for(date(2026, 9, 27), JERUSALEM, ISRAEL_RULES) == []
@@ -209,8 +212,9 @@ def test_next_window_returns_the_window_already_running():
 
 
 def test_next_window_requires_an_aware_moment():
+    naive_moment = datetime(2026, 10, 20, 12, 0)
     with pytest.raises(ValueError):
-        next_window(datetime(2026, 10, 20, 12, 0), JERUSALEM, ISRAEL_RULES)
+        next_window(naive_moment, JERUSALEM, ISRAEL_RULES)
 
 
 def test_window_is_hashable_and_comparable():
@@ -220,13 +224,15 @@ def test_window_is_hashable_and_comparable():
 
 
 def test_rules_reject_a_negative_candle_offset():
+    rules = ZmanimRules(candle_lighting_offset_minutes=-1)
     with pytest.raises(ValueError):
-        ZmanimRules(candle_lighting_offset_minutes=-1).validate()
+        rules.validate()
 
 
 def test_rules_reject_a_negative_tzeit_value():
+    rules = ZmanimRules(tzeit=TzeitRule.minutes(-5))
     with pytest.raises(ValueError):
-        ZmanimRules(tzeit=TzeitRule.minutes(-5)).validate()
+        rules.validate()
 
 
 def test_default_rules_are_diaspora_eighteen_minutes_and_eight_and_a_half_degrees():
@@ -245,8 +251,9 @@ def test_far_north_location_raises_rather_than_guessing():
     from shabbos_goy.zmanim import SunEventNotFound
 
     longyearbyen = Location(78.2232, 15.6469, "Arctic/Longyearbyen")
+    solstice = date(2026, 6, 20)
     with pytest.raises(SunEventNotFound):
-        windows_for(date(2026, 6, 20), longyearbyen, DIASPORA_RULES)
+        windows_for(solstice, longyearbyen, DIASPORA_RULES)
 
 
 # ---------------------------------------------------------------------------
@@ -275,8 +282,9 @@ def test_tzeit_rule_rejects_values_outside_a_usable_range(rule):
 
 @pytest.mark.parametrize("offset", [-1, 1000, float("nan"), float("inf")])
 def test_zmanim_rules_rejects_an_unusable_candle_lighting_offset(offset):
+    rules = ZmanimRules(candle_lighting_offset_minutes=offset, tzeit=TzeitRule.degrees(8.5))
     with pytest.raises(ValueError):
-        ZmanimRules(candle_lighting_offset_minutes=offset, tzeit=TzeitRule.degrees(8.5)).validate()
+        rules.validate()
 
 
 def test_windows_for_refuses_a_window_that_ends_before_it_starts(monkeypatch):
@@ -291,5 +299,6 @@ def test_windows_for_refuses_a_window_that_ends_before_it_starts(monkeypatch):
         return candle_lighting(day - timedelta(days=2), location, rules)
 
     monkeypatch.setattr(windows_mod, "tzeit", inverted_tzeit)
+    a_day = date(2026, 10, 24)
     with pytest.raises(ValueError):
-        windows_mod.windows_for(date(2026, 10, 24), JERUSALEM, ISRAEL_RULES)
+        windows_mod.windows_for(a_day, JERUSALEM, ISRAEL_RULES)

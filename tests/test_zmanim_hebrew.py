@@ -146,11 +146,15 @@ def test_sukkot_second_day_is_diaspora_only():
 
 
 def test_invalid_hebrew_date_is_rejected():
+    no_adar_ii = HebrewDate(5788, 13, 1)  # no Adar II in 5788
     with pytest.raises(ValueError):
-        hebrew.to_gregorian(HebrewDate(5788, 13, 1))  # no Adar II in 5788
+        hebrew.to_gregorian(no_adar_ii)
+    tishrei_overflow = HebrewDate(5787, 7, 31)  # Tishrei has 30 days
     with pytest.raises(ValueError):
-        hebrew.to_gregorian(HebrewDate(5787, 7, 31))  # Tishrei has 30 days
+        hebrew.to_gregorian(tishrei_overflow)
+    month_zero = HebrewDate(5787, 0, 1)
     with pytest.raises(ValueError):
-        hebrew.to_gregorian(HebrewDate(5787, 0, 1))
+        hebrew.to_gregorian(month_zero)
+    year_zero = HebrewDate(0, 7, 1)
     with pytest.raises(ValueError):
-        hebrew.to_gregorian(HebrewDate(0, 7, 1))
+        hebrew.to_gregorian(year_zero)

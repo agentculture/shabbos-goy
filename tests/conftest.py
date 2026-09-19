@@ -21,4 +21,3 @@ def _hermetic_environment(tmp_path_factory, monkeypatch):
     # Never replace the test process, whatever a config says. Tests of the
     # re-exec itself pass an explicit ``env`` and an injected ``execvpe``.
     monkeypatch.setenv(grant_inject.GUARD_ENV, "1")
-    yield

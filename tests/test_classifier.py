@@ -7,6 +7,8 @@ corpus-level number cannot be met by accident.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from shabbos_goy.classifier import CLASSES, INTENTS, Classification, classify
@@ -49,7 +51,8 @@ def test_classify_returns_class_intent_and_confidence():
     assert result.klass in CLASSES
     assert result.intent in INTENTS
     assert 0.0 <= result.confidence <= 1.0
-    assert isinstance(result.reason, str) and result.reason
+    assert isinstance(result.reason, str)
+    assert result.reason
 
 
 @pytest.mark.parametrize("text", ["", "   ", None])
@@ -202,7 +205,7 @@ def test_unknown_text_falls_back_to_unrelated():
 
 def test_classification_is_hashable_and_frozen():
     result = classify("חם פה")
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         result.klass = "imperative"  # type: ignore[misc]
 
 

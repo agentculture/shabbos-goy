@@ -130,19 +130,23 @@ def test_dst_change_shifts_the_local_clock_but_not_the_maths():
 def test_polar_day_has_no_sunset():
     """Svalbard in June: fail loudly rather than invent a time."""
     longyearbyen = Location(78.2232, 15.6469, "Arctic/Longyearbyen")
+    solstice = date(2026, 6, 21)
     with pytest.raises(SunEventNotFound):
-        sun.sunset(date(2026, 6, 21), longyearbyen)
+        sun.sunset(solstice, longyearbyen)
 
 
 def test_polar_night_has_no_sunrise():
     longyearbyen = Location(78.2232, 15.6469, "Arctic/Longyearbyen")
+    winter_solstice = date(2026, 12, 21)
     with pytest.raises(SunEventNotFound):
-        sun.sunrise(date(2026, 12, 21), longyearbyen)
+        sun.sunrise(winter_solstice, longyearbyen)
 
 
 def test_location_rejects_an_unknown_timezone():
+    # __post_init__ resolves the zone eagerly, so construction itself raises;
+    # the explicit .zone() call would never be reached.
     with pytest.raises(ValueError):
-        Location(31.778, 35.235, "Mars/Olympus_Mons").zone()
+        Location(31.778, 35.235, "Mars/Olympus_Mons")
 
 
 def test_location_rejects_an_empty_timezone():
@@ -151,8 +155,10 @@ def test_location_rejects_an_empty_timezone():
 
 
 def test_depression_angle_must_not_be_negative():
+    jerusalem = Location(31.778, 35.235, "Asia/Jerusalem")
+    a_day = date(2026, 10, 24)
     with pytest.raises(ValueError):
-        sun.depression_time(date(2026, 10, 24), Location(31.778, 35.235, "Asia/Jerusalem"), -1.0)
+        sun.depression_time(a_day, jerusalem, -1.0)
 
 
 def test_location_rejects_out_of_range_coordinates():

@@ -85,7 +85,8 @@ def test_min_interval_refuses_immediate_repeat_then_allows_later():
     limiter = RateLimiter(_config(), clock=clock)
 
     ok, reason = limiter.check()
-    assert ok and reason is None
+    assert ok
+    assert reason is None
     limiter.record()
 
     # immediately again: refused
@@ -101,7 +102,8 @@ def test_min_interval_refuses_immediate_repeat_then_allows_later():
     # interval satisfied
     clock.advance(31.0)
     ok, reason = limiter.check()
-    assert ok and reason is None
+    assert ok
+    assert reason is None
 
 
 def test_daily_cap_refuses_once_reached():
@@ -137,7 +139,8 @@ def test_daily_cap_resets_after_a_day_elapses():
 
     clock.advance(86400.0 + 1.0)
     ok, reason = limiter.check()
-    assert ok and reason is None
+    assert ok
+    assert reason is None
 
 
 def test_refused_action_is_logged_and_never_replayed():
@@ -391,7 +394,8 @@ def test_on_after_off_waits_for_the_compressor_interval() -> None:
     limiter.record("pod", direction="off")
     clock.advance(120)
     allowed, reason = limiter.check("pod", direction="on")
-    assert allowed is False and "compressor" in (reason or "")
+    assert allowed is False
+    assert "compressor" in (reason or "")
     clock.advance(125)  # 245 s after the power-off
     assert limiter.check("pod", direction="on")[0] is True
 

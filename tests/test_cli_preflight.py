@@ -249,7 +249,8 @@ def test_sensibo_key_in_the_environment_wins_without_asking_grant() -> None:
     result = preflight._check_sensibo_key(
         {"SENSIBO_API_KEY": "x"}, grant_secret="SENSIBO_API_KEY", runner=_grant_runner(set(), calls)
     )
-    assert result.passed is True and calls == []
+    assert result.passed is True
+    assert calls == []
 
 
 def test_sensibo_key_check_without_env_or_grant_names_both_remedies() -> None:
@@ -257,4 +258,5 @@ def test_sensibo_key_check_without_env_or_grant_names_both_remedies() -> None:
 
     result = preflight._check_sensibo_key({}, grant_secret=None, runner=_grant_runner(set(), []))
     assert result.passed is False
-    assert "grant" in result.remediation and "SENSIBO_API_KEY" in result.remediation
+    assert "grant" in result.remediation
+    assert "SENSIBO_API_KEY" in result.remediation
