@@ -137,7 +137,8 @@ def build_frame(opcode: int, payload: bytes = b"", *, mask: bool = True) -> byte
     every client-to-server frame MUST be masked per RFC 6455 SS5.1.
     """
     header = bytearray()
-    header.append(0x80 | (opcode & 0x0F))  # FIN=1, RSV=0
+    # FIN bit set, no reserved bits, then the opcode's low nibble.
+    header.append(0x80 | (opcode & 0x0F))
     length = len(payload)
     mask_bit = 0x80 if mask else 0x00
     if length < 126:
@@ -153,6 +154,21 @@ def build_frame(opcode: int, payload: bytes = b"", *, mask: bool = True) -> byte
         header += mask_key
         payload = mask_payload(payload, mask_key)
     return bytes(header) + payload
+
+
+def _read_extended_length(recv_exact: Callable[[int], bytes], length: int) -> int:
+    """Resolve the 7-bit length field, reading its 16- or 64-bit extension."""
+    if length == 126:
+        ext = recv_exact(2)
+        if len(ext) < 2:
+            raise FrameReadError("connection closed while reading the 16-bit extended length")
+        return struct.unpack("!H", ext)[0]
+    if length == 127:
+        ext = recv_exact(8)
+        if len(ext) < 8:
+            raise FrameReadError("connection closed while reading the 64-bit extended length")
+        return struct.unpack("!Q", ext)[0]
+    return length
 
 
 def read_frame(
@@ -178,17 +194,7 @@ def read_frame(
     fin = bool(b0 & 0x80)
     opcode = b0 & 0x0F
     masked = bool(b1 & 0x80)
-    length = b1 & 0x7F
-    if length == 126:
-        ext = recv_exact(2)
-        if len(ext) < 2:
-            raise FrameReadError("connection closed while reading the 16-bit extended length")
-        length = struct.unpack("!H", ext)[0]
-    elif length == 127:
-        ext = recv_exact(8)
-        if len(ext) < 8:
-            raise FrameReadError("connection closed while reading the 64-bit extended length")
-        length = struct.unpack("!Q", ext)[0]
+    length = _read_extended_length(recv_exact, b1 & 0x7F)
     if length > max_payload_bytes:
         # Named, and raised before any buffer is sized from it.
         raise FrameTooLarge(

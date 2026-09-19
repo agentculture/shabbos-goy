@@ -158,7 +158,9 @@ AudioSource = Callable[[], bytes | None]
 class LobesClient:
     """One ears-only realtime session, reconnected for as long as it runs."""
 
-    def __init__(
+    # Every argument below is a keyword-only dependency-injection seam with a
+    # default, relied on by the test suite; grouping them would hide the seams.
+    def __init__(  # NOSONAR python:S107
         self,
         config: LobesConfig,
         on_event: EventCallback,
@@ -274,15 +276,10 @@ class LobesClient:
         failures = 0
         productive = 0
         while not self._stopped.is_set():
-            if (
-                self._max_connections is not None
-                and self.stats.connections >= self._max_connections
-            ):
+            if self._connection_budget_spent():
                 break
-            if self.stats.connections > 0:
-                self._sleep(self._backoff.delay(max(1, failures)))
-                if self._stopped.is_set():
-                    break
+            if not self._wait_before_reconnect(failures):
+                break
             try:
                 outcome = self.run_once()
             except (LobesAuthError, LobesConnectError):
@@ -301,6 +298,17 @@ class LobesClient:
             return EXIT_ENVIRONMENT
         return EXIT_OK
 
+    def _connection_budget_spent(self) -> bool:
+        """True once ``max_connections`` (tests and drills) is used up."""
+        return self._max_connections is not None and self.stats.connections >= self._max_connections
+
+    def _wait_before_reconnect(self, failures: int) -> bool:
+        """Back off between connections. False means stop() fired while waiting."""
+        if self.stats.connections == 0:
+            return True
+        self._sleep(self._backoff.delay(max(1, failures)))
+        return not self._stopped.is_set()
+
     def run_once(self) -> SessionOutcome:
         """One connection, from handshake to close. Never persists anything."""
         self.stats.connections += 1
@@ -312,38 +320,8 @@ class LobesClient:
         feeder = self._start_feeder()
         watchdog = Watchdog(self._watchdog_seconds, self._clock)
         watchdog.beat()
-        reason = REASON_STOPPED
-        seen = 0
         try:
-            while not self._stopped.is_set():
-                if self._source_ended.is_set():
-                    # The feeder closed a finite source's last turn and waited
-                    # out its transcript: this session is done, by name.
-                    reason = REASON_SOURCE_ENDED
-                    break
-                try:
-                    fin, opcode, payload = conn.read_frame(timeout=self._read_timeout)
-                except socket.timeout:
-                    if watchdog.expired():
-                        reason = self._stall()
-                        break
-                    continue
-                except (ws.FrameReadError, OSError):
-                    reason = REASON_CONNECTION_LOST
-                    break
-                watchdog.beat()
-                if not fin:
-                    continue
-                if opcode == ws.OPCODE_TEXT:
-                    seen += 1
-                    self._handle_text(payload)
-                elif opcode == ws.OPCODE_PING:
-                    conn.send_pong(payload)
-                    self.stats.pings_answered += 1
-                elif opcode == ws.OPCODE_CLOSE:
-                    reason = REASON_SERVER_CLOSED
-                    break
-                # BINARY/PONG/CONTINUATION: this route sends none; ignored.
+            reason, seen = self._read_until_done(conn, watchdog)
         finally:
             self._session_over.set()
             self._conn = None
@@ -355,6 +333,46 @@ class LobesClient:
         return self._finish_session(reason, seen)
 
     # -- internals --------------------------------------------------------
+    def _read_until_done(self, conn: ws.WebSocketConnection, watchdog: Watchdog) -> tuple[str, int]:
+        """Read frames until something ends the session. Returns (reason, events)."""
+        seen = 0
+        while not self._stopped.is_set():
+            if self._source_ended.is_set():
+                # The feeder closed a finite source's last turn and waited
+                # out its transcript: this session is done, by name.
+                return REASON_SOURCE_ENDED, seen
+            try:
+                fin, opcode, payload = conn.read_frame(timeout=self._read_timeout)
+            except socket.timeout:
+                if watchdog.expired():
+                    return self._stall(), seen
+                continue
+            except (ws.FrameReadError, OSError):
+                return REASON_CONNECTION_LOST, seen
+            watchdog.beat()
+            if not fin:
+                continue
+            closed, counted = self._dispatch_frame(conn, opcode, payload)
+            seen += counted
+            if closed is not None:
+                return closed, seen
+        return REASON_STOPPED, seen
+
+    def _dispatch_frame(
+        self, conn: ws.WebSocketConnection, opcode: int, payload: bytes
+    ) -> tuple[str | None, int]:
+        """Act on one whole frame. Returns (close reason or None, events seen)."""
+        if opcode == ws.OPCODE_TEXT:
+            self._handle_text(payload)
+            return None, 1
+        if opcode == ws.OPCODE_PING:
+            conn.send_pong(payload)
+            self.stats.pings_answered += 1
+        elif opcode == ws.OPCODE_CLOSE:
+            return REASON_SERVER_CLOSED, 0
+        # BINARY/PONG/CONTINUATION: this route sends none; ignored.
+        return None, 0
+
     def _connect(self) -> ws.WebSocketConnection:
         try:
             conn, status, _headers = ws.WebSocketConnection.connect(

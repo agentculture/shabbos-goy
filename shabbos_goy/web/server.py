@@ -225,7 +225,9 @@ class DashboardServer:
     reported as unavailable, never faked.
     """
 
-    def __init__(
+    # Every keyword argument below is an optional dependency-injection seam with
+    # a default, relied on by the test suite; grouping them would hide the seams.
+    def __init__(  # NOSONAR python:S107
         self,
         pipeline: Any,
         mode_provider: Callable[[], Any],
@@ -644,24 +646,8 @@ class DashboardServer:
             # The listener's own ``--apply`` is the ceiling: a caller may ask
             # for a dry run on an applying listener, never the other way round.
             apply = self.controls.apply if apply is None else (self.controls.apply and bool(apply))
-            acted = True
             try:
-                if planned.tool == TOOL_SENSIBO:
-                    result = adapter(planned.key, planned.value == "on", apply=apply)
-                    acted = bool(isinstance(result, Mapping) and result.get("acted"))
-                    # An applying call that did not act FAILED (timeout, non-zero
-                    # exit): only a non-applying call is honestly a dry run.
-                    if acted:
-                        verdict = VERDICT_ACTED
-                    else:
-                        verdict = VERDICT_ERROR if apply else VERDICT_DRY_RUN
-                elif not apply:
-                    # A volume step has no dry-run form of its own: not calling
-                    # the adapter IS the dry run.
-                    verdict = VERDICT_DRY_RUN
-                else:
-                    adapter(1 if planned.value == "up" else -1)
-                    verdict = VERDICT_ACTED
+                verdict, acted = self._actuate(planned, adapter, apply)
             except Exception as exc:  # noqa: BLE001 - the message may quote a pod id
                 reason = type(exc).__name__
                 self._log_control(intent, VERDICT_ERROR, action, planned.alias, reason)
@@ -683,6 +669,25 @@ class DashboardServer:
             "target": planned.alias,
             "reason": "",
         }
+
+    def _actuate(
+        self, planned: PlannedAction, adapter: Callable[..., Any], apply: bool
+    ) -> tuple[str, bool]:
+        """Call one adapter under the caller's lock. Returns (verdict, acted)."""
+        if planned.tool == TOOL_SENSIBO:
+            result = adapter(planned.key, planned.value == "on", apply=apply)
+            acted = bool(isinstance(result, Mapping) and result.get("acted"))
+            # An applying call that did not act FAILED (timeout, non-zero
+            # exit): only a non-applying call is honestly a dry run.
+            if acted:
+                return VERDICT_ACTED, True
+            return (VERDICT_ERROR if apply else VERDICT_DRY_RUN), False
+        if not apply:
+            # A volume step has no dry-run form of its own: not calling
+            # the adapter IS the dry run.
+            return VERDICT_DRY_RUN, True
+        adapter(1 if planned.value == "up" else -1)
+        return VERDICT_ACTED, True
 
     def control_mode(self, body: Mapping[str, Any]) -> dict[str, Any]:
         """Force strict on, switch it off, or clear the override.
@@ -925,7 +930,7 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-        except (UnicodeDecodeError, ValueError):
+        except ValueError:  # UnicodeDecodeError and JSONDecodeError are both ValueErrors
             return None
         return payload if isinstance(payload, dict) else None
 

@@ -363,7 +363,9 @@ def power_direction(planned: "PlannedAction") -> str | None:
 class Pipeline:
     """Transcript events in, at most one whitelisted tool call out."""
 
-    def __init__(
+    # Every argument below is a keyword-only dependency-injection seam with a
+    # default, relied on by the test suite; grouping them would hide the seams.
+    def __init__(  # NOSONAR python:S107
         self,
         *,
         decider: Decider,
@@ -767,17 +769,14 @@ class Pipeline:
             acted = bool(isinstance(result, Mapping) and result.get("acted"))
             if acted or not self._apply:
                 self.rate_limiter.record(planned.key, direction=power_direction(planned))
+            # An applying call that did not act FAILED; only a listener that
+            # is not applying can honestly call the outcome a dry run.
+            failed_or_dry = VERDICT_ERROR if self._apply else VERDICT_DRY_RUN
             self._record(
                 LogRecord(
                     klass=klass,
                     intent=intent,
-                    # An applying call that did not act FAILED; only a listener that
-                    # is not applying can honestly call the outcome a dry run.
-                    verdict=(
-                        VERDICT_ACTED
-                        if acted
-                        else (VERDICT_ERROR if self._apply else VERDICT_DRY_RUN)
-                    ),
+                    verdict=VERDICT_ACTED if acted else failed_or_dry,
                     action=planned.name,
                     target=planned.alias,
                 )
