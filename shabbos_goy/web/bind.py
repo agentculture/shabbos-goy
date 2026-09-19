@@ -39,7 +39,9 @@ __all__ = [
 ]
 
 #: The CGNAT range Tailscale hands out (100.64.0.0 - 100.127.255.255).
-TAILNET_V4 = ipaddress.ip_network("100.64.0.0/10")
+#: NOSONAR python:S1313 - the documented RFC 6598 100.64.0.0/10 range is a
+#: constant of the protocol we match against, not a host we connect to.
+TAILNET_V4 = ipaddress.ip_network("100.64.0.0/10")  # NOSONAR python:S1313
 
 #: Tailscale's IPv6 ULA prefix.
 TAILNET_V6 = ipaddress.ip_network("fd7a:115c:a1e0::/48")

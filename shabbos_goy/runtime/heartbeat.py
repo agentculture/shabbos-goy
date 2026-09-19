@@ -152,7 +152,7 @@ class Heartbeat:
         self.path = Path(path)
         self._clock = clock
         self._window = float(window_seconds)
-        self._last: dict[str, Optional[float]] = {kind: None for kind in KINDS}
+        self._last: dict[str, Optional[float]] = dict.fromkeys(KINDS)
 
     # -- marking -----------------------------------------------------------
 

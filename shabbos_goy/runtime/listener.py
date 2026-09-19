@@ -261,6 +261,36 @@ def wav_audio_source(path: str | Path, *, chunk_bytes: int = CAPTURE_CHUNK_BYTES
     return read
 
 
+def _wait_for_capture(process: Any) -> None:
+    """Reap the capture child, escalating to kill if it ignores terminate."""
+    try:
+        process.wait(timeout=2.0)
+    except subprocess.TimeoutExpired:  # pragma: no cover - a wedged child
+        try:
+            process.kill()
+            process.wait(timeout=2.0)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    except (OSError, ValueError):  # pragma: no cover - already reaped
+        pass
+
+
+def _reap_capture(process: Any) -> None:
+    """Terminate the capture child, wait for it, close its pipe. Idempotent."""
+    try:
+        if process.poll() is None:
+            process.terminate()
+    except (OSError, ValueError):  # pragma: no cover - already gone
+        pass
+    _wait_for_capture(process)
+    stream = getattr(process, "stdout", None)
+    if stream is not None:
+        try:
+            stream.close()
+        except (OSError, ValueError):  # pragma: no cover
+            pass
+
+
 def pipewire_audio_source(
     node: str, *, chunk_bytes: int = CAPTURE_CHUNK_BYTES, popen=subprocess.Popen
 ):
@@ -293,27 +323,7 @@ def pipewire_audio_source(
 
     def close() -> None:
         """Terminate the capture child and wait for it. Safe to call twice."""
-        try:
-            if process.poll() is None:
-                process.terminate()
-        except (OSError, ValueError):  # pragma: no cover - already gone
-            pass
-        try:
-            process.wait(timeout=2.0)
-        except subprocess.TimeoutExpired:  # pragma: no cover - a wedged child
-            try:
-                process.kill()
-                process.wait(timeout=2.0)
-            except (OSError, ValueError, subprocess.TimeoutExpired):
-                pass
-        except (OSError, ValueError):  # pragma: no cover - already reaped
-            pass
-        stream = getattr(process, "stdout", None)
-        if stream is not None:
-            try:
-                stream.close()
-            except (OSError, ValueError):  # pragma: no cover
-                pass
+        _reap_capture(process)
 
     read.process = process  # type: ignore[attr-defined]
     read.close = close  # type: ignore[attr-defined]
@@ -329,6 +339,49 @@ def _close_audio_source(listener: "Listener", audio: Any) -> None:
         closer()
     except Exception as exc:  # noqa: BLE001 - name it; teardown continues
         listener.note("capture_close_failed", type(exc).__name__)
+
+
+def _open_audio_source(listener: "Listener", factory: Optional[Callable[[], Any]]) -> Any:
+    """Build the capture source, if there is one. A failure is named, not fatal."""
+    if factory is None:
+        return None
+    try:
+        return factory()
+    except Exception as exc:  # noqa: BLE001
+        # Name it, keep listening: capture can come back on the next attempt.
+        listener.note("capture_failed", type(exc).__name__)
+        return None
+
+
+def _run_lobes_session(
+    listener: "Listener",
+    config: Any,
+    audio: Any,
+    client_factory: Optional[Callable[..., Any]],
+) -> bool:
+    """One connection, start to finish. True means the audio is over for good."""
+    listener.connection.note_connecting()
+    factory = client_factory or LobesClient
+    client = factory(
+        config,
+        listener.on_lobes_event,
+        audio_source=audio,
+        # The client's watchdog fires on THIS thread, where sys.exit would
+        # only end the thread and run() would return 0. Hand it a stall
+        # path that stops the whole listener with the stall exit code, so
+        # Compose's restart policy (which reacts to exit, never to
+        # "unhealthy") brings the container back (spec c31).
+        exit_action=listener.stalled,
+    )
+    listener.attach_client(client)
+    try:
+        client.run()
+    except Exception as exc:  # noqa: BLE001 - a session must not kill us
+        listener.note("lobes_session_failed", type(exc).__name__)
+    finally:
+        listener.attach_client(None)
+        _close_audio_source(listener, audio)
+    return bool(getattr(client, "source_ended", False))
 
 
 def lobes_source(
@@ -369,35 +422,8 @@ def lobes_source(
                 listener.wait_for_stop(retry_seconds)
                 continue
 
-            audio = None
-            if audio_source_factory is not None:
-                try:
-                    audio = audio_source_factory()
-                except Exception as exc:  # noqa: BLE001 - name it, keep listening
-                    listener.note("capture_failed", type(exc).__name__)
-
-            listener.connection.note_connecting()
-            factory = client_factory or LobesClient
-            client = factory(
-                config,
-                listener.on_lobes_event,
-                audio_source=audio,
-                # The client's watchdog fires on THIS thread, where sys.exit would
-                # only end the thread and run() would return 0. Hand it a stall
-                # path that stops the whole listener with the stall exit code, so
-                # Compose's restart policy (which reacts to exit, never to
-                # "unhealthy") brings the container back (spec c31).
-                exit_action=listener.stalled,
-            )
-            listener.attach_client(client)
-            try:
-                client.run()
-            except Exception as exc:  # noqa: BLE001 - a session must not kill us
-                listener.note("lobes_session_failed", type(exc).__name__)
-            finally:
-                listener.attach_client(None)
-                _close_audio_source(listener, audio)
-            if bool(getattr(client, "source_ended", False)):
+            audio = _open_audio_source(listener, audio_source_factory)
+            if _run_lobes_session(listener, config, audio, client_factory):
                 listener.note("source_ended")
                 return
             if not listener.stopping:
@@ -415,7 +441,9 @@ def lobes_source(
 class Listener:
     """The ambient loop: ears -> queue -> pipeline, plus its servers."""
 
-    def __init__(
+    # Every argument below is a keyword-only dependency-injection seam with a
+    # default, relied on by the test suite; grouping them would hide the seams.
+    def __init__(  # NOSONAR python:S107
         self,
         *,
         config: Config,
@@ -459,18 +487,18 @@ class Listener:
             lambda: resolve_mode(self._now_provider(), self.config)
         )
 
-        pipeline_kwargs: dict[str, Any] = dict(
-            decider=decider,
-            config=config,
-            mode_provider=self._mode_provider,
-            pod_id=pod_id,
-            ac_power=self._guarded(ac_power),
-            ac_status=ac_status,
-            volume_step=self._guarded(volume_step),
-            speak=speak,
-            clock=clock,
-            apply=self.options.apply,
-        )
+        pipeline_kwargs: dict[str, Any] = {
+            "decider": decider,
+            "config": config,
+            "mode_provider": self._mode_provider,
+            "pod_id": pod_id,
+            "ac_power": self._guarded(ac_power),
+            "ac_status": ac_status,
+            "volume_step": self._guarded(volume_step),
+            "speak": speak,
+            "clock": clock,
+            "apply": self.options.apply,
+        }
         if log is not None:
             pipeline_kwargs["log"] = log
         self.pipeline = Pipeline(**pipeline_kwargs)
@@ -865,24 +893,34 @@ class Listener:
             except queue.Empty:
                 item = _TICK
             if self._paused.is_set() and item is not _TICK:
-                # A test seam only: put it back and idle.
-                self._offer(item)
-                if self._stopping.is_set():
+                if self._idle_while_paused(item):
                     return
-                time.sleep(0.005)
                 continue
-            if item is _DRAIN:
-                self._poll(drain=True)
-                self._drained.set()
-            elif item is _TICK or self._tick.is_set():
-                self._tick.clear()
-                if item is not _TICK:
-                    self._handle(item)
-                self._poll()
-            else:
-                self._handle(item)
+            self._dispatch(item)
             if self._stopping.is_set() and self._queue.empty():
                 return
+
+    def _idle_while_paused(self, item: Any) -> bool:
+        """Put *item* back and idle. True when the worker should stop."""
+        # A test seam only: put it back and idle.
+        self._offer(item)
+        if self._stopping.is_set():
+            return True
+        time.sleep(0.005)
+        return False
+
+    def _dispatch(self, item: Any) -> None:
+        """Route one queue item. The order of these three cases is the contract."""
+        if item is _DRAIN:
+            self._poll(drain=True)
+            self._drained.set()
+        elif item is _TICK or self._tick.is_set():
+            self._tick.clear()
+            if item is not _TICK:
+                self._handle(item)
+            self._poll()
+        else:
+            self._handle(item)
 
     def _handle(self, event: Any) -> None:
         try:
