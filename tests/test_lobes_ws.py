@@ -96,10 +96,12 @@ def test_read_frame_parses_an_unmasked_server_frame() -> None:
 def test_read_frame_raises_frame_read_error_on_a_truncated_stream() -> None:
     payload = b"hello"
     frame = bytes([0x82, len(payload)]) + payload
+    truncated_read = io.BytesIO(frame[:-2]).read
     with pytest.raises(ws.FrameReadError):
-        ws.read_frame(io.BytesIO(frame[:-2]).read)
+        ws.read_frame(truncated_read)
+    empty_read = io.BytesIO(b"").read
     with pytest.raises(ws.FrameReadError):
-        ws.read_frame(io.BytesIO(b"").read)
+        ws.read_frame(empty_read)
 
 
 def test_read_frame_handles_the_64_bit_extended_length_header() -> None:
@@ -147,8 +149,9 @@ def test_the_frame_limit_is_configurable_and_defaults_to_one_mebibyte() -> None:
     assert ws.DEFAULT_MAX_PAYLOAD_BYTES == 1024 * 1024
     payload = b"y" * 300
     frame = bytes([0x82, 126]) + struct.pack("!H", len(payload)) + payload
+    short_read = io.BytesIO(frame).read
     with pytest.raises(ws.FrameTooLarge):
-        ws.read_frame(io.BytesIO(frame).read, max_payload_bytes=299)
+        ws.read_frame(short_read, max_payload_bytes=299)
     fin, _opcode, decoded = ws.read_frame(io.BytesIO(frame).read, max_payload_bytes=300)
     assert (fin, decoded) == (True, payload)
 

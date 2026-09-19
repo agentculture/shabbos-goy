@@ -20,7 +20,7 @@ from shabbos_goy.audio import pipewire as pw
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "fake_pipewire"
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_pipewire_env(tmp_path) -> dict[str, str]:
     """A subprocess env whose PATH resolves pw-record/pw-play/wpctl to the
     fakes, with a fresh, isolated state file for the fake wpctl."""
@@ -73,14 +73,12 @@ def test_validate_device_pair_allow_split_devices_overrides() -> None:
 
 
 def test_device_mismatch_error_message_names_both_devices() -> None:
-    try:
+    with pytest.raises(pw.DeviceMismatchError) as exc_info:
         pw.validate_device_pair("mic-a", "speaker-b")
-    except pw.DeviceMismatchError as exc:
-        assert "mic-a" in str(exc)
-        assert "speaker-b" in str(exc)
-        assert "allow_split_devices" in str(exc)
-    else:
-        pytest.fail("expected DeviceMismatchError")
+    message = str(exc_info.value)
+    assert "mic-a" in message
+    assert "speaker-b" in message
+    assert "allow_split_devices" in message
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +93,8 @@ def test_build_capture_argv_targets_node_by_name() -> None:
     assert (
         argv[argv.index("--target") + 1] == "alsa_input.usb-Seeed_ReSpeaker-00.multichannel-input"
     )
-    assert "--rate" in argv and str(pw.CAPTURE_SAMPLE_RATE_DEFAULT) in argv
+    assert "--rate" in argv
+    assert str(pw.CAPTURE_SAMPLE_RATE_DEFAULT) in argv
     assert argv[-1] == "-"
 
 

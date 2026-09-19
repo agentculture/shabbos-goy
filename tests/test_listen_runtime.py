@@ -719,7 +719,8 @@ def test_a_wav_script_is_streamed_as_pcm_chunks_then_ends(tmp_path) -> None:
 
     read = wav_audio_source(path, chunk_bytes=640)
     first = read()
-    assert first is not None and len(first) == 640
+    assert first is not None
+    assert len(first) == 640
     seen = len(first)
     while True:
         chunk = read()

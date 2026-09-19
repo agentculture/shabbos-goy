@@ -517,8 +517,9 @@ def test_batch_client_synthesises_transcribes_and_reads_health():
 def test_batch_client_raises_a_named_error_on_a_bad_status():
     with FakeBatchAudioServer(transcription_status=502) as server:
         client = gr.LobesBatchClient(server.base_url)
+        wav_bytes = marker_wav("x")
         with pytest.raises(gr.GoldenError):
-            client.transcribe(marker_wav("x"), language="he")
+            client.transcribe(wav_bytes, language="he")
 
 
 def test_health_is_never_fatal():
@@ -572,7 +573,8 @@ def test_audio_batch_entrance_reports_a_missing_wav(tmp_path):
         [row("h1")], Spy(), mode="strict", client=None, audio_dir=tmp_path
     )
     assert results[0].transcripts == []
-    assert results[0].error and "audio" in results[0].error
+    assert results[0].error
+    assert "audio" in results[0].error
     assert cache == {}
 
 

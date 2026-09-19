@@ -398,7 +398,8 @@ def test_a_control_press_racing_a_voice_action_cannot_double_spend_the_daily_cap
         control.start()
         control.join(timeout=10)
         voice.join(timeout=10)
-        assert not control.is_alive() and not voice.is_alive()
+        assert not control.is_alive()
+        assert not voice.is_alive()
 
     assert len(ac.power_calls) == 1
     assert ui.stack.pipeline.log_records[-1].verdict == "acted"

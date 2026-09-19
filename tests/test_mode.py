@@ -168,8 +168,10 @@ def test_polar_location_zmanim_failure_is_strict():
 
 
 def test_compute_zmanim_mode_requires_aware_datetime():
+    naive = datetime(2026, 10, 24, 10, 0)
+    config = _config()
     with pytest.raises(ValueError):
-        compute_zmanim_mode(datetime(2026, 10, 24, 10, 0), _config())
+        compute_zmanim_mode(naive, config)
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +217,9 @@ def test_check_ntp_synchronized_none_on_timeout():
 
 
 def test_clock_is_trusted_requires_aware_datetime():
+    naive = datetime(2026, 10, 24, 10, 0)
     with pytest.raises(ValueError):
-        clock_is_trusted(datetime(2026, 10, 24, 10, 0))
+        clock_is_trusted(naive)
 
 
 # ---------------------------------------------------------------------------
