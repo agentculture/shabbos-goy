@@ -45,7 +45,7 @@ _SECTIONS = [
         "items": [
             "an override lives only in the running listener's memory -- it is never "
             "written to disk and never survives a restart",
-            "'mode set' with no listener running exits 2 (nothing would hold the " "override)",
+            "'mode set' with no listener running exits 2 (nothing would hold the override)",
         ],
     },
 ]
@@ -112,21 +112,21 @@ def cmd_mode_set(args: argparse.Namespace) -> int:
 
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("mode", help="Mode noun: show (read), set (override; see 'mode overview').")
-    p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    p.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     p.set_defaults(func=_no_verb, json=False)
     noun_sub = p.add_subparsers(dest="mode_command", parser_class=type(p))
 
     ov = noun_sub.add_parser("overview", help="Describe the mode noun.")
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    ov.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     ov.set_defaults(func=cmd_mode_overview)
 
     sh = noun_sub.add_parser("show", help="The mode in effect now.")
     sh.add_argument("--config", help="Path to an explicit config file.")
-    sh.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    sh.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     sh.set_defaults(func=cmd_mode_show)
 
     se = noun_sub.add_parser("set", help="Force (or clear, with 'auto') the mode override.")
     se.add_argument("value", choices=list(_OVERRIDE_CHOICES), help="weekday, strict, or auto.")
     se.add_argument("--config", help="Path to an explicit config file.")
-    se.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    se.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     se.set_defaults(func=cmd_mode_set)

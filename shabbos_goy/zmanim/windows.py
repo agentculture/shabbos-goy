@@ -199,7 +199,7 @@ def _run_containing(day: date, rules: ZmanimRules) -> tuple[date, ...]:
 def _window_for_run(run: tuple[date, ...], location: Location, rules: ZmanimRules) -> Window:
     start = candle_lighting(run[0] - timedelta(days=1), location, rules)
     end = tzeit(run[-1], location, rules)
-    if not end > start:
+    if end <= start:
         # Defence in depth behind TzeitRule.validate: a window that ends
         # before it starts contains nothing, and a caller filtering on
         # "does it contain now?" would read that as "no window" -- i.e.

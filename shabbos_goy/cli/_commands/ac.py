@@ -81,22 +81,22 @@ def cmd_ac_power(args: argparse.Namespace) -> int:
 
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("ac", help="AC noun: status (read), power (write; see 'ac overview').")
-    p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    p.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     p.set_defaults(func=_no_verb, json=False)
     noun_sub = p.add_subparsers(dest="ac_command", parser_class=type(p))
 
     ov = noun_sub.add_parser("overview", help="Describe the ac noun.")
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    ov.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     ov.set_defaults(func=cmd_ac_overview)
 
     st = noun_sub.add_parser("status", help="Current AC power/temperature/humidity (read-only).")
     st.add_argument("--config", help="Path to an explicit config file.")
-    st.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    st.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     st.set_defaults(func=cmd_ac_status)
 
     pw = noun_sub.add_parser("power", help="Request AC power. Dry-run unless --apply.")
     pw.add_argument("value", choices=list(ALLOWED_POWER_VALUES), help="on or off.")
     pw.add_argument("--apply", action="store_true", help="Actually actuate (default: dry-run).")
     pw.add_argument("--config", help="Path to an explicit config file.")
-    pw.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    pw.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     pw.set_defaults(func=cmd_ac_power)

@@ -100,7 +100,9 @@ def _capabilities_get(
         return False, None, "connect_error"
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
+    except ValueError:
+        # UnicodeDecodeError derives from ValueError, so it is already
+        # covered here.
         return False, None, "bad_response"
     if not isinstance(payload, dict):
         return False, None, "bad_response"

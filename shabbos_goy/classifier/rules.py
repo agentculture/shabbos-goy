@@ -192,6 +192,70 @@ def _negated_before(norm: Normalized, index: int) -> bool:
     return False
 
 
+def _volume_operation_intent(norm: Normalized) -> str:
+    """The intent of a volume-device operation ("louder"/"quieter"/"none")."""
+    if _operates(norm, _OP_UP) or _operates(norm, _OP_ON):
+        return "louder"
+    if _operates(norm, _OP_DOWN) or _operates(norm, _OP_OFF):
+        return "quieter"
+    return "none"
+
+
+def _climate_operation_intent(norm: Normalized) -> str | None:
+    """The intent of an explicit cool/warm operating verb, if any."""
+    if _operates(norm, _OP_COOL):
+        return "cool"
+    if _operates(norm, _OP_WARM):
+        return "warm"
+    return None
+
+
+def _climate_on_off_operation_intent(norm: Normalized) -> str | None:
+    """The intent of an on/off (or, for climate, down/up) operating verb, if any."""
+    if _operates(norm, _OP_ON) or _operates(norm, _OP_DOWN):
+        return "cool"
+    if _operates(norm, _OP_OFF) or _operates(norm, _OP_UP):
+        return "warm"
+    return None
+
+
+def _named_state_intent(norm: Normalized, *, desire: bool) -> str | None:
+    """The intent implied by a bare on/off device *state* word, if one is named.
+
+    ``desire`` says how to read it: in a wish or an impersonal request the
+    state named is the one the speaker wants, while in a rebuke it is the one
+    they are complaining about, so the wanted state is its opposite -- unless
+    the complaint negated it ("למה המזגן לא דלוק").
+    """
+    on_state = norm.token_index(*lex.STATE_ON)
+    off_state = norm.token_index(*lex.STATE_OFF)
+    if on_state is None and off_state is None:
+        return None
+    index = on_state if on_state is not None else off_state
+    named_on = on_state is not None
+    if _negated_before(norm, index):
+        named_on = not named_on
+    # A wish names the state it wants; a complaint names the state it is
+    # stuck with, and wants the other one.
+    wants_on = named_on if desire else not named_on
+    return "cool" if wants_on else "warm"
+
+
+def _state_remark_intent(norm: Normalized, *, climate: bool, desire: bool) -> str | None:
+    """The intent implied by a plain state-of-the-room remark, if the utterance has one."""
+    state = _state(norm)
+    if state is None:
+        return None
+    plain = _STATE_INTENT[state[0]]
+    if climate or not desire:
+        # The device is named, so the state word describes the room being
+        # complained about ("מה עם המזגן, חם פה") -- act on the state.
+        return plain
+    # Nothing named but the state itself: it is what is being asked for
+    # ("אפשר קצת קריר פה"), which reads like a wish -- inverted.
+    return _WISH_INVERSION[plain]
+
+
 def _device_intent(norm: Normalized, *, desire: bool) -> str:
     """The intent a command-class utterance would execute on a weekday.
 
@@ -210,47 +274,26 @@ def _device_intent(norm: Normalized, *, desire: bool) -> str:
     other = norm.has_token(*lex.OTHER_DEVICES)
 
     if volume and not climate:
-        if _operates(norm, _OP_UP) or _operates(norm, _OP_ON):
-            return "louder"
-        if _operates(norm, _OP_DOWN) or _operates(norm, _OP_OFF):
-            return "quieter"
-        return "none"
+        return _volume_operation_intent(norm)
 
-    if _operates(norm, _OP_COOL):
-        return "cool"
-    if _operates(norm, _OP_WARM):
-        return "warm"
+    climate_intent = _climate_operation_intent(norm)
+    if climate_intent is not None:
+        return climate_intent
 
     if other and not climate:
         return "none"  # a light, a shutter, a door: understood, not whitelisted
 
-    if _operates(norm, _OP_ON) or _operates(norm, _OP_DOWN):
-        return "cool"
-    if _operates(norm, _OP_OFF) or _operates(norm, _OP_UP):
-        return "warm"
+    on_off_intent = _climate_on_off_operation_intent(norm)
+    if on_off_intent is not None:
+        return on_off_intent
 
-    on_state = norm.token_index(*lex.STATE_ON)
-    off_state = norm.token_index(*lex.STATE_OFF)
-    if on_state is not None or off_state is not None:
-        index = on_state if on_state is not None else off_state
-        named_on = on_state is not None
-        if _negated_before(norm, index):
-            named_on = not named_on
-        # A wish names the state it wants; a complaint names the state it is
-        # stuck with, and wants the other one.
-        wants_on = named_on if desire else not named_on
-        return "cool" if wants_on else "warm"
+    named_state_intent = _named_state_intent(norm, desire=desire)
+    if named_state_intent is not None:
+        return named_state_intent
 
-    state = _state(norm)
-    if state is not None:
-        plain = _STATE_INTENT[state[0]]
-        if climate or not desire:
-            # The device is named, so the state word describes the room being
-            # complained about ("מה עם המזגן, חם פה") -- act on the state.
-            return plain
-        # Nothing named but the state itself: it is what is being asked for
-        # ("אפשר קצת קריר פה"), which reads like a wish -- inverted.
-        return _WISH_INVERSION[plain]
+    remark_intent = _state_remark_intent(norm, climate=climate, desire=desire)
+    if remark_intent is not None:
+        return remark_intent
 
     if climate:
         return "cool"  # setting the AC, with nothing else said, is cooling
@@ -290,30 +333,18 @@ def _is_question(norm: Normalized) -> bool:
     return norm.has_token(*lex.ADDRESSEES)
 
 
-def classify(text: str | None) -> Classification:
-    """Classify one utterance. Never raises; in doubt, returns ``unrelated``."""
-    norm = normalize(text)
-    if not norm.tokens:
-        return Classification("unrelated", "none", 1.0, "empty")
-
-    # 1. Learning / davening out loud.
-    if norm.has_phrase(*lex.LITURGY):
-        return Classification("unrelated", "none", 0.9, "liturgy")
-
-    # 2. Reported speech: someone quoting someone else.
-    if norm.has_token(*lex.REPORTED):
-        return Classification("unrelated", "none", 0.85, "reported-speech")
-
-    verb = _has_verb(norm)
-    device = norm.has_token(*lex.DEVICES)
-    state = _state(norm)
-
-    # 3. Request frames ("אתה יכול...", "אפשר...", "למה שלא...").
+def _rule_request_frame(
+    norm: Normalized, *, verb: bool, device: bool, state: tuple[str, tuple[int, int]] | None
+) -> Classification | None:
+    """3. Request frames ("אתה יכול...", "אפשר...", "למה שלא...")."""
     framed = norm.has_phrase(*lex.REQUEST_FRAMES)
     if (framed and verb) or (_is_open_request(norm) and (verb or device or state)):
         return Classification("request", _device_intent(norm, desire=True), 0.85, "request-frame")
+    return None
 
-    # 4. A direct imperative, including plausible ASR mis-hearings of one.
+
+def _rule_imperative(norm: Normalized) -> Classification | None:
+    """4. A direct imperative, including plausible ASR mis-hearings of one."""
     if _has_verb_token(norm, lex.IMPERATIVE_VERBS):
         return Classification(
             "imperative", _device_intent(norm, desire=True), 0.95, "imperative-verb"
@@ -326,8 +357,11 @@ def classify(text: str | None) -> Classification:
         return Classification(
             "imperative", _device_intent(norm, desire=True), 0.85, "polite-infinitive"
         )
+    return None
 
-    # 5. A rebuke: an implied command dressed as a complaint or a question.
+
+def _rule_rebuke(norm: Normalized) -> Classification | None:
+    """5. A rebuke: an implied command dressed as a complaint or a question."""
     interrogative = norm.has_token(*lex.REBUKE_INTERROGATIVES) or norm.has_phrase(
         *lex.REBUKE_INTERROGATIVE_PHRASES
     )
@@ -335,61 +369,93 @@ def classify(text: str | None) -> Classification:
     opener = bool(norm.tokens) and any(word in norm.candidates[0] for word in lex.REBUKE_OPENERS)
     if (interrogative and complaint) or norm.has_phrase(*lex.REBUKE_FRAMES) or opener:
         return Classification("rebuke", _device_intent(norm, desire=False), 0.8, "rebuke-frame")
+    return None
 
-    # 6. A status question is a request -- answered, never acted on.
+
+def _rule_status_question(norm: Normalized, *, device: bool) -> Classification | None:
+    """6. A status question is a request -- answered, never acted on."""
     if _is_question(norm) and (
         (device and norm.has_token(*lex.DEVICE_STATES)) or norm.has_phrase(*lex.STATUS_PHRASES)
     ):
         return Classification("request", "status", 0.8, "status-question")
+    return None
 
-    # 6b. The device-operation veto. An utterance about operating a device --
-    #     third-person jussive ("שמישהו יכבה את המזגן"), impersonal modal
-    #     ("כדאי להדליק את המזגן"), or merely naming a controllable device --
-    #     is never a hint, whatever state word follows it. Impersonal and
-    #     wishful framings are requests; anything else is dropped, because in
-    #     doubt the agent does nothing.
-    if _operates(norm, _ALL_OPS) or norm.has_token(
-        *lex.CLIMATE_DEVICES, *lex.VOLUME_DEVICES, *lex.OTHER_DEVICES
+
+def _rule_device_operation_veto(norm: Normalized) -> Classification | None:
+    """6b. The device-operation veto. An utterance about operating a device --
+    third-person jussive ("שמישהו יכבה את המזגן"), impersonal modal ("כדאי
+    להדליק את המזגן"), or merely naming a controllable device -- is never a
+    hint, whatever state word follows it. Impersonal and wishful framings are
+    requests; anything else is dropped, because in doubt the agent does
+    nothing."""
+    if not (
+        _operates(norm, _ALL_OPS)
+        or norm.has_token(*lex.CLIMATE_DEVICES, *lex.VOLUME_DEVICES, *lex.OTHER_DEVICES)
     ):
-        if norm.has_token(*lex.IMPERSONAL_FRAMES) or norm.has_phrase(
-            *lex.IMPERSONAL_FRAMES, *lex.WISH_FRAMES
-        ):
-            return Classification(
-                "request", _device_intent(norm, desire=True), 0.75, "impersonal-operation"
-            )
-        return Classification("unrelated", "none", 0.7, "device-operation")
+        return None
+    if norm.has_token(*lex.IMPERSONAL_FRAMES) or norm.has_phrase(
+        *lex.IMPERSONAL_FRAMES, *lex.WISH_FRAMES
+    ):
+        return Classification(
+            "request", _device_intent(norm, desire=True), 0.75, "impersonal-operation"
+        )
+    return Classification("unrelated", "none", 0.7, "device-operation")
 
-    # 6c. The state is not this room's: outdoors, a neighbour's, the soup's,
-    #     or a person's fever.
+
+def _rule_state_not_this_room(
+    norm: Normalized, *, state: tuple[str, tuple[int, int]] | None
+) -> Classification | None:
+    """6c. The state is not this room's: outdoors, a neighbour's, the soup's,
+    or a person's fever."""
     if state and (
         norm.has_token(*lex.ELSEWHERE)
         or norm.has_token(*lex.FOOD, *lex.FEVER)
         or norm.has_phrase(*lex.FEVER_PHRASES)
     ):
         return Classification("unrelated", "none", 0.8, "state-not-this-room")
+    return None
 
-    # 6d. A fragment: a single word, or an utterance that opens like the tail
-    #     of a longer one. The ASR splits sentences on a pause, and half a
-    #     sentence can mean the opposite of the whole.
+
+def _rule_fragment(norm: Normalized) -> Classification | None:
+    """6d. A fragment: a single word, or an utterance that opens like the tail
+    of a longer one. The ASR splits sentences on a pause, and half a sentence
+    can mean the opposite of the whole."""
     if len(norm.tokens) < 2 or any(word in norm.candidates[0] for word in lex.FRAGMENT_OPENERS):
         return Classification("unrelated", "none", 0.7, "fragment")
+    return None
 
-    # 7. A wish, before the question rule: "מי ייתן ..." opens with what would
-    #    otherwise read as an interrogative.
+
+def _rule_wish(
+    norm: Normalized, *, state: tuple[str, tuple[int, int]] | None
+) -> Classification | None:
+    """7. A wish, before the question rule: "מי ייתן ..." opens with what
+    would otherwise read as an interrogative."""
     if state and norm.has_phrase(*lex.WISH_FRAMES) and _is_anchored(norm):
         if _negated_outside(norm, state[1]):
             return Classification("unrelated", "none", 0.8, "negated-wish")
         intent = _WISH_INVERSION[_STATE_INTENT[state[0]]]
         return Classification("wish", intent, 0.8, f"wish-{state[0]}")
+    return None
 
-    # 8. A question, or speech addressed to a person in the room.
+
+def _rule_question(norm: Normalized) -> Classification | None:
+    """8. A question, or speech addressed to a person in the room."""
     if _is_question(norm):
         return Classification("unrelated", "none", 0.7, "question-to-person")
+    return None
 
-    # 9. Another tense: yesterday's heat, or tomorrow's forecast.
+
+def _rule_other_tense(norm: Normalized) -> Classification | None:
+    """9. Another tense: yesterday's heat, or tomorrow's forecast."""
     if norm.has_token(*lex.TENSE):
         return Classification("unrelated", "none", 0.75, "other-tense")
+    return None
 
+
+def _classify_remark(
+    norm: Normalized, *, state: tuple[str, tuple[int, int]] | None
+) -> Classification:
+    """10-13. Nothing left but the state of the room itself, or its absence."""
     # 10. Nothing about the state of the room.
     if state is None:
         return Classification("unrelated", "none", 0.2, "no-state")
@@ -411,3 +477,45 @@ def classify(text: str | None) -> Classification:
 
     # 13. A plain remark about the state of the room.
     return Classification("remark", intent, 0.7, f"remark-{state[0]}")
+
+
+def classify(text: str | None) -> Classification:
+    """Classify one utterance. Never raises; in doubt, returns ``unrelated``.
+
+    Rules 3-9 are tried in the fixed order documented in this module's
+    docstring; the first match wins.
+    """
+    norm = normalize(text)
+    if not norm.tokens:
+        return Classification("unrelated", "none", 1.0, "empty")
+
+    # 1. Learning / davening out loud.
+    if norm.has_phrase(*lex.LITURGY):
+        return Classification("unrelated", "none", 0.9, "liturgy")
+
+    # 2. Reported speech: someone quoting someone else.
+    if norm.has_token(*lex.REPORTED):
+        return Classification("unrelated", "none", 0.85, "reported-speech")
+
+    verb = _has_verb(norm)
+    device = norm.has_token(*lex.DEVICES)
+    state = _state(norm)
+
+    rules = (
+        lambda: _rule_request_frame(norm, verb=verb, device=device, state=state),
+        lambda: _rule_imperative(norm),
+        lambda: _rule_rebuke(norm),
+        lambda: _rule_status_question(norm, device=device),
+        lambda: _rule_device_operation_veto(norm),
+        lambda: _rule_state_not_this_room(norm, state=state),
+        lambda: _rule_fragment(norm),
+        lambda: _rule_wish(norm, state=state),
+        lambda: _rule_question(norm),
+        lambda: _rule_other_tense(norm),
+    )
+    for rule in rules:
+        verdict = rule()
+        if verdict is not None:
+            return verdict
+
+    return _classify_remark(norm, state=state)

@@ -47,6 +47,11 @@ DEFAULT_CONTROL_ADDRESS = f"{CONTROL_HOST}:{DEFAULT_CONTROL_PORT}"
 
 DEFAULT_TIMEOUT_SECONDS = 3.0
 
+#: Shared ``--json`` argparse help text. ``ac``/``mode``/``volume`` each add
+#: this flag to several subparsers; centralised here (a module they already
+#: import) so the repeats can't drift apart.
+JSON_HELP_TEXT = "Emit structured JSON."
+
 LISTENER_REMEDIATION = (
     "start the listener with 'shabbos-goy listen' (task t14); "
     "'shabbos-goy mode show' also works with no listener running"
@@ -124,7 +129,9 @@ def _request(
         return ControlResult(ok=True, data={})
     try:
         decoded = json.loads(raw.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
+    except ValueError:
+        # UnicodeDecodeError derives from ValueError, so it is already
+        # covered here.
         return ControlResult(ok=False, reason="bad_response")
     return ControlResult(ok=True, data=decoded)
 

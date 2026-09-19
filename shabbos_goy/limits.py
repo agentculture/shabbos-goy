@@ -25,9 +25,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Callable, Deque, Generic, Optional, TypeVar
-
-T = TypeVar("T")
+from typing import Callable, Deque, Optional
 
 #: A clock is any zero-argument callable returning seconds as a float. It
 #: need not be wall-clock time (tests use a fake, advanceable clock); it
@@ -41,7 +39,7 @@ def system_clock() -> float:
     return time.monotonic()
 
 
-class BoundedRing(Generic[T]):
+class BoundedRing[T]:
     """A fixed-capacity FIFO buffer that evicts its oldest entry on overflow.
 
     Every buffer this agent holds in memory — raw event logs, transcript

@@ -72,22 +72,22 @@ def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "volume", help="Volume noun: get (read), set (write; see 'volume overview')."
     )
-    p.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    p.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     p.set_defaults(func=_no_verb, json=False)
     noun_sub = p.add_subparsers(dest="volume_command", parser_class=type(p))
 
     ov = noun_sub.add_parser("overview", help="Describe the volume noun.")
-    ov.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    ov.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     ov.set_defaults(func=cmd_volume_overview)
 
     g = noun_sub.add_parser("get", help="Current volume level/muted state (read-only).")
     g.add_argument("--config", help="Path to an explicit config file.")
-    g.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    g.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     g.set_defaults(func=cmd_volume_get)
 
     s = noun_sub.add_parser("set", help="Step the volume. Dry-run unless --apply.")
     s.add_argument("direction", choices=list(_DIRECTIONS), help="up or down.")
     s.add_argument("--apply", action="store_true", help="Actually actuate (default: dry-run).")
     s.add_argument("--config", help="Path to an explicit config file.")
-    s.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    s.add_argument("--json", action="store_true", help=_control.JSON_HELP_TEXT)
     s.set_defaults(func=cmd_volume_set)

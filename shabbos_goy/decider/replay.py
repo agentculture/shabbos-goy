@@ -50,6 +50,7 @@ class ReplayDecider:
         mode: str,
         ac_state: dict | None = None,
     ) -> Decision:
+        del mode, ac_state  # part of the Decider protocol; unused here
         record = self._records.get((utterance or "").strip())
         if record is None:
             return no_decision("not_recorded", source=SOURCE)
