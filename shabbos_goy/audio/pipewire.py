@@ -283,7 +283,7 @@ def build_set_mute_argv(target: str, muted: bool) -> list[str]:
     return ["wpctl", "set-mute", _safe_target(target), "1" if muted else "0"]
 
 
-_VOLUME_LINE_RE = re.compile(r"Volume:\s*([0-9]*\.?[0-9]+)\s*(\[MUTED\])?", re.IGNORECASE)
+_VOLUME_LINE_RE = re.compile(r"Volume:\s*(\d*\.?\d+)\s*(\[MUTED\])?", re.IGNORECASE)
 
 
 def parse_volume_output(text: str) -> VolumeState:

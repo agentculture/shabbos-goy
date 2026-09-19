@@ -90,8 +90,8 @@ class Normalized:
             width = len(words)
             for start in range(0, len(self.tokens) - width + 1):
                 window = self.tokens[start : start + width]
-                stripped = tuple(_strip_one(word) for word in window)
-                if list(window) == words or list(stripped) == words:
+                stripped = [_strip_one(word) for word in window]
+                if list(window) == words or stripped == words:
                     return (start, start + width)
         return None
 

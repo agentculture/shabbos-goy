@@ -267,7 +267,9 @@ def check_ntp_synchronized(*, runner=subprocess.run) -> bool | None:
             check=False,
             timeout=5,
         )
-    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError):
+        # subprocess.TimeoutExpired derives from SubprocessError, so it is
+        # already covered here.
         return None
     if result.returncode != 0:
         return None

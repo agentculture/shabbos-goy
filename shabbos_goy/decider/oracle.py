@@ -41,6 +41,7 @@ class RuleOracle:
         """Classify with the rules. Context, mode and AC state are ignored:
         the cascade is stateless by design, which is what makes it a useful
         oracle."""
+        del ac_state  # part of the Decider protocol; unused here
         verdict = classify(utterance)
         try:
             return Decision(

@@ -146,7 +146,9 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str] | None:
             timeout=_TIMEOUT_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError):
+        # subprocess.TimeoutExpired derives from SubprocessError, so it is
+        # already covered here.
         return None
 
 
@@ -155,7 +157,9 @@ def _parse_json(proc: subprocess.CompletedProcess[str] | None) -> dict[str, Any]
         return None
     try:
         payload = json.loads(proc.stdout)
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
+        # json.JSONDecodeError derives from ValueError, so it is already
+        # covered here.
         return None
     return payload if isinstance(payload, dict) else None
 
@@ -189,19 +193,48 @@ def power(
 # -- status: zero-write read ---------------------------------------------------
 
 
+def _power_from_set_payload(set_payload: dict[str, Any] | None) -> PowerState:
+    """Derive the pod's current power state from a dry-run ``set`` payload.
+
+    The diff's ``"from"`` value on the ``on`` field is the pod's actual
+    current state whether or not a change is proposed. If the dry-run
+    reports no diff at all, the pod already matches the requested ``on``
+    value (i.e. it is already on). Any payload that failed to parse degrades
+    to ``"unknown"`` rather than guessing.
+    """
+    if set_payload is None:
+        return "unknown"
+    changes = set_payload.get("changes")
+    if not isinstance(changes, dict):
+        return "unknown"
+    on_change = changes.get("on")
+    if isinstance(on_change, dict) and "from" in on_change:
+        return "on" if on_change["from"] else "off"
+    # No diff for `on`: the pod already matches the requested value
+    # (on=True), i.e. it is already on.
+    return "on"
+
+
+def _readings_from_read_payload(
+    read_payload: dict[str, Any] | None,
+) -> tuple[Any, Any]:
+    """Derive ``(temperature, humidity)`` from a ``read`` payload, or ``(None, None)``."""
+    if read_payload is None:
+        return None, None
+    readings = read_payload.get("readings")
+    if not isinstance(readings, dict):
+        return None, None
+    return readings.get("temperature"), readings.get("humidity")
+
+
 def status(pod_id: str, *, grant_secret: str | None = None) -> dict[str, Any]:
     """Current power state plus temperature/humidity for ``pod_id``. Never writes.
 
     ``power`` is derived from a dry-run ``sensibo set --power on`` (never
-    ``--apply``): the diff's ``"from"`` value on the ``on`` field is the
-    pod's actual current state whether or not a change is proposed. If the
-    dry-run reports no diff at all, the pod already matches the requested
-    ``on`` value, i.e. it is already on. Any non-zero exit, at either
-    subprocess call, degrades that piece to ``"unknown"``/``None`` rather
-    than guessing.
+    ``--apply``); see :func:`_power_from_set_payload`. Any non-zero exit, at
+    either subprocess call, degrades that piece to ``"unknown"``/``None``
+    rather than guessing.
     """
-    result: dict[str, Any] = {"power": "unknown", "temperature": None, "humidity": None}
-
     set_argv = _set_argv(pod_id, power_on=True, apply=False)
     if "--apply" in set_argv:
         # Load-bearing: status() must never write. An assert would vanish
@@ -210,22 +243,11 @@ def status(pod_id: str, *, grant_secret: str | None = None) -> dict[str, Any]:
         raise RuntimeError("status() built an argv containing --apply; refusing to run it")
 
     set_payload = _parse_json(_run(_with_grant(set_argv, grant_secret)))
-    if set_payload is not None:
-        changes = set_payload.get("changes")
-        if isinstance(changes, dict):
-            on_change = changes.get("on")
-            if isinstance(on_change, dict) and "from" in on_change:
-                result["power"] = "on" if on_change["from"] else "off"
-            else:
-                # No diff for `on`: the pod already matches the requested
-                # value (on=True), i.e. it is already on.
-                result["power"] = "on"
-
     read_payload = _parse_json(_run(_with_grant(_read_argv(pod_id), grant_secret)))
-    if read_payload is not None:
-        readings = read_payload.get("readings")
-        if isinstance(readings, dict):
-            result["temperature"] = readings.get("temperature")
-            result["humidity"] = readings.get("humidity")
+    temperature, humidity = _readings_from_read_payload(read_payload)
 
-    return result
+    return {
+        "power": _power_from_set_payload(set_payload),
+        "temperature": temperature,
+        "humidity": humidity,
+    }

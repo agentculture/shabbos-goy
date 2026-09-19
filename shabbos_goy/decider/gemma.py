@@ -267,7 +267,13 @@ class GemmaDecider:
             payload["response_format"] = _RESPONSE_SCHEMA
         return payload
 
-    def _post(self, user_message: str, *, structured: bool) -> "_Outcome":
+    def _send(self, user_message: str, *, structured: bool) -> tuple[bytes | None, str]:
+        """POST the request; return ``(raw_body, "ok")`` or ``(None, reason)``.
+
+        Every transport failure -- HTTP error, timeout, connection failure,
+        or any other transport-level exception -- is folded into a reason
+        code here, never let escape as an exception into the caller.
+        """
         body = json.dumps(self._payload(user_message, structured=structured)).encode("utf-8")
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if self.config.api_key:
@@ -279,45 +285,63 @@ class GemmaDecider:
             with urllib.request.urlopen(  # nosec B310 - http(s) only, see above
                 request, timeout=self.config.timeout_seconds
             ) as response:
-                raw = response.read(self.config.max_body_bytes + 1)
+                return response.read(self.config.max_body_bytes + 1), "ok"
         except urllib.error.HTTPError as exc:
             with contextlib.suppress(OSError, ValueError):
                 exc.read(1)  # drain, best-effort; the body is never inspected
-            return _Outcome(reason=f"http_{exc.code}")
+            return None, f"http_{exc.code}"
         except socket.timeout:
-            return _Outcome(reason="timeout")
+            return None, "timeout"
         except urllib.error.URLError as exc:
             if isinstance(exc.reason, socket.timeout):
-                return _Outcome(reason="timeout")
-            return _Outcome(reason="connect_error")
-        except (OSError, ValueError, json.JSONDecodeError):
-            # Never let a transport detail (which can quote the peer or the
-            # body) escape as an exception into the caller.
-            return _Outcome(reason="connect_error")
+                return None, "timeout"
+            return None, "connect_error"
+        except (OSError, ValueError):
+            # json.JSONDecodeError derives from ValueError, so it is already
+            # covered here.
+            return None, "connect_error"
 
-        if len(raw) > self.config.max_body_bytes:
-            return _Outcome(reason="body_too_large")
+    @staticmethod
+    def _decode_envelope(raw: bytes) -> tuple[dict[str, Any] | None, str]:
+        """Decode ``raw`` as one UTF-8 JSON object; ``(None, reason)`` on failure."""
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:
-            return _Outcome(reason="bad_encoding")
+            return None, "bad_encoding"
         try:
             envelope = json.loads(text)
         except ValueError:
-            return _Outcome(reason="bad_envelope")
+            return None, "bad_envelope"
         if not isinstance(envelope, dict):
-            return _Outcome(reason="bad_envelope")
+            return None, "bad_envelope"
+        return envelope, "ok"
+
+    @staticmethod
+    def _extract_content(envelope: dict[str, Any]) -> str | None:
+        """The ``choices[0].message.content`` string, or ``None`` if any step fails."""
         choices = envelope.get("choices")
         if not isinstance(choices, list) or not choices:
-            return _Outcome(reason="no_choices")
+            return None
         first = choices[0]
         if not isinstance(first, dict):
-            return _Outcome(reason="no_choices")
+            return None
         message = first.get("message")
         if not isinstance(message, dict):
-            return _Outcome(reason="no_choices")
+            return None
         content = message.get("content")
-        if not isinstance(content, str):
+        return content if isinstance(content, str) else None
+
+    def _post(self, user_message: str, *, structured: bool) -> "_Outcome":
+        raw, reason = self._send(user_message, structured=structured)
+        if raw is None:
+            return _Outcome(reason=reason)
+        if len(raw) > self.config.max_body_bytes:
+            return _Outcome(reason="body_too_large")
+        envelope, reason = self._decode_envelope(raw)
+        if envelope is None:
+            return _Outcome(reason=reason)
+        content = self._extract_content(envelope)
+        if content is None:
             return _Outcome(reason="no_choices")
         return _Outcome(content=content)
 

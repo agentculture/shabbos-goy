@@ -81,14 +81,12 @@ class LobesConfig:
     __str__ = __repr__
 
 
-def config_from_env(env: Mapping[str, str]) -> LobesConfig:
-    """Build a :class:`LobesConfig` from *env* (usually ``os.environ``)."""
-    raw_url = (env.get(ENV_URL) or "").strip()
-    if not raw_url:
-        raise LobesConfigError(
-            f"{ENV_URL} is not set: the lobes host comes from the environment only "
-            "(set it in the gitignored env file, never in a tracked file)"
-        )
+def _parse_endpoint(raw_url: str) -> tuple[str, int, bool]:
+    """``(host, port, tls)`` from a validated ws(s):///http(s):// URL.
+
+    Raises :class:`LobesConfigError` naming :data:`ENV_URL` on anything
+    malformed, unsupported, or hostless.
+    """
     try:
         parsed = urlsplit(raw_url)
         port = parsed.port
@@ -104,27 +102,45 @@ def config_from_env(env: Mapping[str, str]) -> LobesConfig:
     tls = scheme in _TLS_SCHEMES
     if port is None:
         port = 443 if tls else 80
+    return parsed.hostname, port, tls
 
+
+def _parse_sample_rate(env: Mapping[str, str]) -> int:
+    """The configured sample rate, or :data:`DEFAULT_SAMPLE_RATE`.
+
+    Raises :class:`LobesConfigError` naming :data:`ENV_SAMPLE_RATE` on a
+    non-integer or unsupported value.
+    """
     rate_text = (env.get(ENV_SAMPLE_RATE) or "").strip()
-    rate = DEFAULT_SAMPLE_RATE
-    if rate_text:
-        try:
-            rate = int(rate_text)
-        except ValueError as exc:
-            raise LobesConfigError(
-                f"{ENV_SAMPLE_RATE} must be an integer, got {rate_text!r}"
-            ) from exc
-        if rate not in SUPPORTED_SAMPLE_RATES:
-            raise LobesConfigError(
-                f"{ENV_SAMPLE_RATE}={rate} is not supported; lobes accepts "
-                f"{SUPPORTED_SAMPLE_RATES}"
-            )
+    if not rate_text:
+        return DEFAULT_SAMPLE_RATE
+    try:
+        rate = int(rate_text)
+    except ValueError as exc:
+        raise LobesConfigError(f"{ENV_SAMPLE_RATE} must be an integer, got {rate_text!r}") from exc
+    if rate not in SUPPORTED_SAMPLE_RATES:
+        message = (
+            f"{ENV_SAMPLE_RATE}={rate} is not supported; lobes accepts {SUPPORTED_SAMPLE_RATES}"
+        )
+        raise LobesConfigError(message)
+    return rate
 
+
+def config_from_env(env: Mapping[str, str]) -> LobesConfig:
+    """Build a :class:`LobesConfig` from *env* (usually ``os.environ``)."""
+    raw_url = (env.get(ENV_URL) or "").strip()
+    if not raw_url:
+        raise LobesConfigError(
+            f"{ENV_URL} is not set: the lobes host comes from the environment only "
+            "(set it in the gitignored env file, never in a tracked file)"
+        )
+    host, port, tls = _parse_endpoint(raw_url)
+    rate = _parse_sample_rate(env)
     api_key = env.get(ENV_API_KEY) or env.get(ENV_API_KEY_FALLBACK) or None
     language = (env.get(ENV_LANGUAGE) or DEFAULT_LANGUAGE).strip() or DEFAULT_LANGUAGE
 
     return LobesConfig(
-        host=parsed.hostname,
+        host=host,
         port=port,
         tls=tls,
         api_key=api_key,
