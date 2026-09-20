@@ -2,7 +2,7 @@
   "plan_slug": "strict-window-close-boundary",
   "schema_version": 2,
   "created": "2026-09-20T10:15:35Z",
-  "updated": "2026-09-20T14:11:50Z",
+  "updated": "2026-09-20T14:28:43Z",
   "deviations": [
     {
       "id": "d1",
@@ -232,6 +232,25 @@
       "status": "proposed",
       "superseded": false,
       "seq": 12
+    },
+    {
+      "id": "e9",
+      "obligation_ref": "o1",
+      "test_ref": "python3 scripts/golden-set.py --entrance all --mode both --only <234 k-rows>",
+      "behavior_text": "hard_false_positives_strict is 0 on all three entrances under prompt p6",
+      "contract_text": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "234 k-rows, all three entrances, both modes, live senses model, prompt p6, gateway 0.81.0. strict hard_false_positives: text 0, audio-batch 0, audio-realtime 0 -- the release-blocking metric met on every entrance, against 10 (text) under p2 on the same rows. Recall strict: 0.821 / 0.692 / 0.744 versus p5's 0.821 / 0.561 / 0.636. Two violations remain and ship recorded as d5: wrong_actions(text/strict)=1 on k-h33, which PASSES in isolation and so is variance, and hint_recall(audio-batch)=0.692 against 0.70. Strength is execution, NOT sensitivity: this is one run per condition of a grader shown to vary at temperature 0 (two rows have flipped between runs), and the 61 g-rows were not re-measured under p6. The recall change must NOT be attributed to p6's context rule -- runner.py:786 passes an empty ContextWindow per utterance by design, so the rule is unmeasured here (lapse l3, risk r14).",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T17:01:00+03:00",
+        "commit": "1a12a4152493916401bcc4e2f7dd758cf1a9a9eb"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 14
     }
   ],
   "deltas": [
