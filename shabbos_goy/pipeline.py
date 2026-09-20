@@ -387,6 +387,7 @@ class Pipeline:
         context: Optional[ContextWindow] = None,
         clock: Clock = system_clock,
         joiner_clock: Optional[Callable[[], float]] = None,
+        joiner_wall_clock: Optional[Callable[[], float]] = None,
         join_gap_ms: Optional[int] = None,
         log: Optional[Callable[[LogRecord], None]] = None,
         apply: bool = False,
@@ -424,6 +425,14 @@ class Pipeline:
         joiner_kwargs: dict[str, Any] = {}
         if joiner_clock is not None:
             joiner_kwargs["clock"] = joiner_clock
+        if joiner_wall_clock is not None:
+            # A public seam for the joiner's WALL clock, separate from its
+            # monotonic receive clock. The listener uses it to stamp an
+            # utterance with the instant the speech-start event was RECEIVED
+            # rather than the instant a busy worker got round to it; a test
+            # uses it to pin that instant. Without the seam a test had to
+            # assign the private attribute.
+            joiner_kwargs["wall_clock"] = joiner_wall_clock
         self.joiner = TranscriptJoiner(
             gap_threshold_ms=gap_ms, on_utterance=self._on_utterance, **joiner_kwargs
         )
