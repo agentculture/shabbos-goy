@@ -1,0 +1,86 @@
+{
+  "slug": "weekday-spoken-status",
+  "title": "weekday spoken status",
+  "schema_version": 6,
+  "status": "drafting",
+  "created": "2026-09-20T09:04:29Z",
+  "updated": "2026-09-20T09:08:06Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "shabbos-goy answers a status question aloud on a weekday, through whatever voice lobes advertises",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "MIGRATED and CORRECTED from qwen-worker-selfsetup/c62. The capability table advertises status-to-speech and the path is dead in practice, but an implementation EXISTS: pipeline.py:144-148 holds the Hebrew literals and pipeline.py:851-870 is a working weekday-gated _speak_status. What is missing is the wiring and the transport -- listener.py:459 defaults speak=None, cli/_commands/listen.py never passes a callable, and no call to /v1/audio/speech exists. Until it is wired, actions must not advertise it",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "decision",
+      "text": "MIGRATED from qwen-worker-selfsetup/c64. Connect it rather than withdraw it, but it is NOT relevant to strict mode and not window-blocking: strict mode says nothing at all, so the path can never fire on Shabbat, Yom Kippur or Yom Tov and cannot touch the core invariant",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c4",
+      "kind": "boundary",
+      "text": "MIGRATED from qwen-worker-selfsetup/c65. We use what lobes advertises, and if it changes it is invisible to us: no engine, voice or rate is chosen here, no config key exists for any of them, and no mismatch check is added. The 24000 constant survives only as the fallback when nothing is advertised",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/h43. Runtime invisibility must not extend to the evidence: golden-set reports keep recording the stack they ran against, so a silent lobes change makes a past measurement visibly stale afterwards rather than undetectably wrong",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "assumption",
+      "text": "what /capabilities advertises for tts today is model, runtime, path and language -- no sample rate, no voice, no engine -- so 'read the rate from the advertised capabilities' currently has nothing to read and the 24000 fallback would be the only path. This needs checking against the API before it is built",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [],
+  "scope_entries": [],
+  "lapses": [],
+  "obligations": []
+}

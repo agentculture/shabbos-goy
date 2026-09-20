@@ -1,0 +1,129 @@
+{
+  "slug": "hearing-correctness",
+  "title": "hearing correctness",
+  "schema_version": 6,
+  "status": "drafting",
+  "created": "2026-09-20T09:04:29Z",
+  "updated": "2026-09-20T09:29:37Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "shabbos-goy can tell deaf from quiet, and refuses to report listening when it is not",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c40. heartbeat.healthcheck() takes max() over pong, audio and transcript and drops None, so a fresh audio stamp alone returns ok -- a listener that hears nothing passes indefinitely and Compose never restarts it. CLAUDE.md's claim that the healthcheck proves transcripts are arriving is false; there is no deaf failure code",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "decision",
+      "text": "MIGRATED from qwen-worker-selfsetup/c48, CORRECTED after PR #4 review. Close the gap with a config-gated deaf_after_seconds defaulting to OFF: unset leaves the runtime byte-identical to the build proven on 2026-09-20. When set, deafness must cause the LISTENER PROCESS TO EXIT non-zero via the existing watchdog path (lobes_stalled exits 3), NOT merely flip the health label -- docker-compose.yml:39-48 says Compose does not restart a container for being unhealthy, only for the process exiting, so a health-label-only signal recovers nothing. Default-off is deliberate: a long genuine silence in an empty room must not exit the process",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h1",
+          "text": "a test proves the CONFIGURED Compose deployment actually restarts the listener when deafness fires -- that the process exits and comes back -- rather than only that a health label changed",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": [
+        {
+          "text": "MIGRATED from qwen-worker-selfsetup/c48. Close the gap with a config-gated deaf_after_seconds defaulting to OFF: unset leaves the runtime byte-identical to the build proven on 2026-09-20, set makes healthcheck require a transcript stamp within the window. Default-off is deliberate -- a long genuine silence in an empty room must not cause restarts",
+          "kind": "decision",
+          "reason": "PR #4 review found the original mechanism cannot trigger recovery under this compose restart policy"
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "kind": "success_signal",
+      "text": "MIGRATED from qwen-worker-selfsetup/c66. Demonstrated live at 12:00: transcript stamp 211s old against a 120s window, and listen --healthcheck returned ok at that moment. The room was quiet, which is the point -- the product cannot distinguish quiet from deaf",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c41 and c68. Capture must refuse an absent mic_node rather than let pw-record fall back silently (passing --target is not enough: pw-record accepts an unknown target). The RECOVERY is undecided and must be: on this box recovery needed a host action the container cannot perform, systemctl --user restart wireplumber, and nobody is available to intervene during a window",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c42. preflight's audio_node check reads only the DEFAULT SINK via wpctl, so it passed green while the configured mic was absent and misnamed. It must check the configured mic node's existence and binding",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c7",
+      "kind": "requirement",
+      "text": "the Tier A binding oracle now ships in the package as scripts/restart-proof.sh (vendored during PR #4 review, repo-relative, dashboard URL overridable): pactl list source-outputs resolved to a source NAME and compared to the configured mic_node is what actually discriminates deafness, and it must stay in the repo rather than an operator's home directory so a third party can run it",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": [
+        {
+          "text": "the Tier A binding oracle belongs in the package, not in a home-directory script: pactl list source-outputs resolved to a source NAME and compared to the configured mic_node is what actually discriminates, and it currently lives only in ~/shabbos-goy-restart-proof.sh",
+          "kind": "requirement",
+          "reason": "PR #4 review (qodo, Medium) noted the evidence claimed third-party repeatability while referencing an uncommitted local script; the script is now vendored"
+        }
+      ]
+    },
+    {
+      "id": "c8",
+      "kind": "assumption",
+      "text": "MIGRATED from qwen-worker-selfsetup/c47, and it governs this frame: every check here must name the PROPERTY it asserts, never a proxy. The deaf_after_seconds knob is itself vulnerable -- a transcript stamp is a proxy for hearing exactly as an audio stamp was a proxy for sound -- so the knob is a mitigation, not the property, and the binding check is what names it",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [],
+  "scope_entries": [],
+  "lapses": [],
+  "obligations": []
+}

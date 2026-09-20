@@ -250,3 +250,9 @@ tests/golden/audio/
 # Docker Compose secrets (lobes gateway key, Sensibo API key) — real values
 # only, never committed. docker/shabbos-goy.env.example ships the shape.
 docker/shabbos-goy.env
+
+# Deployment-local Compose override: this is where an operator opts into
+# actuation (`listen --apply`) or any host-specific tweak. The tracked
+# docker-compose.yml stays dry-run by default on purpose — see its comment
+# above the commented-out `command:` line.
+docker-compose.override.yml

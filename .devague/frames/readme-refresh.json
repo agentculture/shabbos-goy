@@ -1,0 +1,86 @@
+{
+  "slug": "readme-refresh",
+  "title": "readme refresh",
+  "schema_version": 6,
+  "status": "drafting",
+  "created": "2026-09-20T09:04:29Z",
+  "updated": "2026-09-20T09:08:06Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "shabbos-goy's README is a hundred-odd functional lines that lead with what it does and who holds what",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c61. Refresh README.md to the functional, announcement-first shape ../devague/README.md models -- 119 lines, six sections, imperative voice, commands in code blocks, near-zero explanatory prose -- against today's 323 lines across nine sections including an 8-step prose setup checklist whose operative content is one env var and a config file",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "boundary",
+      "text": "MIGRATED from qwen-worker-selfsetup/h39, and it is the hard constraint on brevity: three statements must survive verbatim and prominently -- that there is NO rabbinic approval and users must ask their own rav, that weekday mode obeys anyone in earshot with the whitelist as the only control, and the strict-versus-weekday refusal table. No endorsement-sounding copy may appear anywhere",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c4",
+      "kind": "assumption",
+      "text": "the refusal table alone is about 45 lines of the current README (58-102), so a 119-line target is tight once the three untouchable statements are kept -- the line count is a model to aim at, not a requirement to hit",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/h40. Every command the refreshed README shows is executed and its output matches, documenting the path actually verified on this box: the single SHABBOS_GOY_LOBES_URL, grant-or-env secrets, docker compose up",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "boundary",
+      "text": "depth the README sheds moves into per-topic 'shabbos-goy explain' catalog entries rather than being deleted, so the agent-first surface gains what the prose loses",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [],
+  "scope_entries": [],
+  "lapses": [],
+  "obligations": []
+}
