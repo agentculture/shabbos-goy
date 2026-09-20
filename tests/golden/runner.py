@@ -505,30 +505,49 @@ def render_table(report: Mapping[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def record_decisions(results: Sequence[RowResult], path: str | Path = REPLAY_PATH) -> int:
-    """Write utterance -> decision so CI can replay the real model's answers.
+def record_decisions(
+    results_by_entrance: Mapping[str, Sequence[RowResult]],
+    path: str | Path = REPLAY_PATH,
+) -> int:
+    """Write entrance -> utterance -> decision so CI can replay the real model.
 
-    Merges into whatever is already there (a run of one entrance must not
-    throw away another's), and never records a failure: a timeout is not an
-    answer, and replaying it as one would invent evidence.
+    Keyed BY ENTRANCE, not by text alone. Two entrances routinely produce the
+    same transcript string -- the manifest text and an ASR transcript that
+    happens to match it -- and a flat text key let a later entrance's answer
+    overwrite an earlier one. That silently turned a recorded run that FAILED
+    the text entrance into a fixture that passes (risk r13, 2026-09-20): the
+    run reported hard_false_positives(text/strict)=1 for k-n_fragment_13 while
+    the fixture stored that text as unrelated, because audio-realtime answered
+    second. A gate that cannot see the failure it recorded is not a gate.
+
+    Merges into whatever is already there per entrance, and never records a
+    failure: a timeout is not an answer, and replaying it as one would invent
+    evidence.
     """
     target = Path(path)
     records: dict[str, Any] = {}
     if target.exists():
         existing = json.loads(target.read_text("utf-8"))
         if isinstance(existing, dict):
-            records = existing
+            # A pre-r13 flat file is read as the text entrance's records, which
+            # is what it mostly was, rather than silently discarded.
+            if existing and all(isinstance(v, dict) and "class" in v for v in existing.values()):
+                records = {"text": existing}
+            else:
+                records = existing
     written = 0
-    for result in results:
-        for text, decision in zip(result.transcripts, result.decisions):
-            if not text.strip() or is_decider_failure(decision):
-                continue
-            records[text.strip()] = {
-                "class": decision.klass,
-                "intent": decision.intent,
-                "confidence": round(float(decision.confidence), 3),
-            }
-            written += 1
+    for entrance, results in results_by_entrance.items():
+        bucket = records.setdefault(entrance, {})
+        for result in results:
+            for text, decision in zip(result.transcripts, result.decisions):
+                if not text.strip() or is_decider_failure(decision):
+                    continue
+                bucket[text.strip()] = {
+                    "class": decision.klass,
+                    "intent": decision.intent,
+                    "confidence": round(float(decision.confidence), 3),
+                }
+                written += 1
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         json.dumps(records, ensure_ascii=False, indent=2, sort_keys=True) + "\n", "utf-8"
@@ -1068,6 +1087,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     scores: list[dict[str, Any]] = []
     all_results: list[RowResult] = []
+    # Per entrance, so the recorded fixture cannot let one entrance's answer
+    # overwrite another's for the same transcript string (risk r13).
+    recorded_by_entrance: dict[str, list[RowResult]] = {}
     cache: dict[str, dict[str, list[str]]] = {}
     for entrance in entrances:
         if entrance == "tts":
@@ -1090,6 +1112,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 cache.setdefault(entrance, {}).update(produced)
             all_results.extend(results)
+            recorded_by_entrance.setdefault(entrance, []).extend(results)
             scores.append(score(rows, results, mode=mode, entrance=entrance))
 
     thresholds = load_thresholds(args.thresholds)
@@ -1109,7 +1132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print(render_table(report))
     if args.record:
-        written = record_decisions(all_results, args.record)
+        written = record_decisions(recorded_by_entrance, args.record)
         print(f"recorded {written} decision(s) to {args.record}", file=sys.stderr)
     if cache and not args.no_cache:
         save_asr_cache(ASR_CACHE_PATH, cache)

@@ -1,4 +1,4 @@
-"""Prompt p2: the model reports the STATE it heard and the NEED, never our intent names.
+"""Prompt p2 onward: the model reports the STATE it heard and the NEED, never our intent names.
 
 Found live: identical input at temperature 0 flipped "brr, it is too cold here" to
 intent ``cool`` in about 1 run in 12, which would switch the AC ON for a cold
@@ -106,7 +106,9 @@ def test_the_old_shape_and_bad_values_are_refused(payload, reason) -> None:
 def test_the_prompt_is_a_new_version_and_names_the_new_fields() -> None:
     from shabbos_goy.decider.prompt import PROMPT_VERSION, SYSTEM_PROMPT
 
-    assert PROMPT_VERSION == "p2"
+    # p3 adds the wish-for-an-action rule, the two-things-at-once rule, the
+    # fragment list, and another room's device; see CHANGELOG 0.11.0.
+    assert PROMPT_VERSION == "p6"
     for token in ('"state"', '"need"', "colder", "warmer", "quieter", "louder"):
         assert token in SYSTEM_PROMPT
     # The old intent vocabulary must not be what the model is asked for.

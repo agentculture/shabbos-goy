@@ -5,7 +5,7 @@
   "schema_version": 5,
   "status": "exported",
   "created": "2026-09-20T09:53:54Z",
-  "updated": "2026-09-20T10:28:21Z",
+  "updated": "2026-09-20T14:11:50Z",
   "targets": [
     {
       "id": "c1",
@@ -295,6 +295,70 @@
       "task_id": "t3",
       "resolved": false,
       "resolution": ""
+    },
+    {
+      "id": "r10",
+      "text": "SECOND SUSPECT ROW, needs the user's ruling like d4 did. k-h33 'kashe lishmoa et haradio' (it is hard to hear the radio) is hint/quiet with intent=louder, act_strict=true. But 'louder' actuates THE AGENT'S OWN VOLUME (the whitelist is AC power plus the agent's volume, nothing else), and raising the agent's volume cannot help anyone hear a radio. The alternative reading -- the AC's noise is drowning the radio -- maps to 'quieter', which also only lowers the agent's own volume and is equally useless. So either the row's intent is wrong and should be none, or the whitelist cannot serve this utterance and the row should not be a hint at all. It is currently counted as a wrong_action against the model on every run, and wrong_actions_max is 0, so it blocks. I adjusted the prompt for this row BEFORE questioning it, which is the same mistake d4 corrected.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r11",
+      "text": "DUPLICATE TEXT in the golden set: k-c45_06 and g-adv-03 are the SAME Hebrew utterance 'halevai shemishehu yadlik et hamazgan' under two ids, filed as command/request and command/wish_for_an_action respectively, with identical expectations. Not an error -- both rulings agree -- but one phenomenon is counted twice in every metric, so the hard-false-positive tally is not 295 independent observations. Worth knowing when reading any number from this manifest.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r12",
+      "text": "THRESHOLD DOC/CODE MISMATCH: tests/golden/README.md defines wrong_actions as 'a row that ACTED with an intent the row forbids, IN ANY MODE: a cold complaint that switches the AC on. A false action, never just a missed hint.' The runner enforces it only inside 'if scored.get(\"mode\") == \"strict\"' (tests/golden/runner.py:384), so every weekday wrong action is invisible to the gate. That is not academic: p5 on the dev rows reports 0 wrong actions in strict and 23 in weekday, and p2 reported 46-49 weekday wrong actions per entrance on the full set. On a weekday the agent obeys anyone in earshot, so a wrong action there actuates the AC for real -- it is only 'safe' relative to Shabbat, not safe. Either the README overstates the gate or the runner under-enforces it; nobody decided which.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r13",
+      "text": "THE REPO'S OWN RELEASE GUARD IS A PROXY, and it is green right now on a run that FAILED. tests/golden/runner.py:526 records replay decisions as records[text.strip()] = decision -- keyed by TEXT, last write wins -- and merges across entrances deliberately ('a run of one entrance must not throw away another's'). Entrances run text, then audio-batch, then audio-realtime. When two entrances produce the SAME transcript string, the later entrance's decision OVERWRITES the earlier one. Demonstrated: the p5 run reported hard_false_positives(text/strict)=1 for k-n_fragment_13 'haya kar li', yet the recorded fixture stores that text as class=unrelated intent=none, and tests/test_golden_manifest.py::test_the_recorded_golden_run_still_passes_the_thresholds therefore PASSES. Committing this fixture would turn CI green on a measured failure -- the exact 'reports healthy while broken' pattern this whole day is about, this time in the repo's own gate rather than in my reasoning. The fixture must be keyed per entrance (or recorded per entrance) before any recorded run can be believed as evidence of a pass. Until then the recorded-run test proves nothing about the text entrance.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r14",
+      "text": "THE CONTEXT RULE IS UNTESTED BY THE GOLDEN SET. runner.py:786 hands every utterance a fresh empty ContextWindow by design, so no golden-set row ever exercises the recent: block that p6 added and that the live listener DOES populate (8 items / 120 s). The deployed behaviour therefore has a path the evidence does not cover: a fragment inheriting state from a preceding utterance can act in strict mode, and nothing in the 295 rows measures that. A conversational entrance is needed -- ordered utterance pairs where the second is a fragment -- before the context rule can be called measured. Until then p6's context behaviour is a reasoned design, not evidence.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r15",
+      "text": "recover hint_recall on audio-batch from 0.692 to at least 0.70. It is short by about one row. Likely levers: soften the fragment rule for ASR output specifically (ASR omits the deictic 'here' that the rule leans on), or add the conversational entrance from r14 so a fragment can legitimately inherit state instead of being dropped.",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r16",
+      "text": "bound the run-to-run variance before any future number is read as a property. Two rows have now flipped between runs at temperature 0 with identical inputs: k-n_fragment_13 (passed dev, failed full) and k-h33 (passes alone, fails in a full run). Cause is vLLM batching, not sampling. Three runs of the final prompt, reporting the range rather than a point, is the minimum; every single-run claim in this delivery inherits this uncertainty (see lapses l2 and l3).",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r17",
+      "text": "record a committed golden fixture from a FULL 295-row, three-entrance run under the final prompt, now that the fixture is keyed by entrance (r13 fixed). The measurement that authorised this deploy covered 234 k-rows only and was not recorded, so the repo still has no committed recorded run and tests/test_golden_manifest.py's guard still skips.",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
     }
   ],
   "obligations": [
@@ -305,6 +369,56 @@
       "criterion_snapshot": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
       "seam": "the decider's label for a spoken utterance, measured end-to-end by the golden set's text entrance in strict mode",
       "behavior": "hard_false_positives_strict is 0 across all 295 manifest rows",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o2",
+      "task_id": "t3",
+      "criterion_index": 1,
+      "criterion_snapshot": "four cases in a single test: command begun inside the window and decided outside -> REFUSED; begun outside and decided outside -> ACTS; begun outside and decided inside (the open boundary) -> REFUSED; and a hint in all four positions -> behaviour unchanged",
+      "seam": "the gate verdict for a spoken command whose utterance spans a strict-window edge",
+      "behavior": "a command begun inside the window is refused however late the decision lands, and a command begun outside it still acts",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o3",
+      "task_id": "t1",
+      "criterion_index": 1,
+      "criterion_snapshot": "the object the pipeline receives for a decision carries the monotonic-and-wall-clock instant at which speech STARTED, sourced from the joiner's existing speech_started tracking -- not re-derived and not the arrival time of the transcript",
+      "seam": "the utterance object the pipeline receives from the joiner",
+      "behavior": "it carries the monotonic-and-wall-clock instant at which speech started, pinned to the first half of a pause-split utterance",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o4",
+      "task_id": "t1",
+      "criterion_index": 2,
+      "criterion_snapshot": "a reconnect-orphaned or joiner-bypassed utterance with no start instant is judged by the STRICTER of the start-time and decision-time modes, and a test covers that path explicitly",
+      "seam": "an utterance reaching the pipeline with no speech-start instant",
+      "behavior": "it is judged by the strict column rather than the decision-time mode",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o5",
+      "task_id": "t2",
+      "criterion_index": 2,
+      "criterion_snapshot": "where the start-instant mode and the decision-instant mode disagree, the strict reading wins -- implemented as an explicit rule with its own named function or branch, not as a side effect of evaluation order, so a later refactor cannot silently reverse it",
+      "seam": "the mode-resolution path in pipeline._handle_utterance",
+      "behavior": "where the start-instant and decision-instant modes disagree the strict reading wins, as an explicit rule a refactor cannot reverse",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o6",
+      "task_id": "t2",
+      "criterion_index": 1,
+      "criterion_snapshot": "pipeline.py no longer calls a fresh resolve_mode() for the gate decision; it resolves from the instant carried on the utterance",
+      "seam": "the listener's construction of the Pipeline in the real deployment",
+      "behavior": "it supplies mode_at, so the boundary fix is live rather than inert",
       "origin": "llm",
       "status": "proposed"
     }

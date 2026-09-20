@@ -782,9 +782,9 @@ def test_record_writes_a_replay_file_the_replay_decider_can_read(tmp_path):
         result("h2", transcripts=("קר פה",), decisions=(decision(reason="timeout"),)),
     ]
     path = tmp_path / "golden_replay.json"
-    written = gr.record_decisions(results, path)
+    written = gr.record_decisions({"text": results}, path)
     assert written == 1  # the failed decision is not recorded as an answer
-    replay = ReplayDecider.from_file(path)
+    replay = ReplayDecider.from_file(path, entrance="text")
     from shabbos_goy.decider import ContextWindow
 
     got = replay.decide("חם פה", ContextWindow(), mode="strict")
@@ -793,12 +793,66 @@ def test_record_writes_a_replay_file_the_replay_decider_can_read(tmp_path):
 
 def test_record_merges_into_an_existing_replay_file(tmp_path):
     path = tmp_path / "golden_replay.json"
-    path.write_text(json.dumps({"ישן": {"class": "unrelated", "intent": "none"}}), "utf-8")
+    path.write_text(
+        json.dumps({"text": {"ישן": {"class": "unrelated", "intent": "none"}}}), "utf-8"
+    )
     gr.record_decisions(
-        [result("h1", transcripts=("חדש",), decisions=(decision("wish", "cool"),))], path
+        {"text": [result("h1", transcripts=("חדש",), decisions=(decision("wish", "cool"),))]}, path
     )
     data = json.loads(path.read_text("utf-8"))
-    assert set(data) == {"ישן", "חדש"}
+    assert set(data["text"]) == {"ישן", "חדש"}
+
+
+def test_one_entrance_never_overwrites_another_for_the_same_transcript(tmp_path):
+    """Risk r13: a flat text key let audio-realtime's answer overwrite the
+    text entrance's for the same string, so a recorded run that FAILED the
+    text entrance produced a fixture that PASSED. Keyed by entrance, both
+    answers survive and the failing one stays visible."""
+    same = "היה קר לי"
+    path = tmp_path / "golden_replay.json"
+    gr.record_decisions(
+        {
+            "text": [
+                result("n1", transcripts=(same,), decisions=(decision("discomfort", "warm"),))
+            ],
+            "audio-realtime": [
+                result("n1", transcripts=(same,), decisions=(decision("unrelated", "none"),))
+            ],
+        },
+        path,
+    )
+    data = json.loads(path.read_text("utf-8"))
+    assert data["text"][same]["class"] == "discomfort"
+    assert data["audio-realtime"][same]["class"] == "unrelated"
+
+    from shabbos_goy.decider import ContextWindow
+
+    assert (
+        ReplayDecider.from_file(path, entrance="text")
+        .decide(same, ContextWindow(), mode="strict")
+        .klass
+        == "discomfort"
+    )
+    # Merging the entrances back together is what hid the failure, so it is
+    # refused rather than silently guessed at.
+    with pytest.raises(ValueError, match="keyed by entrance"):
+        ReplayDecider.from_file(path)
+
+
+def test_a_pre_r13_flat_replay_file_is_read_as_the_text_entrance(tmp_path):
+    path = tmp_path / "golden_replay.json"
+    path.write_text(json.dumps({"חם פה": {"class": "wish", "intent": "cool"}}), "utf-8")
+    gr.record_decisions(
+        {
+            "audio-batch": [
+                result("h1", transcripts=("קר פה",), decisions=(decision("remark", "warm"),))
+            ]
+        },
+        path,
+    )
+    data = json.loads(path.read_text("utf-8"))
+    assert data["text"]["חם פה"]["class"] == "wish"
+    assert data["audio-batch"]["קר פה"]["class"] == "remark"
 
 
 def test_asr_cache_round_trips(tmp_path):

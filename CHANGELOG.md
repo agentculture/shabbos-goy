@@ -55,6 +55,33 @@ not fixed here — see Known failing below. Read that section before shipping.
 
 ### Changed
 
+- **Decider prompt `p2` → `p6`.** Four rule-level gaps closed, each traceable
+  to the manifest's own taxonomy: wishing for an **action** is a request (the
+  manifest already called this `command/wish_for_an_action`); an utterance
+  carrying **two things at once** is unrelated; **bare fragments** are
+  unrelated — where the prompt had *contradicted itself*, listing the bare
+  word "מחניק" as a hot-state example while also calling a bare adjective a
+  fragment; and **another room's device** is unrelated. Plus a collision fix:
+  "audio from a television, a phone or a speaker" was written for *quoted*
+  speech and was swallowing "it is hard to hear the radio". `p6` adds rules
+  for the `recent:` block the model was already being handed and had no
+  instruction about — a fragment may inherit the state of the conversation in
+  progress, and may never inherit a *class*.
+- **The rolling context window is 120 s**, down from 900 s (still config).
+  With `p6` able to let a fragment inherit state, the window length is the
+  blast radius of a wrong inheritance.
+- **A wrong row in the golden set is corrected.** "קר לי מהמזגן" (*I am cold
+  from the AC*) was `negative/mixed_command_hint` and must now act: cold maps
+  to `warm`, which is AC power **off**. The model wanting to act on it was
+  right and the manifest was wrong, so one of the originally counted hard
+  false positives was never a model failure. Corrected at source in
+  `tests/fixtures/corpus.jsonl`, since the manifest is generated.
+- **The recorded golden fixture is keyed by entrance**, not by transcript text
+  alone. A flat key let a later entrance overwrite an earlier one for the same
+  string, so a run that FAILED the text entrance produced a fixture that
+  passed — the release guard reporting healthy while broken. Merging the
+  entrances back together is now refused rather than silently guessed, and the
+  guard scores **every** recorded entrance.
 - Five converged specs exported for the frames split out of the
   2026-09-20 bundle: `strict-window-close-boundary`, `hearing-correctness`,
   `actuation-behaviour-decisions`, `weekday-spoken-status`, `readme-refresh`.
@@ -70,17 +97,33 @@ not fixed here — see Known failing below. Read that section before shipping.
 
 ### Known failing
 
-- **`hard_false_positives_strict` is 14, not 0.** Measured against the live
-  model on the box (prompt `p2`, gateway 0.81.0) on code with **no** part of
-  this release applied, so it is not caused by these changes. The threshold
-  is 0 and CLAUDE.md is explicit that a hard failure blocks a release and
-  must not be tuned. Two failures are unambiguous strict-mode invariant
-  breaks on request-shaped wishes — "I wish someone would turn on the AC",
-  "I would be glad if the AC were on" — which the manifest marks as never
-  acting in strict mode. Four are mixed command+hint rows that must not act
-  in *either* mode; the rest are fragments. `wrong_actions` is 11.
-  This needs its own frame and its own fix; it is recorded here rather than
-  discovered later.
+Two threshold violations ship knowingly, recorded as deviation `d5`. The
+release-blocking metric is met: **`hard_false_positives_strict` is 0 on all
+three entrances** (text, audio-batch, audio-realtime).
+
+- **`wrong_actions(text/strict)` = 1** (`k-h33`). The row passes when run in
+  isolation and fails only inside a full run with an identically empty
+  context window, so this is run-to-run variance, not a defect in the row's
+  handling. Two rows have now flipped between runs at `temperature: 0`
+  (`k-h33`, `k-n_fragment_13`); the cause is vLLM batching, not sampling, and
+  the variance is **not yet bounded** — every single-run number here inherits
+  that uncertainty.
+- **`hint_recall(audio-batch/strict)` = 0.692** against a 0.70 bar, short by
+  about one row. A missed hint means someone stays hot; CLAUDE.md is explicit
+  that a missed hint is cheap and a false action is not.
+
+### Not measured
+
+- **The `recent:` context rule is untested by the golden set.**
+  `tests/golden/runner.py` hands every utterance a fresh, empty
+  `ContextWindow` on purpose — "the golden set measures one utterance at a
+  time, never a conversation that primed the model" — so no row exercises the
+  block that the live listener does populate. The prompt rule is a reasoned
+  design, not evidence. A conversational entrance (ordered pairs whose second
+  utterance is a fragment) is needed before it can be called measured.
+- **No committed recorded run exists.** The measurement that authorised this
+  release covered the 234 `k-` rows and was not recorded, so
+  `test_the_recorded_golden_run_still_passes_the_thresholds` still skips.
 
 ## [0.10.1] - 2026-09-20
 

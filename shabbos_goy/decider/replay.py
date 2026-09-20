@@ -28,11 +28,34 @@ class ReplayDecider:
         self._records = dict(records)
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "ReplayDecider":
+    def from_file(cls, path: str | Path, *, entrance: str | None = None) -> "ReplayDecider":
+        """Load a replay file, flat or keyed by entrance.
+
+        A golden-set recording is keyed ``entrance -> utterance -> decision``
+        so that one entrance's answer can never overwrite another's for the
+        same transcript string (risk r13). Pass ``entrance`` to read exactly
+        that entrance's records; without it a nested file raises, because
+        merging the entrances back together is what hid a failing run.
+        A flat ``utterance -> decision`` file still loads unchanged.
+        """
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError("a replay file must be a JSON object of utterance -> decision")
-        return cls(data)
+        nested = bool(data) and all(isinstance(v, dict) and "class" not in v for v in data.values())
+        if not nested:
+            if entrance is not None:
+                raise ValueError(
+                    f"replay file is flat (not keyed by entrance); cannot select {entrance!r}"
+                )
+            return cls(data)
+        if entrance is None:
+            raise ValueError(
+                "replay file is keyed by entrance "
+                f"({', '.join(sorted(data))}); pass entrance= to choose one"
+            )
+        if entrance not in data:
+            raise ValueError(f"replay file has no records for entrance {entrance!r}")
+        return cls(data[entrance])
 
     def __len__(self) -> int:
         return len(self._records)

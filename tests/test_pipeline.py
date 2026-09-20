@@ -862,7 +862,7 @@ def test_a_malformed_context_window_block_falls_back_to_the_defaults(tmp_path) -
     rendered = repr(pipeline.context)
 
     assert "/8" in rendered
-    assert "max_age_seconds=900" in rendered
+    assert "max_age_seconds=120" in rendered
     assert "max_render_chars=800" in rendered
 
 

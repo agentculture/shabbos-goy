@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-20T09:04:29Z",
-  "updated": "2026-09-20T10:13:54Z",
+  "updated": "2026-09-20T14:07:02Z",
   "claims": [
     {
       "id": "c1",
@@ -200,6 +200,28 @@
       "skipped_check": "a criterion review that would have caught 'the STRICTER of the start-time and decision-time modes' being uncomputable in the very case it governs",
       "refs": [
         "plan strict-window-close-boundary / t1 AC2"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l2",
+      "code": "n-below-claim",
+      "what": "I re-aimed t4's criterion at a DELTA against a baseline of 14 (deviation d1) while having exactly ONE run per condition of a nondeterministic grader. The after-run reports 11 on the same text entrance, and the failing SET moved: k-c45_08, k-n_fragment_11, k-n_fragment_16 and k-n_mixed_command_hint_11 pass now and failed before, while g-adv-03 fails now and passed before. Four rows flipped each way on code that cannot affect labelling (t1/t2 move a timestamp, t3 is tests-only), so 14 -> 11 is run-to-run variance in the model, NOT an improvement. The delta criterion d1 installed is therefore not measurable at n=1, and reading 11 < 14 as progress would be exactly the proxy-for-property error this frame exists around. What is sound is the absolute: the invariant fails on all three entrances.",
+      "skipped_check": "a repeat run of the same condition before treating a difference between two single runs as a delta",
+      "refs": [
+        "deviation d1 / plan risk r7 / evidence e1"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l3",
+      "code": "assumption-for-measurement",
+      "what": "I told the user 'your reframe worked -- letting a fragment inherit state from recent: recovered 13 and 11 points of ASR recall'. That claim is NOT supported by the measurement. tests/golden/runner.py:786 passes a FRESH, EMPTY ContextWindow for every utterance, deliberately -- 'the golden set measures one utterance at a time, never a conversation that primed the model'. So the recent: block is always empty in every golden-set number, and p6's context rule is entirely UNMEASURED by it. The recall improvement from p5 (0.561/0.636) to p6 (0.692/0.744) therefore cannot be attributed to context; it is either run-to-run variance or a side effect of the new prompt text changing how readily the model calls something a fragment. I attributed an effect to a mechanism the instrument cannot see.",
+      "skipped_check": "reading how the golden set constructs its ContextWindow before attributing a recall change to the context rule",
+      "refs": [
+        "p6 / dev-p6-all.json / my claim 'your reframe worked'"
       ],
       "origin": "llm",
       "status": "proposed"
