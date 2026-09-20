@@ -510,6 +510,32 @@ def test_an_untrusted_clock_forces_the_strict_column() -> None:
     assert verdicts(pipeline) == [("gate_refused", "none")]
 
 
+def test_a_joiner_bypassed_utterance_with_no_start_instant_forces_the_strict_column() -> None:
+    """strict-window-close-boundary, t1, AC2: a reconnect-orphaned or
+    joiner-bypassed utterance carries no speech-start instant. It must be
+    judged by the STRICTER of the (unknowable) start-time mode and the
+    decision-time mode -- here, decision-time is a weekday-legal imperative,
+    so only forcing strict on the missing instant can explain a refusal."""
+    pipeline, ac, _volume, _speaker, _clock = make_pipeline(apply=True)  # mode="weekday"
+
+    pipeline._handle_utterance(TURN_AC_ON, None)  # bypasses the joiner entirely
+
+    assert ac.power_calls == []
+    assert verdicts(pipeline) == [("gate_refused", "none")]
+
+
+def test_a_normal_joiner_driven_utterance_still_carries_its_start_instant() -> None:
+    """Sanity check for the plumbing itself (AC1): an utterance driven
+    through the real joiner path (not bypassed) is NOT forced strict on a
+    weekday, because it DOES carry a start instant."""
+    pipeline, ac, _volume, _speaker, _clock = make_pipeline(apply=True)  # mode="weekday"
+
+    feed(pipeline, TURN_AC_ON)
+
+    assert ac.power_calls == [(POD, True, True)]
+    assert verdicts(pipeline) == [("acted", "ac_power_on")]
+
+
 def test_an_unrelated_utterance_does_nothing() -> None:
     pipeline, ac, volume, speaker, _clock = make_pipeline(apply=True)
     feed(pipeline, CHITCHAT)

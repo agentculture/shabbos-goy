@@ -104,6 +104,21 @@ Finally, empty-text transcript events are dropped noise (see
 contribute to, or by themselves start, a buffered utterance; and a late
 transcript for an ``item_id`` whose segment already closed (its chain was
 flushed, discarded, or reset) is orphaned and dropped.
+
+Speech-start instant (strict-window-close-boundary, t1) --- a downstream
+mode decision must be able to ask "what was in force when this utterance's
+speech STARTED", not just "what is in force now" (a decision can complete
+after a strict window has closed). The receive clock this module already
+samples on every ``speech_started`` (``local_now`` above) is monotonic-only
+by contract ("It need not be wall-clock time" --- see ``clock`` below), so
+it cannot by itself be compared against a zmanim window. This module
+therefore also samples one genuine wall-clock reading (``wall_clock``,
+default :func:`time.time`) at the same instant, for the *first* segment of
+each chain only --- continuations of an already-open chain never move the
+utterance's start. The pair is exposed as :class:`SpeechStart` via
+:attr:`TranscriptJoiner.last_utterance_start`, set immediately before
+``on_utterance`` fires so a caller's callback can read it synchronously.
+Nothing here consumes it: this module only threads it through.
 """
 
 from __future__ import annotations
@@ -112,7 +127,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
-__all__ = ["TranscriptJoiner"]
+__all__ = ["SpeechStart", "TranscriptJoiner"]
 
 _DEFAULT_GAP_THRESHOLD_MS = 500
 _DEFAULT_MAX_BUFFER_CHARS = 4096
@@ -129,6 +144,23 @@ _TRANSCRIPT_TYPES = frozenset(
 
 def _default_clock() -> float:
     return time.monotonic() * 1000.0
+
+
+@dataclass(frozen=True)
+class SpeechStart:
+    """The instant an utterance's speech STARTED --- not when it was joined,
+    not when its transcript arrived, and not re-derived from either.
+
+    ``monotonic_ms`` is the joiner's own local receive clock (whatever was
+    injected as ``clock``; monotonic by contract, not necessarily wall-clock)
+    sampled at the same moment as ``wall_time``, which is always a genuine
+    wall-clock reading (seconds since the epoch) suitable for comparison
+    against a zmanim window. Both are sampled once, on the FIRST
+    ``speech_started`` of the chain that produced the utterance.
+    """
+
+    monotonic_ms: float
+    wall_time: float
 
 
 @dataclass
@@ -168,7 +200,15 @@ class TranscriptJoiner:
         boundary event is handled -- to compute gaps and timeouts when the
         wire's own ``at_ms`` is missing on either side. Defaults to a
         ``time.monotonic``-based clock. Tests inject a fake, hand-advanced
-        one instead of sleeping.
+        one instead of sleeping. It "need not be wall-clock time", which is
+        exactly why ``wall_clock`` below exists separately.
+    wall_clock:
+        Zero-arg callable returning the current wall-clock time in seconds
+        (default :func:`time.time`), sampled once on the first
+        ``speech_started`` of each chain to build :class:`SpeechStart`. Never
+        used for any gap, timeout or reconnect decision -- those still run
+        entirely on ``clock``/``at_ms`` as before. Tests inject a fake here
+        too, so nothing in this module ever needs to sleep.
     """
 
     def __init__(
@@ -177,6 +217,7 @@ class TranscriptJoiner:
         on_utterance: Optional[Callable[[str], None]] = None,
         max_buffer_chars: int = _DEFAULT_MAX_BUFFER_CHARS,
         clock: Callable[[], float] = _default_clock,
+        wall_clock: Callable[[], float] = time.time,
     ) -> None:
         if gap_threshold_ms <= 0:
             raise ValueError("gap_threshold_ms must be positive")
@@ -186,9 +227,20 @@ class TranscriptJoiner:
         self._on_utterance = on_utterance
         self._max_buffer_chars = max_buffer_chars
         self._clock = clock
+        self._wall_clock = wall_clock
 
         self._segments: List[_Segment] = []
         self._overflowed = False
+        # The (monotonic, wall-clock) instant of the chain currently open,
+        # sampled once on its first speech_started. None while no chain is
+        # open. Never touched by a continuation of an already-open chain.
+        self._chain_start: Optional[SpeechStart] = None
+        #: The :class:`SpeechStart` of the utterance most recently handed to
+        #: ``on_utterance`` -- set immediately before that call, so a
+        #: synchronous callback can read it. ``None`` before the first
+        #: emitted utterance; never set for a discarded (overflow or
+        #: reconnect) chain, since those never emit at all.
+        self.last_utterance_start: Optional[SpeechStart] = None
         self._last_stopped_at_ms: Optional[int] = None
         # Local receive-time stamp of the last speech_stopped, sampled
         # from the injected clock -- tracked unconditionally (even when
@@ -289,6 +341,14 @@ class TranscriptJoiner:
         self._auto_item_seq += 1
         effective_item_id = item_id if item_id is not None else f"_auto_{self._auto_item_seq}"
         if not self._overflowed:
+            if not self._segments:
+                # The first segment of a brand-new chain: this is the
+                # utterance's speech-start instant. A later continuation of
+                # this same chain (segments already non-empty) must never
+                # move it.
+                self._chain_start = SpeechStart(
+                    monotonic_ms=local_now, wall_time=self._wall_clock()
+                )
             self._segments.append(_Segment(item_id=effective_item_id))
         # else: this utterance is already being discarded for overflow;
         # don't bother tracking further segments until the chain closes.
@@ -349,8 +409,10 @@ class TranscriptJoiner:
     def _close_chain(self, emit: bool) -> None:
         text = self._joined_text()
         was_overflowed = self._overflowed
+        chain_start = self._chain_start
         self._segments = []
         self._overflowed = False
+        self._chain_start = None
         self._last_stopped_at_ms = None
         self._last_stopped_local_ms = None
         self._flush_due_at_ms = None
@@ -358,6 +420,10 @@ class TranscriptJoiner:
         if was_overflowed:
             return  # already discarded; never emit any part of it
         if emit and text and self._on_utterance is not None:
+            # Set immediately before the call so a synchronous callback
+            # (the only kind this module supports; see the class docstring)
+            # can read the instant for the utterance it is about to handle.
+            self.last_utterance_start = chain_start
             self._on_utterance(text)
 
     def _discard_reconnect(self) -> None:

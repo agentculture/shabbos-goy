@@ -72,7 +72,7 @@ from .cli._errors import CliError
 from .config import AC_ACTION, Config, validate_ac_argument
 from .decider import NO_DECISION, ContextWindow, Decider, Decision
 from .decider.decision import INTENTS
-from .joiner import TranscriptJoiner
+from .joiner import SpeechStart, TranscriptJoiner
 from .limits import BoundedRing, Clock, DelayTimer, LimitsConfig, RateLimiter, system_clock
 from .policy import CLASSES, may_act
 
@@ -561,9 +561,14 @@ class Pipeline:
         An exception from any adapter is reported as its TYPE NAME only: the
         message can quote the transcript, the pod id or an API response, and
         a log line may carry none of those.
+
+        Reads :attr:`TranscriptJoiner.last_utterance_start` synchronously,
+        right where the joiner set it just before calling us --- the
+        utterance's own speech-start instant, not re-derived here.
         """
+        start = self.joiner.last_utterance_start
         try:
-            self._handle_utterance(text)
+            self._handle_utterance(text, start)
         except Exception as exc:  # noqa: BLE001 - a bug must not deafen the agent
             self._record(
                 LogRecord(
@@ -577,7 +582,18 @@ class Pipeline:
         finally:
             self._chain_suppressed = False
 
-    def _handle_utterance(self, text: str) -> None:
+    def _handle_utterance(self, text: str, start: Optional[SpeechStart] = None) -> None:
+        """One joined utterance in, at most one action out.
+
+        ``start`` is the utterance's speech-start instant, threaded through
+        from the joiner (see :meth:`_on_utterance`). It defaults to
+        ``None`` for a caller that bypasses the joiner entirely, and that
+        default is also what a reconnect-orphaned utterance would carry if
+        one ever reached here. ``start`` is not yet consumed to resolve the
+        mode itself (a later change does that) --- here it only decides
+        whether the STRICTER reading is forced: see ``_treat_as_untrusted``
+        below (t1's acceptance criterion 2).
+        """
         if self._chain_suppressed:
             self._record(
                 LogRecord(
@@ -593,6 +609,17 @@ class Pipeline:
         resolved = self._mode_provider()
         mode = getattr(resolved, "mode", None)
         clock_untrusted = not bool(getattr(resolved, "clock_trusted", True))
+        # Acceptance criterion 2 (t1): an utterance with no speech-start
+        # instant -- a reconnect-orphaned or joiner-bypassed one -- is
+        # judged by the STRICTER of the (unknown) start-time mode and the
+        # decision-time mode. The start-time mode cannot be computed at all
+        # without an instant, so the safe assumption for the unknown side is
+        # "strict" -- exactly the clock-trust rule's own "fail toward the
+        # stricter behaviour, never toward acting" -- which is why this
+        # folds into the same ``clock_untrusted``-style forcing already used
+        # below, rather than a second parallel mechanism.
+        start_instant_missing = start is None
+        treat_as_untrusted = clock_untrusted or start_instant_missing
         ac_state = self._read_ac_state()
 
         started = self._clock()
@@ -644,11 +671,11 @@ class Pipeline:
             self._log_refusal(klass, intent, VERDICT_LOW_CONFIDENCE)
             return
 
-        if not may_act(mode, klass, clock_untrusted=clock_untrusted):
+        if not may_act(mode, klass, clock_untrusted=treat_as_untrusted):
             self._log_refusal(klass, intent, VERDICT_GATE_REFUSED)
             return
 
-        effective_mode = "strict" if clock_untrusted else mode
+        effective_mode = "strict" if treat_as_untrusted else mode
         if intent == "status":
             self._handle_status(klass, intent, effective_mode, ac_state)
             return
