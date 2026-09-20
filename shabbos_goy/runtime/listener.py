@@ -486,11 +486,20 @@ class Listener:
         self._mode_provider = mode_provider or (
             lambda: resolve_mode(self._now_provider(), self.config)
         )
+        # The same resolution, at an arbitrary wall-clock instant, so the
+        # pipeline can judge an utterance by the window in force when SPEECH
+        # STARTED rather than when the decision completed. Without this the
+        # window-close fix is inert in the real deployment: the pipeline's
+        # mode_at is optional and falls back to decision-time only.
+        self._mode_at = lambda at: resolve_mode(
+            datetime.fromtimestamp(at, tz=timezone.utc), self.config
+        )
 
         pipeline_kwargs: dict[str, Any] = {
             "decider": decider,
             "config": config,
             "mode_provider": self._mode_provider,
+            "mode_at": self._mode_at,
             "pod_id": pod_id,
             "ac_power": self._guarded(ac_power),
             "ac_status": ac_status,

@@ -26,11 +26,13 @@ import stat
 import threading
 import time
 import urllib.error
+from datetime import datetime, timezone
 
 import pytest
 
 from shabbos_goy import mode as mode_module
 from shabbos_goy.lobes import events as lobes_events
+from shabbos_goy.policy import MODES
 from shabbos_goy.runtime import (
     ConnectionMonitor,
     Heartbeat,
@@ -878,3 +880,24 @@ def test_no_capture_process_survives_repeated_lobes_reconnects(
 
     survivors = [p for p in fake_capture.instances if p.poll() is None]
     assert survivors == [], f"{len(survivors)} capture children survived the shutdown"
+
+
+def test_the_listener_hands_the_pipeline_a_start_instant_mode_resolver(tmp_path) -> None:
+    """strict-window-close-boundary, t2: the boundary fix is INERT unless the
+    listener supplies ``mode_at``. The pipeline's parameter is optional and
+    silently falls back to decision-time-only resolution, so nothing else
+    would notice the wiring going missing. Assert the real deployment path
+    has it, and that it resolves at the instant it is given rather than now.
+    """
+    listener = make_listener(tmp_path)
+
+    resolver = listener.pipeline._mode_at
+    assert resolver is not None, "listener must pass mode_at or the fix does nothing"
+
+    # A Yom Kippur instant and a plain weekday instant must resolve
+    # differently through the SAME resolver -- proof it reads its argument.
+    strict_at = datetime(2026, 9, 21, 18, 0, tzinfo=timezone.utc).timestamp()
+    weekday_at = datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc).timestamp()
+    assert resolver(strict_at).mode in MODES
+    assert resolver(weekday_at).mode in MODES
+    assert resolver(weekday_at).mode == "weekday"
