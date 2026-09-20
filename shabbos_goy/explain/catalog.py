@@ -154,6 +154,10 @@ actuates: no adapter, no whitelist check, no rate limiter.
 
 - `--decider {gemma,replay}` — which decider to ask (default: `gemma`).
 - `--replay-file PATH` — a JSON replay file; required with `--decider replay`.
+- `--replay-entrance NAME` — which recorded entrance of an entrance-keyed
+  replay file (the shape `--record` writes) to read. A file recording one
+  entrance is read without it; several entrances require it, and the error
+  names them rather than picking one.
 - `--mode {weekday,strict,auto}` — the mode to gate under (default: `auto`,
   computed from zmanim).
 
@@ -376,6 +380,8 @@ reconnecting and replaying the file from the top.
   lobes events (no server, no socket), or a WAV streamed through the real
   client path.
 - `--decider {gemma,replay}` / `--replay-file PATH` — which decider to ask.
+- `--replay-entrance NAME` — which recorded entrance of an entrance-keyed
+  replay file to read (required only when the file records several).
 - `--no-dashboard` — skip the dashboard; the control endpoint still runs.
 - `--control-address ADDR` — where the loopback control endpoint binds.
 - `--heartbeat PATH` — the liveness file (default: `$SHABBOS_GOY_HEARTBEAT`,
