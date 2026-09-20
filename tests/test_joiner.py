@@ -39,16 +39,23 @@ these ever sleep for real -- the fake clock's value is advanced by hand.
 
 from __future__ import annotations
 
-from shabbos_goy.joiner import TranscriptJoiner
+from shabbos_goy.joiner import SpeechStart, TranscriptJoiner
 
 GAP_MS = 500
 
 
-def _joiner(threshold_ms: int = GAP_MS, max_buffer_chars: int = 4096, clock=None):
+def _joiner(
+    threshold_ms: int = GAP_MS,
+    max_buffer_chars: int = 4096,
+    clock=None,
+    wall_clock=None,
+):
     utterances: list[str] = []
     kwargs = {}
     if clock is not None:
         kwargs["clock"] = clock
+    if wall_clock is not None:
+        kwargs["wall_clock"] = wall_clock
     joiner = TranscriptJoiner(
         gap_threshold_ms=threshold_ms,
         on_utterance=utterances.append,
@@ -413,3 +420,99 @@ def test_no_utterance_before_stop_event_seen() -> None:
     joiner.handle_event({"type": "speech_started", "at_ms": 0})
     joiner.poll(now_ms=10_000)
     assert utterances == []
+
+
+# --------------------------------------------------------------------------
+# speech-start instant (strict-window-close-boundary, t1)
+# --------------------------------------------------------------------------
+
+
+class _FakeWallClock:
+    """A hand-advanced stand-in for a real wall clock (seconds since epoch)."""
+
+    def __init__(self, start: float = 0.0) -> None:
+        self.value = start
+
+    def __call__(self) -> float:
+        return self.value
+
+
+def test_last_utterance_start_is_none_before_anything_is_emitted() -> None:
+    joiner, _utterances = _joiner()
+    assert joiner.last_utterance_start is None
+
+
+def test_emitted_utterance_carries_its_speech_start_instant() -> None:
+    """A single, un-joined utterance's ``last_utterance_start`` matches the
+    monotonic and wall-clock readings sampled on its own speech_started --
+    not the arrival time of its transcript, and not re-derived."""
+    clock = _FakeClock(start=1_000.0)
+    wall = _FakeWallClock(start=500_000.0)
+    joiner, utterances = _joiner(clock=clock, wall_clock=wall)
+
+    joiner.handle_event({"type": "speech_started", "at_ms": 0})
+    # The transcript arrives well after speech_started; the start instant
+    # must come from speech_started, never from this later moment.
+    clock.value = 9_999.0
+    wall.value = 999_999.0
+    joiner.handle_event({"type": "speech_stopped", "at_ms": 400})
+    joiner.handle_event({"type": "transcription.completed", "text": "חם פה"})
+    joiner.poll(now_ms=400 + GAP_MS + 1)
+
+    assert utterances == ["חם פה"]
+    start = joiner.last_utterance_start
+    assert isinstance(start, SpeechStart)
+    assert start.monotonic_ms == 1_000.0
+    assert start.wall_time == 500_000.0
+
+
+def test_joined_utterance_keeps_the_first_segments_start_not_the_seconds() -> None:
+    """A pause-split utterance's start instant is the FIRST half's
+    speech_started -- a continuation must never move it forward."""
+    clock = _FakeClock(start=1.0)
+    wall = _FakeWallClock(start=1.0)
+    joiner, utterances = _joiner(clock=clock, wall_clock=wall)
+
+    clock.value, wall.value = 10.0, 10.0
+    joiner.handle_event({"type": "speech_started", "at_ms": 0})
+    clock.value, wall.value = 20.0, 20.0
+    joiner.handle_event({"type": "speech_stopped", "at_ms": 400})
+    joiner.handle_event({"type": "transcription.completed", "text": "חם פה"})
+
+    # Continuation: a second speech_started within the gap threshold. Its
+    # own clock readings must NOT overwrite the chain's start instant.
+    clock.value, wall.value = 30.0, 30.0
+    joiner.handle_event({"type": "speech_started", "at_ms": 500})
+    clock.value, wall.value = 40.0, 40.0
+    joiner.handle_event({"type": "speech_stopped", "at_ms": 900})
+    joiner.handle_event({"type": "transcription.completed", "text": "מאוד"})
+
+    joiner.poll(now_ms=900 + GAP_MS + 1)
+
+    assert utterances == ["חם פה מאוד"]
+    start = joiner.last_utterance_start
+    assert start.monotonic_ms == 10.0
+    assert start.wall_time == 10.0
+
+
+def test_a_discarded_reconnect_fragment_never_sets_last_utterance_start() -> None:
+    """A reconnect-orphaned fragment is discarded, never emitted -- so it
+    must never update ``last_utterance_start`` either."""
+    joiner, utterances = _joiner()
+
+    joiner.handle_event({"type": "speech_started", "at_ms": 50_000})
+    joiner.handle_event({"type": "speech_stopped", "at_ms": 50_400})
+    joiner.handle_event({"type": "transcription.completed", "text": "פתח"})
+
+    # Reconnect: at_ms regresses, discarding the pre-reconnect half.
+    joiner.handle_event({"type": "speech_started", "at_ms": 10})
+    joiner.handle_event({"type": "speech_stopped", "at_ms": 300})
+    joiner.handle_event({"type": "transcription.completed", "text": "את הדלת"})
+
+    joiner.poll(now_ms=300 + GAP_MS + 1)
+
+    assert utterances == ["את הדלת"]
+    assert joiner.dropped_reconnect == 1
+    # The one utterance that DID emit carries the post-reconnect segment's
+    # own start, not the discarded fragment's.
+    assert joiner.last_utterance_start is not None
