@@ -10,15 +10,18 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from shabbos_goy.config import load_config
 from shabbos_goy.decider import ContextWindow, Decision, ReplayDecider
 from shabbos_goy.joiner import SpeechStart
-from shabbos_goy.mode import ResolvedMode
+from shabbos_goy.mode import ResolvedMode, parse_tzeit_definition, resolve_mode, set_override
 from shabbos_goy.pipeline import Pipeline, pipewire_volume_stepper
+from shabbos_goy.zmanim import Location, ZmanimRules, next_window
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pipeline"
 POD = "PODFAKE1"
@@ -966,3 +969,166 @@ def test_a_command_begun_after_the_window_closed_still_acts() -> None:
 
     assert ac.power_calls == [(POD, True, True)]
     assert verdicts(pipeline) == [("acted", "ac_power_on")]
+
+
+# --- strict-window-close-boundary, t3: the boundary, on REAL zmanim ---------
+
+#: The Shabbat this test pins itself to, and the published Hebcal times that
+#: anchor its two edges. ``tests/fixtures/zmanim_sun_vectors.json`` is an
+#: independent source (see its ``source`` field), so if the zmanim maths, the
+#: fixture config's location or its tzeit definition ever moves, the anchor
+#: assertions below fail instead of the boundary quietly shifting with the
+#: code under test.
+_T3_FRIDAY = "2026-10-23"
+_T3_SATURDAY = "2026-10-24"
+_T3_TOLERANCE = timedelta(minutes=2)
+
+#: Comfortably past the fixture config's 15-second strict-mode delay.
+_T3_DELAY_HEADROOM = 60.0
+
+
+def _t3_published(day: str, key: str) -> datetime:
+    """A published Hebcal instant for Jerusalem, from the zmanim vectors."""
+    vectors = json.loads(
+        (Path(__file__).parent / "fixtures" / "zmanim_sun_vectors.json").read_text(encoding="utf-8")
+    )["vectors"]
+    for vector in vectors:
+        if vector["location"] == "jerusalem" and vector["date"] == day:
+            return datetime.fromisoformat(vector["times"][key]).astimezone(timezone.utc)
+    raise AssertionError(f"no jerusalem vector for {day} {key}")
+
+
+def _t3_real_window(config):
+    """The real strict window around ``_T3_FRIDAY``, computed from the same
+    config the pipeline under test is built from -- location, candle-lighting
+    offset, tzeit definition and region all come from
+    ``tests/fixtures/pipeline/config.json``, not from hand-picked offsets."""
+    location = Location(config.location["lat"], config.location["lon"], config.location["timezone"])
+    rules = ZmanimRules(
+        candle_lighting_offset_minutes=config.candle_lighting_offset_minutes,
+        tzeit=parse_tzeit_definition(config.tzeit_definition),
+        israel=config.region == "israel",
+    ).validate()
+    noon = datetime.fromisoformat(f"{_T3_FRIDAY}T12:00:00").replace(
+        tzinfo=ZoneInfo(config.location["timezone"])
+    )
+    window = next_window(noon, location, rules)
+    assert window is not None, "no strict window computed for the pinned Shabbat"
+    return window
+
+
+def test_the_window_boundary_is_judged_from_the_speech_start_instant_on_real_zmanim() -> None:
+    """strict-window-close-boundary, t3.
+
+    The four boundary cases, in one test function, on a clock pinned either
+    side of the REAL computed candle-lighting and tzeit instants for the
+    configured location (Jerusalem, 18-minute offset, 3 medium stars) rather
+    than synthetic offsets:
+
+    1. a command begun INSIDE the window and decided after it closed -> refused;
+    2. a command begun and decided OUTSIDE it -> acts (the other half of the
+       pair, so case 1 cannot be satisfied by refusing everything);
+    3. a command begun outside and decided INSIDE it (the OPEN boundary,
+       candle lighting) -> refused;
+    4. a hint in all four positions -> behaviour unchanged: never refused, and
+       the AC is switched in every one of them (immediately on a weekday,
+       after the strict-mode delay inside the window).
+
+    The whole real path runs: fixture realtime events -> the joiner (whose
+    wall clock is the only thing pinned) -> ``_on_utterance`` ->
+    ``_handle_utterance``'s two mode readings and ``stricter_mode``.
+    """
+    set_override(None)  # module-level state; never rely on another test's
+    config = load_config(path=FIXTURES / "config.json")
+    assert config.ok, config.error
+    window = _t3_real_window(config)
+
+    # The anchors: both edges match the published Hebcal times for this
+    # Shabbat, so a zmanim change surfaces here as a failure.
+    assert window.kinds == ("shabbat",)
+    expected_open = _t3_published(_T3_FRIDAY, "sunset") - timedelta(
+        minutes=config.candle_lighting_offset_minutes
+    )
+    expected_close = _t3_published(_T3_SATURDAY, "tzeit85deg")
+    assert abs(window.start - expected_open) <= _T3_TOLERANCE
+    assert abs(window.end - expected_close) <= _T3_TOLERANCE
+
+    opens = window.start.timestamp()
+    closes = window.end.timestamp()
+
+    def mode_at(at: float):
+        """The real resolver, at a real instant. Only ``timedatectl`` is faked."""
+        return resolve_mode(
+            datetime.fromtimestamp(at, tz=timezone.utc),
+            config,
+            runner=lambda argv, **kwargs: type(
+                "R", (), {"returncode": 0, "stdout": "yes\n", "stderr": ""}
+            )(),
+        )
+
+    # Sanity: the instants really do straddle the two edges, one second out.
+    assert mode_at(closes - 1.0).mode == "strict"
+    assert mode_at(closes + 1.0).mode == "weekday"
+    assert mode_at(opens - 1.0).mode == "weekday"
+    assert mode_at(opens + 1.0).mode == "strict"
+
+    # (name, text, speech-start instant, decision instant, expected verdicts,
+    #  whether the AC must end up switched)
+    cases = [
+        (
+            "command begun inside the window, decided after tzeit",
+            TURN_AC_ON,
+            closes - 1.0,
+            closes + 1.0,
+            [("gate_refused", "none")],
+            False,
+        ),
+        (
+            "command begun and decided after tzeit",
+            TURN_AC_ON,
+            closes + 1.0,
+            closes + 5.0,
+            [("acted", "ac_power_on")],
+            True,
+        ),
+        (
+            "command begun before candle lighting, decided after it",
+            TURN_AC_ON,
+            opens - 1.0,
+            opens + 1.0,
+            [("gate_refused", "none")],
+            False,
+        ),
+        ("hint, both inside", HOT, opens + 1.0, closes - 1.0, [("delayed", "ac_power_on")], True),
+        ("hint, begun inside", HOT, closes - 1.0, closes + 1.0, [("delayed", "ac_power_on")], True),
+        ("hint, begun outside", HOT, opens - 1.0, opens + 1.0, [("delayed", "ac_power_on")], True),
+        ("hint, both outside", HOT, closes + 1.0, closes + 5.0, [("acted", "ac_power_on")], True),
+    ]
+
+    for name, text, start_wall, decide_wall, expected, switched in cases:
+        clock = FakeClock()
+        pipeline, ac, _volume, _speaker, _clock = make_pipeline(
+            apply=True,
+            clock=clock,
+            mode_provider=lambda decide_wall=decide_wall: mode_at(decide_wall),
+            mode_at=mode_at,
+        )
+        # The one injection: the joiner samples wall-clock time at
+        # ``speech_started``, and this test needs that instant to be the
+        # pinned one. Everything downstream is the real path.
+        pipeline.joiner._wall_clock = lambda start_wall=start_wall: start_wall
+
+        feed(pipeline, text)
+
+        assert verdicts(pipeline) == expected, name
+        assert pipeline.joiner.last_utterance_start.wall_time == start_wall, name
+
+        # Let any strict-mode delay elapse, then check what actually happened.
+        clock.advance(_T3_DELAY_HEADROOM)
+        pipeline.poll()
+        if switched:
+            assert ac.power_calls == [(POD, True, True)], name
+            assert verdicts(pipeline)[-1] == ("acted", "ac_power_on"), name
+        else:
+            assert ac.power_calls == [], name
+            assert all(verdict == "gate_refused" for verdict, _ in verdicts(pipeline)), name
