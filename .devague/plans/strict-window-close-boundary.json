@@ -5,7 +5,7 @@
   "schema_version": 5,
   "status": "exported",
   "created": "2026-09-20T09:53:54Z",
-  "updated": "2026-09-20T09:59:50Z",
+  "updated": "2026-09-20T10:28:21Z",
   "targets": [
     {
       "id": "c1",
@@ -271,7 +271,42 @@
       "task_id": null,
       "resolved": false,
       "resolution": ""
+    },
+    {
+      "id": "r7",
+      "text": "BLOCKING, and it is not caused by this plan: the golden set run on UNMODIFIED code (pre-t1, commit c2efa53, prompt p2, senses = nvidia/Gemma-4-26B-A4B-NVFP4, gateway 0.81.0) reports hard_false_positives(text/strict) = 14 of 230 hard rows, plus wrong_actions = 11. The release-blocking threshold is 0 and CLAUDE.md says a HARD failure blocks a release and must not be tuned. So t4's acceptance criterion 'hard_false_positives_strict is 0' CANNOT be met by finishing this plan -- the number is already 14 before the boundary fix exists. Two of the failures are unambiguous strict-mode invariant breaks on request-shaped wishes: k-c45_06 'halevai shemishehu yadlik et hamazgan' (I wish someone would turn on the AC) and k-c45_08 (I would be glad if the AC were on), both act_strict=false, both ACTED. Six are fragments that must not act and did, four are mixed command+hint rows with intent=none that must not act in EITHER mode and did. The agent is deployed live with --apply on this box.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r8",
+      "text": "t3's test pins the joiner's wall clock by assigning the private pipeline.joiner._wall_clock, because Pipeline exposes joiner_clock (the monotonic receive clock) but no seam for the joiner's wall_clock. It works and the test asserts last_utterance_start.wall_time to prove the pinned instant is the one the joiner handed downstream, but a private-attribute assignment in a test is a missing public seam: a joiner_wall_clock parameter on Pipeline would be the honest fix. Recorded rather than silently accepted, and deliberately not done here because 'prefer a test to a product change' applied.",
+      "kind": "follow_up",
+      "task_id": "t3",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r9",
+      "text": "t3 found a real hole in its own acceptance criterion 3 and closed it: using the REAL zmanim computation alone would let a zmanim change move both edges of the window together and the test would still pass, because the test derives its instants from the same computation it is checking. That is a proxy standing in for the property -- the exact defect this frame exists around. The fix was to anchor both edges against the independent published Hebcal vectors in tests/fixtures/zmanim_sun_vectors.json within the repo's 2-minute tolerance. The anchors are part of how criterion 3 is met, not decoration; removing them silently weakens the test to tautology.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t3",
+      "resolved": false,
+      "resolution": ""
     }
   ],
-  "obligations": []
+  "obligations": [
+    {
+      "id": "o1",
+      "task_id": "t4",
+      "criterion_index": 2,
+      "criterion_snapshot": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "seam": "the decider's label for a spoken utterance, measured end-to-end by the golden set's text entrance in strict mode",
+      "behavior": "hard_false_positives_strict is 0 across all 295 manifest rows",
+      "origin": "llm",
+      "status": "proposed"
+    }
+  ]
 }

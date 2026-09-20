@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-09-20
+
+Closes the window-close boundary: a spoken command uttered inside a strict
+window no longer acts because the decision happened to land after the window
+shut. This is the first release to change the gate path since the invariant
+was written down.
+
+It also records a **release-blocking defect that predates this work** and is
+not fixed here — see Known failing below. Read that section before shipping.
+
+### Fixed
+
+- **A command begun inside a strict window is refused even when the decision
+  completes after the window closes.** The mode was resolved at *decision*
+  time, so an imperative spoken at 19:12:59 and decided at 19:13:01 was
+  judged weekday and **acted** — a spoken command acting on a holy day, the
+  one thing this project exists to prevent. The mode is now resolved at the
+  utterance's speech-start instant *and* at decision time, and the stricter
+  of the two wins. Clock distrust from either reading applies to both, so an
+  untrusted clock cannot be laundered through the boundary. No margin, sleep
+  or grace period was introduced: the fix is a different timestamp, not a
+  delay. The window-*open* boundary already failed safe and is unchanged.
+- The boundary fix was initially **inert in the real deployment**: the
+  pipeline's `mode_at` is optional and falls back to decision-time-only
+  resolution, and the listener never passed it, while every test still passed
+  because tests construct a `Pipeline` directly with their own resolver. The
+  listener now supplies it, and a test asserts both that it does and that the
+  resolver reads the instant it is given rather than "now".
+
+### Added
+
+- `shabbos_goy.mode.stricter_mode(a, b)` — `strict` beats `weekday`, and an
+  unknown mode counts as strict. Its own named function so a refactor cannot
+  reverse the direction by accident.
+- `shabbos_goy.joiner.SpeechStart(monotonic_ms, wall_time)`, sampled at
+  `speech_started` and pinned to the **first** half of a pause-split
+  utterance, exposed as `TranscriptJoiner.last_utterance_start`. Memory-only:
+  a crash leaves nothing behind.
+- `Pipeline(mode_at=...)` — resolves the mode at a wall-clock instant.
+  Optional, so a caller without it behaves exactly as before.
+- A four-case boundary test on **real computed zmanim** for the configured
+  location, anchored against the independent published vectors in
+  `tests/fixtures/zmanim_sun_vectors.json`. The anchors are load-bearing:
+  deriving the instants from the same computation under test would let a
+  zmanim change move both edges together and still pass.
+- An utterance that reaches the pipeline with **no** speech-start instant —
+  reconnect-orphaned or joiner-bypassed — is forced to the strict column.
+
+### Changed
+
+- Five converged specs exported for the frames split out of the
+  2026-09-20 bundle: `strict-window-close-boundary`, `hearing-correctness`,
+  `actuation-behaviour-decisions`, `weekday-spoken-status`, `readme-refresh`.
+- Four previously-unmade decisions are now recorded: nothing happens to the
+  AC at a window's end; a failed or unconfirmed Sensibo write leaves power
+  **unknown** so the already-in-state gate cannot silently disable the agent
+  for a whole window; room and outdoor temperature stay out of the runtime as
+  an evidence channel only; and deaf recovery is two pieces — the listener
+  process exits non-zero, and a host unit republishes the mic node.
+- `grant` is no longer the container's secret path: `grant` 0.11.0 chmods its
+  store on the read path, so a read-only mount raises `EROFS`. The gitignored
+  env file is the deployment of record.
+
+### Known failing
+
+- **`hard_false_positives_strict` is 14, not 0.** Measured against the live
+  model on the box (prompt `p2`, gateway 0.81.0) on code with **no** part of
+  this release applied, so it is not caused by these changes. The threshold
+  is 0 and CLAUDE.md is explicit that a hard failure blocks a release and
+  must not be tuned. Two failures are unambiguous strict-mode invariant
+  breaks on request-shaped wishes — "I wish someone would turn on the AC",
+  "I would be glad if the AC were on" — which the manifest marks as never
+  acting in strict mode. Four are mixed command+hint rows that must not act
+  in *either* mode; the rest are fragments. `wrong_actions` is 11.
+  This needs its own frame and its own fix; it is recorded here rather than
+  discovered later.
+
 ## [0.10.1] - 2026-09-20
 
 Specs and evidence only — **no runtime code changed in this release**. The

@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-20T09:04:29Z",
-  "updated": "2026-09-20T09:53:32Z",
+  "updated": "2026-09-20T10:13:54Z",
   "claims": [
     {
       "id": "c1",
@@ -192,6 +192,18 @@
   ],
   "open_vagueness": [],
   "scope_entries": [],
-  "lapses": [],
+  "lapses": [
+    {
+      "id": "l1",
+      "code": "provenance-missing",
+      "what": "t1's second acceptance criterion, which I wrote, is not literally computable: it asks for the stricter of the start-time and the decision-time mode in exactly the case where the start time is UNKNOWN, so there is no start-time mode to compare. The task agent resolved it by treating the unknowable side as worst-case strict -- which is right, and matches c5 and the clock-trust rule -- but it is an interpretation of an ambiguous criterion, not a mechanical implementation of what the criterion says. The agent flagged it rather than smoothing it over; the lapse is mine for writing a criterion whose own terms do not apply to its case.",
+      "skipped_check": "a criterion review that would have caught 'the STRICTER of the start-time and decision-time modes' being uncomputable in the very case it governs",
+      "refs": [
+        "plan strict-window-close-boundary / t1 AC2"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    }
+  ],
   "obligations": []
 }

@@ -1,0 +1,60 @@
+{
+  "plan_slug": "strict-window-close-boundary",
+  "schema_version": 2,
+  "created": "2026-09-20T10:15:35Z",
+  "updated": "2026-09-20T10:24:29Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "t4's acceptance criterion 'hard_false_positives_strict is 0' is not achievable by this plan and is replaced by: the number must not be made WORSE by this change, measured against the pre-change baseline of 14, with the pre-existing failure recorded as a blocking product defect for its own frame rather than absorbed here",
+      "task_ref": "t4",
+      "reason": "the golden set run on UNMODIFIED code (commit c2efa53, prompt p2, senses = nvidia/Gemma-4-26B-A4B-NVFP4, gateway 0.81.0) reports hard_false_positives(text/strict) = 14 of 230 hard rows and wrong_actions = 11, so the release-blocking threshold was already failing before this plan's first line of code existed. Two failures are unambiguous strict-mode invariant breaks on request-shaped wishes (k-c45_06 'I wish someone would turn on the AC', k-c45_08 'I would be glad if the AC were on'), four are mixed command+hint rows with intent=none that must not act in either mode, and the rest are fragments. CLAUDE.md forbids tuning the threshold, so the criterion cannot be met by finishing this plan and must not be silently relaxed either -- it is re-aimed at a delta, and the absolute failure keeps its own blocking record (plan risk r7, obligation o1, evidence e1 with outcome=fail)",
+      "affects": [
+        "c3",
+        "h3",
+        "c10",
+        "h9"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 2
+    },
+    {
+      "id": "d2",
+      "what": "t4's golden-set measurement was launched against the t1+t2 merge BEFORE t3 had merged, departing from the declared dependency t4 --dep t3",
+      "task_ref": "t4",
+      "reason": "t3 adds only a test and cannot change what the model labels, so the measurement's validity does not depend on it, and running the three entrances takes long enough that serialising it behind a test task would have cost wall-clock for no change in the number. This is a real departure from the wave order the user approved at gate 2, so it is recorded rather than assumed harmless -- and it is only sound while t3 stays test-only. If t3 reports a product-code fix (it was told to fix a genuine t1/t2 bug minimally and say so), this measurement is STALE and must be re-run before it can be cited",
+      "affects": [
+        "t3"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "classification": "acceptable",
+      "seq": 3
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o1",
+      "test_ref": "python3 scripts/golden-set.py --entrance text --mode both",
+      "behavior_text": "hard_false_positives_strict is 0 across all 295 manifest rows",
+      "contract_text": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "295 rows, 230 hard rows, text entrance, strict+weekday, live senses model: 14 hard false positives, 11 wrong actions, hint recall 62/65 (95.4%), weekday obedience 56/78 (71.8%), label acceptability 273/295 (92.5%), 0 decider failures, p50 643ms p95 809ms, prompt p2, gateway 0.81.0. Measured on code with NO boundary fix applied, so this is the shipped product's number, not this plan's change.",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-20T13:20:00+03:00",
+        "commit": "a9d25a9530537156ac4963cf0ab450751ceee36d"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 1
+    }
+  ],
+  "deltas": [],
+  "supersessions": []
+}
