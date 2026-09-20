@@ -22,7 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from shabbos_goy.decider import Decision, ReplayDecider
+from shabbos_goy.decider import ContextWindow, Decision, ReplayDecider
+from shabbos_goy.decider.replay import REPLAY_FORMAT, entrance_buckets
 from shabbos_goy.lobes.config import LobesConfig
 from tests.decider_fake_server import FakeSensesServer, ScriptedResponse, decision_body
 from tests.golden import runner as gr
@@ -794,12 +795,18 @@ def test_record_writes_a_replay_file_the_replay_decider_can_read(tmp_path):
 def test_record_merges_into_an_existing_replay_file(tmp_path):
     path = tmp_path / "golden_replay.json"
     path.write_text(
-        json.dumps({"text": {"ישן": {"class": "unrelated", "intent": "none"}}}), "utf-8"
+        json.dumps(
+            {
+                "format": REPLAY_FORMAT,
+                "entrances": {"text": {"ישן": {"class": "unrelated", "intent": "none"}}},
+            }
+        ),
+        "utf-8",
     )
     gr.record_decisions(
         {"text": [result("h1", transcripts=("חדש",), decisions=(decision("wish", "cool"),))]}, path
     )
-    data = json.loads(path.read_text("utf-8"))
+    data = entrance_buckets(json.loads(path.read_text("utf-8")))
     assert set(data["text"]) == {"ישן", "חדש"}
 
 
@@ -821,7 +828,7 @@ def test_one_entrance_never_overwrites_another_for_the_same_transcript(tmp_path)
         },
         path,
     )
-    data = json.loads(path.read_text("utf-8"))
+    data = entrance_buckets(json.loads(path.read_text("utf-8")))
     assert data["text"][same]["class"] == "discomfort"
     assert data["audio-realtime"][same]["class"] == "unrelated"
 
@@ -850,9 +857,131 @@ def test_a_pre_r13_flat_replay_file_is_read_as_the_text_entrance(tmp_path):
         },
         path,
     )
-    data = json.loads(path.read_text("utf-8"))
+    data = entrance_buckets(json.loads(path.read_text("utf-8")))
     assert data["text"]["חם פה"]["class"] == "wish"
     assert data["audio-batch"]["קר פה"]["class"] == "remark"
+
+
+def test_record_decisions_writes_a_marked_envelope(tmp_path):
+    """The recorder is the only producer of the nested shape, so it marks it.
+
+    Finding 5: the reader must not have to infer the shape from the absence
+    of a key -- a flat file with one malformed record satisfies that guess.
+    """
+    path = tmp_path / "golden_replay.json"
+    gr.record_decisions(
+        {"text": [result("h1", transcripts=("חם פה",), decisions=(decision("wish", "cool"),))]},
+        path,
+    )
+    data = json.loads(path.read_text("utf-8"))
+    assert data["format"] == REPLAY_FORMAT
+    assert set(data["entrances"]) == {"text"}
+    assert (
+        ReplayDecider.from_file(path, entrance="text")
+        .decide("חם פה", ContextWindow(), mode="strict")
+        .intent
+        == "cool"
+    )
+
+
+def test_a_recorded_envelope_replays_per_entrance_through_the_runner_cli(tmp_path, capsys):
+    """Finding 3: ``--decider replay`` must read what ``--record`` wrote.
+
+    And it must read the bucket for the entrance it is running: the text
+    bucket here holds the failure, the audio-batch bucket does not.
+    """
+    rows = gr.load_manifest()
+    command = next(r for r in rows if r.category == "command")
+    replay = tmp_path / "golden_replay.json"
+    replay.write_text(
+        json.dumps(
+            {
+                "format": REPLAY_FORMAT,
+                "entrances": {
+                    "text": {
+                        command.text: {"class": "remark", "intent": "cool", "confidence": 1.0}
+                    },
+                    "audio-batch": {
+                        command.text: {"class": "imperative", "intent": "cool", "confidence": 1.0}
+                    },
+                },
+            }
+        ),
+        "utf-8",
+    )
+    code = gr.main(
+        [
+            "--entrance",
+            "text",
+            "--mode",
+            "strict",
+            "--decider",
+            "replay",
+            "--replay",
+            str(replay),
+            "--only",
+            command.id,
+        ]
+    )
+    printed = capsys.readouterr()
+    assert code == gr.EXIT_THRESHOLD, printed.err
+    assert command.id in printed.out
+
+
+def test_the_replay_decider_is_bound_to_the_entrance_being_run(tmp_path):
+    replay = tmp_path / "golden_replay.json"
+    replay.write_text(
+        json.dumps(
+            {
+                "format": REPLAY_FORMAT,
+                "entrances": {
+                    "text": {"חם פה": {"class": "wish", "intent": "cool", "confidence": 0.9}},
+                    "audio-batch": {"חם פה": {"class": "unrelated", "intent": "none"}},
+                },
+            }
+        ),
+        "utf-8",
+    )
+    args = gr._parser().parse_args(["--decider", "replay", "--replay", str(replay)])
+    decider_for, model = gr._build_decider(args, {})
+    assert model == "replay"
+    window = ContextWindow()
+    assert decider_for("text").decide("חם פה", window, mode="strict").klass == "wish"
+    assert decider_for("audio-batch").decide("חם פה", window, mode="strict").klass == "unrelated"
+
+
+def test_a_flat_replay_file_still_serves_every_entrance(tmp_path):
+    replay = tmp_path / "replay.json"
+    replay.write_text(
+        json.dumps({"חם פה": {"class": "wish", "intent": "cool", "confidence": 0.9}}), "utf-8"
+    )
+    args = gr._parser().parse_args(["--decider", "replay", "--replay", str(replay)])
+    decider_for, _ = gr._build_decider(args, {})
+    for entrance in ("text", "audio-batch", "audio-realtime"):
+        got = decider_for(entrance).decide("חם פה", ContextWindow(), mode="strict")
+        assert got.intent == "cool"
+
+
+def test_a_missing_entrance_in_the_replay_file_is_an_environment_error(tmp_path, capsys):
+    replay = tmp_path / "golden_replay.json"
+    replay.write_text(
+        json.dumps(
+            {
+                "format": REPLAY_FORMAT,
+                "entrances": {
+                    "audio-batch": {"חם פה": {"class": "wish", "intent": "cool"}},
+                    "audio-realtime": {"חם פה": {"class": "wish", "intent": "cool"}},
+                },
+            }
+        ),
+        "utf-8",
+    )
+    code = gr.main(
+        ["--entrance", "text", "--decider", "replay", "--replay", str(replay), "--limit", "2"]
+    )
+    printed = capsys.readouterr()
+    assert code == gr.EXIT_ENVIRONMENT
+    assert "text" in printed.err
 
 
 def test_asr_cache_round_trips(tmp_path):

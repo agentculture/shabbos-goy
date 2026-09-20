@@ -105,9 +105,19 @@ def _build_decider(args: argparse.Namespace) -> Any:
                 message="--decider replay needs --replay-file PATH",
                 remediation="pass a recorded decisions file, e.g. --replay-file replay.json",
             )
+        entrance = getattr(args, "replay_entrance", None)
         try:
-            return ReplayDecider.from_file(args.replay_file)
-        except (OSError, ValueError) as exc:
+            return ReplayDecider.from_file(args.replay_file, entrance=entrance)
+        except ValueError as exc:
+            # A recorded golden fixture is keyed by entrance (risk r13): one
+            # entrance loads on its own, several are named rather than picked.
+            raise CliError(
+                code=EXIT_USER_ERROR,
+                message=f"could not read the replay file: {exc}",
+                remediation="pass --replay-entrance NAME to choose one recorded entrance, "
+                "or use a flat utterance -> decision file",
+            ) from exc
+        except OSError as exc:
             raise CliError(
                 code=EXIT_USER_ERROR,
                 message=f"could not read the replay file: {type(exc).__name__}",
@@ -282,6 +292,13 @@ def register(sub: argparse._SubParsersAction) -> None:
         help="Which decider to ask (default: gemma, the lobes senses role).",
     )
     p.add_argument("--replay-file", help="A JSON replay file; required with --decider replay.")
+    p.add_argument(
+        "--replay-entrance",
+        help=(
+            "Which recorded entrance of an entrance-keyed replay file to read. "
+            "One recorded entrance is read without this flag; several require it."
+        ),
+    )
     p.add_argument(
         "--no-dashboard",
         dest="dashboard",

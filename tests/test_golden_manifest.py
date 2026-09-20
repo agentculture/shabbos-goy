@@ -26,6 +26,7 @@ import pytest
 
 from shabbos_goy.decider import ContextWindow, ReplayDecider
 from shabbos_goy.decider.oracle import RuleOracle
+from shabbos_goy.decider.replay import entrance_buckets
 from shabbos_goy.policy import CLASSES
 from tests.golden import runner as gr
 
@@ -88,43 +89,94 @@ def test_the_runner_scores_the_whole_manifest_offline(rows):
 
 @pytest.mark.skipif(not REPLAY_PATH.exists(), reason="no recorded golden run yet (--record)")
 def test_the_recorded_golden_run_still_passes_the_thresholds(rows):
-    """EVERY recorded entrance must be clean, not whichever one wrote last.
+    """EVERY recorded entrance must be SCORED and clean -- not whichever one
+    happened to match the ASR cache.
 
     Risk r13: the fixture used to be keyed by transcript text alone, so
     audio-realtime's answer overwrote the text entrance's for the same string
     and a run that FAILED the text entrance produced a fixture that passed.
-    The fixture is now keyed by entrance, and this test scores each one.
+    The fixture is now a marked, entrance-keyed envelope.
+
+    Finding 2 (the same defect, one level up): this guard used to ``continue``
+    past an entrance whose ASR cache was missing, stale or incomplete and pass
+    as long as *one* entrance matched, so a recorded failing entrance could
+    vanish from the release gate. An entrance that cannot be scored is now a
+    failure, and the scored set must equal the recorded set.
     """
     data = json.loads(REPLAY_PATH.read_text("utf-8"))
     assert data, "the replay file is empty"
-    nested = all(isinstance(v, dict) and "class" not in v for v in data.values())
-    assert nested, (
+    buckets = entrance_buckets(data)
+    assert buckets is not None, (
         "replay file is not keyed by entrance -- re-record it; a flat file "
         "cannot show which entrance a decision came from (risk r13)"
     )
+    review = gr.review_recorded_run(rows, buckets, gr.load_asr_cache(), mode="strict")
+    assert review.problems == [], "\n".join(review.problems)
+    assert set(review.scored) == set(buckets), (
+        "every recorded entrance must be scored; scored "
+        f"{sorted(review.scored)} of {sorted(buckets)}"
+    )
 
-    cache = gr.load_asr_cache()
-    checked = []
-    for entrance in sorted(data):
-        replay = ReplayDecider.from_file(REPLAY_PATH, entrance=entrance)
-        recorded = set(data[entrance])
-        if entrance == "text":
-            transcripts_for = lambda row: [row.text]  # noqa: E731
-            covered = [r for r in rows if r.text in recorded]
-        else:
-            heard = cache.get(entrance, {})
-            transcripts_for = lambda row: list(heard.get(row.id, []))  # noqa: E731
-            covered = [r for r in rows if any(t in recorded for t in heard.get(r.id, []))]
-        if not covered:
-            continue
-        results = gr.run_decider(covered, replay, mode="strict", transcripts_for=transcripts_for)
-        scored = gr.score(covered, results, mode="strict", entrance=entrance)
-        assert scored["hard_false_positives"] == [], (
-            f"{entrance}/strict: recorded run acts on rows that must never act: "
-            f"{scored['hard_false_positives']}"
-        )
-        checked.append(entrance)
-    assert checked, "the replay file matches no manifest row on any entrance"
+
+def test_the_guard_fails_when_an_entrances_asr_cache_is_missing(rows):
+    """Finding 2: an absent input must never yield a pass.
+
+    ``audio-batch`` here has recorded decisions but no ASR cache, so nothing
+    maps its transcripts back to manifest rows. The old guard skipped it and
+    passed on ``text`` alone.
+    """
+    hint = next(r for r in rows if r.act_strict and r.intent == "cool")
+    command = next(r for r in rows if r.category == "command")
+    buckets = {
+        "text": {hint.text: {"class": "wish", "intent": "cool", "confidence": 0.9}},
+        "audio-batch": {
+            "מה ששמע המכשיר": {"class": "remark", "intent": "cool", "confidence": 0.9},
+            command.text: {"class": "remark", "intent": "cool", "confidence": 0.9},
+        },
+    }
+    review = gr.review_recorded_run(rows, buckets, {}, mode="strict")
+    assert "text" in review.scored
+    assert "audio-batch" not in review.scored
+    assert set(review.scored) != set(buckets)
+    joined = "\n".join(review.problems)
+    assert "audio-batch" in joined
+    assert "מה ששמע המכשיר" in joined, "the unmatched recorded keys must be named"
+    assert command.text in joined
+
+
+def test_the_guard_names_recorded_transcripts_that_match_no_manifest_row(rows):
+    hint = next(r for r in rows if r.act_strict and r.intent == "cool")
+    buckets = {
+        "text": {
+            hint.text: {"class": "wish", "intent": "cool", "confidence": 0.9},
+            "שורה שנמחקה מהמניפסט": {"class": "remark", "intent": "cool", "confidence": 0.9},
+        }
+    }
+    review = gr.review_recorded_run(rows, buckets, {}, mode="strict")
+    joined = "\n".join(review.problems)
+    assert "שורה שנמחקה מהמניפסט" in joined
+    assert review.problems, "a recorded transcript no row matches is cache/manifest drift"
+
+
+def test_the_guard_scores_an_audio_entrance_through_the_asr_cache(rows):
+    hint = next(r for r in rows if r.act_strict and r.intent == "cool")
+    heard = "מה שהמכונה שמעה"
+    buckets = {"audio-batch": {heard: {"class": "wish", "intent": "cool", "confidence": 0.9}}}
+    review = gr.review_recorded_run(
+        rows, buckets, {"audio-batch": {hint.id: [heard]}}, mode="strict"
+    )
+    assert review.problems == [], review.problems
+    assert review.scored == ["audio-batch"]
+    assert review.scores[0]["hint_recall"]["acted_right"] == 1
+
+
+def test_the_guard_reports_a_hard_false_positive_in_a_recorded_run(rows):
+    command = next(r for r in rows if r.category == "command")
+    buckets = {"text": {command.text: {"class": "remark", "intent": "cool", "confidence": 1.0}}}
+    review = gr.review_recorded_run(rows, buckets, {}, mode="strict")
+    joined = "\n".join(review.problems)
+    assert command.id in joined
+    assert "text" in joined
 
 
 def test_a_recorded_decision_replays_identically(tmp_path, rows):

@@ -18,6 +18,7 @@ import pytest
 from shabbos_goy.classifier import classify
 from shabbos_goy.decider import NO_DECISION, ContextWindow, ReplayDecider
 from shabbos_goy.decider.oracle import RuleOracle
+from shabbos_goy.decider.replay import REPLAY_FORMAT, entrances_in
 from shabbos_goy.policy import may_act
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -70,6 +71,133 @@ def test_replay_rejects_a_corrupt_recorded_entry(tmp_path: Path) -> None:
     decision = decider.decide("x", _window(), mode="strict", ac_state=None)
     assert decision.klass == NO_DECISION.klass
     assert decision.reason == "bad_record"
+
+
+def _envelope(buckets: dict) -> dict:
+    return {"format": REPLAY_FORMAT, "entrances": buckets}
+
+
+def test_a_recorded_envelope_with_one_entrance_loads_without_naming_it(tmp_path: Path) -> None:
+    """Finding 3: a recorded fixture must be replayable by every consumer.
+
+    `--decider replay` and the CLI replay paths pass no entrance. With a
+    single recorded entrance there is nothing to choose, so the file loads.
+    """
+    path = tmp_path / "golden_replay.json"
+    path.write_text(
+        json.dumps(
+            _envelope({"text": {"חם פה": {"class": "wish", "intent": "cool", "confidence": 0.8}}})
+        ),
+        encoding="utf-8",
+    )
+    decider = ReplayDecider.from_file(path)
+    assert decider.decide("חם פה", _window(), mode="strict").intent == "cool"
+
+
+def test_a_recorded_envelope_with_several_entrances_names_them_instead_of_guessing(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "golden_replay.json"
+    path.write_text(
+        json.dumps(
+            _envelope(
+                {
+                    "text": {"חם פה": {"class": "wish", "intent": "cool", "confidence": 0.8}},
+                    "audio-batch": {"חם פה": {"class": "unrelated", "intent": "none"}},
+                }
+            )
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="keyed by entrance") as excinfo:
+        ReplayDecider.from_file(path)
+    assert "audio-batch" in str(excinfo.value) and "text" in str(excinfo.value)
+    assert (
+        ReplayDecider.from_file(path, entrance="audio-batch")
+        .decide("חם פה", _window(), mode="strict")
+        .klass
+        == "unrelated"
+    )
+
+
+def test_entrances_in_reports_the_recorded_entrances_and_none_for_a_flat_file(
+    tmp_path: Path,
+) -> None:
+    flat = tmp_path / "flat.json"
+    flat.write_text(json.dumps({"חם פה": {"class": "wish", "intent": "cool"}}), encoding="utf-8")
+    assert entrances_in(flat) is None
+    nested = tmp_path / "nested.json"
+    nested.write_text(json.dumps(_envelope({"text": {}, "audio-batch": {}})), encoding="utf-8")
+    assert entrances_in(nested) == ["audio-batch", "text"]
+
+
+def test_a_flat_file_with_one_malformed_record_still_loads_and_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """Finding 5: a localized bad record must not become a load failure.
+
+    `{"x": {"intent": "warm"}}` has no ``class``, which an
+    absence-of-a-key discriminator mistook for an entrance bucket. The file
+    must load and ``decide`` must fail closed, per record, as before.
+    """
+    path = tmp_path / "flat.json"
+    path.write_text(
+        json.dumps(
+            {
+                "x": {"intent": "warm"},
+                "חם פה": {"class": "wish", "intent": "cool", "confidence": 0.8},
+            }
+        ),
+        encoding="utf-8",
+    )
+    decider = ReplayDecider.from_file(path)
+    bad = decider.decide("x", _window(), mode="strict")
+    assert (bad.klass, bad.reason) == (NO_DECISION.klass, "bad_record")
+    assert decider.decide("חם פה", _window(), mode="strict").intent == "cool"
+
+
+def test_a_flat_file_of_nothing_but_malformed_records_still_loads(tmp_path: Path) -> None:
+    path = tmp_path / "flat.json"
+    path.write_text(json.dumps({"x": {"intent": "warm"}}), encoding="utf-8")
+    decider = ReplayDecider.from_file(path)
+    assert decider.decide("x", _window(), mode="strict").reason == "bad_record"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"format": REPLAY_FORMAT, "entrances": []},
+        {"format": REPLAY_FORMAT},
+        {"format": REPLAY_FORMAT, "entrances": {"text": "nope"}},
+        {"format": "golden-replay/99", "entrances": {"text": {}}},
+    ],
+)
+def test_a_malformed_envelope_is_refused_deterministically(tmp_path: Path, payload) -> None:
+    path = tmp_path / "bad.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError):
+        ReplayDecider.from_file(path)
+
+
+def test_an_envelope_with_no_entrances_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "empty.json"
+    path.write_text(json.dumps(_envelope({})), encoding="utf-8")
+    with pytest.raises(ValueError, match="no entrances"):
+        ReplayDecider.from_file(path)
+
+
+def test_a_non_object_replay_file_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "bad.json"
+    path.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+    with pytest.raises(ValueError, match="JSON object"):
+        ReplayDecider.from_file(path)
+
+
+def test_selecting_an_entrance_from_a_flat_file_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "flat.json"
+    path.write_text(json.dumps({"חם פה": {"class": "wish", "intent": "cool"}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="flat"):
+        ReplayDecider.from_file(path, entrance="text")
 
 
 def test_replay_from_mapping() -> None:
