@@ -113,6 +113,12 @@ listen --healthcheck → {'ok': True, 'reason': 'ok'}
 A deaf listener passes the healthcheck indefinitely, so Compose never restarts
 it. The product cannot distinguish **quiet** from **deaf**.
 
+A failing healthcheck would not be enough either: `docker-compose.yml` says it
+plainly — Compose *"does NOT restart a container merely for being reported
+`unhealthy`"*, only for the process exiting. So any deafness signal has to make
+the listener **exit**, the way `lobes_stalled` already exits 3, rather than
+change a label.
+
 ## Faults found that are not about hearing
 
 - **`grant` cannot back a container deployment** as `docker-compose.yml`
@@ -128,7 +134,7 @@ it. The product cannot distinguish **quiet** from **deaf**.
 ## Reproducing
 
 ```bash
-~/shabbos-goy-restart-proof.sh --wait-speech 120
+scripts/restart-proof.sh --wait-speech 120
 ```
 
 Tier A is automatic and asserts the *actual* capture binding

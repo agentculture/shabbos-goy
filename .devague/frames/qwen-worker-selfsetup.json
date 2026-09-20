@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-20T05:36:51Z",
-  "updated": "2026-09-20T09:09:50Z",
+  "updated": "2026-09-20T09:30:06Z",
   "claims": [
     {
       "id": "c1",
@@ -694,7 +694,7 @@
       ],
       "hard_questions": [],
       "links": [],
-      "instruction": "Re-run ~/shabbos-goy-restart-proof.sh --wait-speech 120 after a reboot. This claim holds only while drill 1's disproof stays recorded beside drill 2's pass \u2014 never cite the pass alone.",
+      "instruction": "Re-run scripts/restart-proof.sh --wait-speech 120 after a reboot (vendored into the repo during PR #4 review). This claim holds only while drill 1's disproof stays recorded beside drill 2's pass \u2014 never cite the pass alone.",
       "revisions": [
         {
           "text": "REBOOT DRILL PASSED 2026-09-20 10:11: unattended after boot the container was Up (healthy) within 41s with cmd=[shabbos-goy listen --apply], the PipeWire socket was a real socket on both sides of the mount (srw-rw-rw- on the host and as shabbos-goy:shabbos-goy inside), heartbeat carried pong+audio, listen --healthcheck exited 0, mode recomputed to weekday from zmanim, and the Sensibo pod read back (power=off 30.8C 52.7%). Automatic restart is also now proven: RestartCount=7 means the process exited seven times during the boot race (event=source_ended, then the run summary, then a fresh start) and Compose brought it back each time until PipeWire settled -- the bind-mount race predicted in c35 self-heals through restart: unless-stopped instead of wedging",
@@ -882,14 +882,20 @@
     {
       "id": "c48",
       "kind": "decision",
-      "text": "user decision 2026-09-20: close the deafness gap with a CONFIG-GATED knob, deaf_after_seconds, defaulting to OFF. When unset the runtime stays byte-identical to the build proven across the two reboot drills; when set, healthcheck additionally requires a transcript stamp within that window, so Compose restarts a deaf listener. Default-off is deliberate: a long genuine silence in an empty room must not cause restarts, and the default behaviour is not to be changed hours before a live window",
+      "text": "user decision 2026-09-20, CORRECTED 2026-09-20 13:10 after PR review found the original mechanism cannot work: close the deafness gap with a config-gated deaf_after_seconds defaulting to OFF. When unset the runtime stays byte-identical to the build proven across the two reboot drills. When set, deafness must make the LISTENER PROCESS EXIT non-zero -- the watchdog path that already exists for lobes_stalled (exit 3) -- and not merely make the healthcheck report unhealthy, because docker-compose.yml:39-48 states in terms that Compose 'does NOT restart a container merely for being reported unhealthy; restart: unless-stopped only reacts to the process exiting'. A healthcheck-only deafness signal would label the container and recover nothing. Default-off stays deliberate: a long genuine silence in an empty room must not exit the process",
       "origin": "user",
       "status": "confirmed",
       "honesty_conditions": [],
       "hard_questions": [],
       "links": [],
       "instruction": "Implement in shabbos_goy/config.py (positive-number validation, None when absent) and shabbos_goy/runtime/heartbeat.py's healthcheck (a new named reason code for deafness, e.g. 'deaf'); assert both that unset leaves every existing healthcheck result unchanged and that set-plus-null-transcript returns False",
-      "revisions": []
+      "revisions": [
+        {
+          "text": "user decision 2026-09-20: close the deafness gap with a CONFIG-GATED knob, deaf_after_seconds, defaulting to OFF. When unset the runtime stays byte-identical to the build proven across the two reboot drills; when set, healthcheck additionally requires a transcript stamp within that window, so Compose restarts a deaf listener. Default-off is deliberate: a long genuine silence in an empty room must not cause restarts, and the default behaviour is not to be changed hours before a live window",
+          "kind": "decision",
+          "reason": "PR #4 review (qodo, High) pointed out that a failing healthcheck triggers no restart under this compose policy, which the repo's own comment already documented -- the specified mechanism could not have worked"
+        }
+      ]
     },
     {
       "id": "c49",

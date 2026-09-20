@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "drafting",
   "created": "2026-09-20T09:04:29Z",
-  "updated": "2026-09-20T09:08:05Z",
+  "updated": "2026-09-20T09:29:37Z",
   "claims": [
     {
       "id": "c1",
@@ -33,14 +33,27 @@
     {
       "id": "c3",
       "kind": "decision",
-      "text": "MIGRATED from qwen-worker-selfsetup/c48. Close the gap with a config-gated deaf_after_seconds defaulting to OFF: unset leaves the runtime byte-identical to the build proven on 2026-09-20, set makes healthcheck require a transcript stamp within the window. Default-off is deliberate -- a long genuine silence in an empty room must not cause restarts",
+      "text": "MIGRATED from qwen-worker-selfsetup/c48, CORRECTED after PR #4 review. Close the gap with a config-gated deaf_after_seconds defaulting to OFF: unset leaves the runtime byte-identical to the build proven on 2026-09-20. When set, deafness must cause the LISTENER PROCESS TO EXIT non-zero via the existing watchdog path (lobes_stalled exits 3), NOT merely flip the health label -- docker-compose.yml:39-48 says Compose does not restart a container for being unhealthy, only for the process exiting, so a health-label-only signal recovers nothing. Default-off is deliberate: a long genuine silence in an empty room must not exit the process",
       "origin": "user",
       "status": "confirmed",
-      "honesty_conditions": [],
+      "honesty_conditions": [
+        {
+          "id": "h1",
+          "text": "a test proves the CONFIGURED Compose deployment actually restarts the listener when deafness fires -- that the process exits and comes back -- rather than only that a health label changed",
+          "status": "confirmed",
+          "instruction": ""
+        }
+      ],
       "hard_questions": [],
       "links": [],
       "instruction": "",
-      "revisions": []
+      "revisions": [
+        {
+          "text": "MIGRATED from qwen-worker-selfsetup/c48. Close the gap with a config-gated deaf_after_seconds defaulting to OFF: unset leaves the runtime byte-identical to the build proven on 2026-09-20, set makes healthcheck require a transcript stamp within the window. Default-off is deliberate -- a long genuine silence in an empty room must not cause restarts",
+          "kind": "decision",
+          "reason": "PR #4 review found the original mechanism cannot trigger recovery under this compose restart policy"
+        }
+      ]
     },
     {
       "id": "c4",
@@ -81,14 +94,20 @@
     {
       "id": "c7",
       "kind": "requirement",
-      "text": "the Tier A binding oracle belongs in the package, not in a home-directory script: pactl list source-outputs resolved to a source NAME and compared to the configured mic_node is what actually discriminates, and it currently lives only in ~/shabbos-goy-restart-proof.sh",
+      "text": "the Tier A binding oracle now ships in the package as scripts/restart-proof.sh (vendored during PR #4 review, repo-relative, dashboard URL overridable): pactl list source-outputs resolved to a source NAME and compared to the configured mic_node is what actually discriminates deafness, and it must stay in the repo rather than an operator's home directory so a third party can run it",
       "origin": "llm",
       "status": "confirmed",
       "honesty_conditions": [],
       "hard_questions": [],
       "links": [],
       "instruction": "",
-      "revisions": []
+      "revisions": [
+        {
+          "text": "the Tier A binding oracle belongs in the package, not in a home-directory script: pactl list source-outputs resolved to a source NAME and compared to the configured mic_node is what actually discriminates, and it currently lives only in ~/shabbos-goy-restart-proof.sh",
+          "kind": "requirement",
+          "reason": "PR #4 review (qodo, Medium) noted the evidence claimed third-party repeatability while referencing an uncommitted local script; the script is now vendored"
+        }
+      ]
     },
     {
       "id": "c8",
