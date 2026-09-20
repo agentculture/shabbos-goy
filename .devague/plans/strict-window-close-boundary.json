@@ -5,7 +5,7 @@
   "schema_version": 5,
   "status": "exported",
   "created": "2026-09-20T09:53:54Z",
-  "updated": "2026-09-20T14:11:50Z",
+  "updated": "2026-09-20T14:50:31Z",
   "targets": [
     {
       "id": "c1",
@@ -285,8 +285,8 @@
       "text": "t3's test pins the joiner's wall clock by assigning the private pipeline.joiner._wall_clock, because Pipeline exposes joiner_clock (the monotonic receive clock) but no seam for the joiner's wall_clock. It works and the test asserts last_utterance_start.wall_time to prove the pinned instant is the one the joiner handed downstream, but a private-attribute assignment in a test is a missing public seam: a joiner_wall_clock parameter on Pipeline would be the honest fix. Recorded rather than silently accepted, and deliberately not done here because 'prefer a test to a product change' applied.",
       "kind": "follow_up",
       "task_id": "t3",
-      "resolved": false,
-      "resolution": ""
+      "resolved": true,
+      "resolution": "closed by the Qodo #1 fix: Pipeline now takes a public joiner_wall_clock, so no test needs to assign the private pipeline.joiner._wall_clock. The seam exists because the listener needs it in production to stamp an utterance at receipt rather than at dispatch."
     },
     {
       "id": "r9",
@@ -355,6 +355,22 @@
     {
       "id": "r17",
       "text": "record a committed golden fixture from a FULL 295-row, three-entrance run under the final prompt, now that the fixture is keyed by entrance (r13 fixed). The measurement that authorised this deploy covered 234 k-rows only and was not recorded, so the repo still has no committed recorded run and tests/test_golden_manifest.py's guard still skips.",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r18",
+      "text": "REPORTED BY THE SUBAGENT, one level further out than Qodo finding 2: the release guard is still skipif(not REPLAY_PATH.exists()), and tests/fixtures/decider/golden_replay.json is neither present nor gitignored. So an ABSENT fixture still yields a green suite -- the same species of hole as finding 2 (an absent input producing a pass), just moved from 'entrance missing from the file' to 'file missing entirely'. It was left rather than fixed because turning it into a hard failure would red CI immediately, and it is reported here instead of being quietly accepted. Closing it properly means r17 (record a committed fixture from a full run) plus turning the skip into a failure once one exists.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r19",
+      "text": "disclosed by the subagent rather than glossed: two of its CLI tests (classify/listen replays_a_recorded_entrance_keyed_file) were written after the single-entrance rule was already in place, so it never observed them fail. The equivalent pre-fix failure is proven one level down at the decider by test_a_recorded_envelope_with_one_entrance_loads_without_naming_it, and the four --replay-entrance flag tests were seen failing with 'unrecognized arguments'. Worth re-deriving those two against a stash before they are trusted as regressions.",
       "kind": "follow_up",
       "task_id": "t4",
       "resolved": false,

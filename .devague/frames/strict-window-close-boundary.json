@@ -4,7 +4,7 @@
   "schema_version": 6,
   "status": "exported",
   "created": "2026-09-20T09:04:29Z",
-  "updated": "2026-09-20T14:07:02Z",
+  "updated": "2026-09-20T14:43:52Z",
   "claims": [
     {
       "id": "c1",
@@ -222,6 +222,17 @@
       "skipped_check": "reading how the golden set constructs its ContextWindow before attributing a recall change to the context rule",
       "refs": [
         "p6 / dev-p6-all.json / my claim 'your reframe worked'"
+      ],
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "l4",
+      "code": "control-absent",
+      "what": "My first test for Qodo finding 4 PASSED and was VACUOUS. It asserted that the injected mode and the speech-start mode were both 'weekday' at a chosen instant -- but the host's own resolver returns weekday at most instants, so the assertion held whether or not the fix existed. I only found it because I ran the negative control, which passed when it should have failed. Rewritten to assert IDENTITY (the injected object itself is what both readings return), which fails correctly without the fix. The lesson is the day's own rule applied to myself twice over: a test that passes is not evidence until it has been shown it can fail.",
+      "skipped_check": "running the negative control before believing a passing test",
+      "refs": [
+        "Qodo #4 / tests/test_listen_runtime.py"
       ],
       "origin": "llm",
       "status": "proposed"

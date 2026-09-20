@@ -2,7 +2,7 @@
   "plan_slug": "strict-window-close-boundary",
   "schema_version": 2,
   "created": "2026-09-20T10:15:35Z",
-  "updated": "2026-09-20T14:28:43Z",
+  "updated": "2026-09-20T14:36:54Z",
   "deviations": [
     {
       "id": "d1",
@@ -251,6 +251,25 @@
       "status": "proposed",
       "superseded": false,
       "seq": 14
+    },
+    {
+      "id": "e10",
+      "obligation_ref": "o2",
+      "test_ref": "live observation via the dashboard /api/utterances and the container heartbeat",
+      "behavior_text": "the deployed p6 build hears real Hebrew speech in the room and acts correctly on a discomfort hint in strict mode",
+      "contract_text": "a command spoken inside a strict window never acts, even when the window closes before the decision does",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "Spoken by the user in the room, on the deployed p6 container, mode strict (overridden). 'mamash kham li' -> klass=discomfort, intent=cool, verdict=delayed, action=ac_power_on, target=ac, decide latency 626ms; the 15s strict-mode delay was applied, as designed. Heartbeat transcript stamp 50s old against a live audio stamp, so HEARING IS PROVEN ON THIS BOOT -- this closes the Tier B gap the restart-proof reported, where quiet and deaf were indistinguishable. Five adjacent utterances in the same ring were correctly refused as unrelated: two ASR noise runs, a question put to a person, a bare day name, and an unrelated sentence. This is the first live actuation under p6 and the first observation of the fragment and noise rules against real ASR output in this room. It does NOT measure the recent: context rule (r14) and it is a single observation, not a rate.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T17:26:00+03:00",
+        "commit": "d63ca41227b63ef5ca4c16c8f70513867ea47109"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 15
     }
   ],
   "deltas": [
