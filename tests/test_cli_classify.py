@@ -141,7 +141,10 @@ def test_classify_names_the_entrances_instead_of_picking_one(
     err = capsys.readouterr().err
     assert rc == 1
     assert "--replay-entrance" in err
-    assert "audio-batch" in err and "text" in err
+    # Split per SonarCloud: one assertion per entrance, so a failure says
+    # which entrance the remediation message forgot to list.
+    assert "audio-batch" in err
+    assert "text" in err
 
 
 def test_classify_replay_entrance_selects_the_bucket(

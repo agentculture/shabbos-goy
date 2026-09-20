@@ -111,7 +111,11 @@ def test_a_recorded_envelope_with_several_entrances_names_them_instead_of_guessi
     )
     with pytest.raises(ValueError, match="keyed by entrance") as excinfo:
         ReplayDecider.from_file(path)
-    assert "audio-batch" in str(excinfo.value) and "text" in str(excinfo.value)
+    # Split per SonarCloud: each entrance is its own assertion, so a failure
+    # names which one is missing from the message rather than just "False".
+    message = str(excinfo.value)
+    assert "audio-batch" in message
+    assert "text" in message
     assert (
         ReplayDecider.from_file(path, entrance="audio-batch")
         .decide("חם פה", _window(), mode="strict")
