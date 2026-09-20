@@ -16,6 +16,7 @@ import pytest
 
 from shabbos_goy.config import load_config
 from shabbos_goy.decider import ContextWindow, Decision, ReplayDecider
+from shabbos_goy.joiner import SpeechStart
 from shabbos_goy.mode import ResolvedMode
 from shabbos_goy.pipeline import Pipeline, pipewire_volume_stepper
 
@@ -904,3 +905,64 @@ def test_a_new_session_after_a_connection_loss_keeps_its_own_audio_timeline() ->
 
     assert [entry.text for entry in pipeline.recent()][-1] == HOT
     assert ac.power_calls == [(POD, True, True)]
+
+
+# --- strict-window-close-boundary, t2: mode resolved at the START instant ---
+
+
+def test_a_command_begun_inside_the_window_is_refused_when_decided_after_it_closed() -> None:
+    """t2, AC1+AC2: the bug this frame exists to fix. The utterance's speech
+    STARTED inside a strict window; by the time the decision runs, the window
+    has closed and 'now' resolves weekday. Resolving at decision time judges
+    it weekday and ACTS -- which is a spoken command acting on a holy day.
+    Resolving from the start instant, and taking the stricter of the two,
+    refuses it."""
+    start_wall = 1_000_000.0
+
+    def mode_at(at: float):
+        # Strict strictly before the boundary, weekday at or after it.
+        inside = at < start_wall + 2.0
+        return ResolvedMode(
+            mode="strict" if inside else "weekday",
+            kinds=("yom_kippur",) if inside else (),
+            clock_trusted=True,
+            overridden=False,
+        )
+
+    pipeline, ac, _volume, _speaker, _clock = make_pipeline(
+        apply=True,
+        # decision time is AFTER the window closed
+        mode_provider=lambda: mode_at(start_wall + 5.0),
+        mode_at=mode_at,
+    )
+
+    pipeline._handle_utterance(TURN_AC_ON, SpeechStart(monotonic_ms=0.0, wall_time=start_wall))
+
+    assert ac.power_calls == []
+    assert verdicts(pipeline) == [("gate_refused", "none")]
+
+
+def test_a_command_begun_after_the_window_closed_still_acts() -> None:
+    """The other half of the pair. Without this, the test above is satisfiable
+    by refusing everything -- which would silently break weekday mode."""
+    start_wall = 1_000_000.0
+
+    def mode_at(at: float):
+        inside = at < start_wall - 10.0
+        return ResolvedMode(
+            mode="strict" if inside else "weekday",
+            kinds=("yom_kippur",) if inside else (),
+            clock_trusted=True,
+            overridden=False,
+        )
+
+    pipeline, ac, _volume, _speaker, _clock = make_pipeline(
+        apply=True,
+        mode_provider=lambda: mode_at(start_wall + 5.0),
+        mode_at=mode_at,
+    )
+
+    pipeline._handle_utterance(TURN_AC_ON, SpeechStart(monotonic_ms=0.0, wall_time=start_wall))
+
+    assert ac.power_calls == [(POD, True, True)]
+    assert verdicts(pipeline) == [("acted", "ac_power_on")]

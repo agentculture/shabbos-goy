@@ -383,3 +383,23 @@ def resolve_mode(now: datetime, config: Config, *, runner=subprocess.run) -> Res
         return ResolvedMode(mode=override, kinds=kinds, clock_trusted=True, overridden=True)
 
     return ResolvedMode(mode=zmanim_mode, kinds=kinds, clock_trusted=True, overridden=False)
+
+
+def stricter_mode(a: str | None, b: str | None) -> str:
+    """The stricter of two resolved modes.
+
+    ``"strict"`` is stricter than ``"weekday"``, and an unknown mode
+    (``None``, or anything outside :data:`shabbos_goy.policy.MODES`) is
+    treated as ``"strict"`` -- the clock-trust rule's own direction, fail
+    toward the stricter behaviour and never toward acting.
+
+    This exists as its own named function, rather than as an ``if`` inside
+    the pipeline, because a refactor must not be able to reverse it by
+    accident: the window-close boundary is the one place where the two
+    readings of a single utterance can disagree, and which one wins is the
+    core invariant (spec ``strict-window-close-boundary``, claim c5).
+    """
+    for value in (a, b):
+        if value != "weekday":
+            return "strict"
+    return "weekday"

@@ -74,6 +74,7 @@ from .decider import NO_DECISION, ContextWindow, Decider, Decision
 from .decider.decision import INTENTS
 from .joiner import SpeechStart, TranscriptJoiner
 from .limits import BoundedRing, Clock, DelayTimer, LimitsConfig, RateLimiter, system_clock
+from .mode import stricter_mode
 from .policy import CLASSES, may_act
 
 __all__ = [
@@ -371,6 +372,7 @@ class Pipeline:
         decider: Decider,
         config: Config,
         mode_provider: Callable[[], Any],
+        mode_at: Optional[Callable[[float], Any]] = None,
         pod_id: str,
         pod_alias: str = "ac",
         volume_key: str = "self",
@@ -396,6 +398,10 @@ class Pipeline:
         self._decider = decider
         self._config = config
         self._mode_provider = mode_provider
+        # Resolves the mode at a given wall-clock instant (epoch seconds).
+        # Optional: with no provider the pipeline keeps resolving only at
+        # decision time, which is the pre-t2 behaviour.
+        self._mode_at = mode_at
         self._pod_id = pod_id
         self._pod_alias = pod_alias
         self._volume_key = volume_key
@@ -609,6 +615,17 @@ class Pipeline:
         resolved = self._mode_provider()
         mode = getattr(resolved, "mode", None)
         clock_untrusted = not bool(getattr(resolved, "clock_trusted", True))
+
+        # t2, the window-close boundary: the verdict belongs to the window
+        # in force when SPEECH STARTED, not when the decision completed.
+        # Resolve both and take the stricter -- an utterance that began
+        # inside a holy day is judged by that day even if the decision
+        # lands seconds after tzeit. No margin, sleep or grace period is
+        # introduced anywhere: this is a different TIMESTAMP, not a delay.
+        if start is not None and self._mode_at is not None:
+            at_start = self._mode_at(start.wall_time)
+            mode = stricter_mode(getattr(at_start, "mode", None), mode)
+            clock_untrusted = clock_untrusted or not bool(getattr(at_start, "clock_trusted", True))
         # Acceptance criterion 2 (t1): an utterance with no speech-start
         # instant -- a reconnect-orphaned or joiner-bypassed one -- is
         # judged by the STRICTER of the (unknown) start-time mode and the
