@@ -26,11 +26,15 @@ import stat
 import threading
 import time
 import urllib.error
+from datetime import datetime, timezone
+from unittest import mock
 
 import pytest
 
+import shabbos_goy.runtime.listener as listener_module
 from shabbos_goy import mode as mode_module
 from shabbos_goy.lobes import events as lobes_events
+from shabbos_goy.policy import MODES
 from shabbos_goy.runtime import (
     ConnectionMonitor,
     Heartbeat,
@@ -878,3 +882,87 @@ def test_no_capture_process_survives_repeated_lobes_reconnects(
 
     survivors = [p for p in fake_capture.instances if p.poll() is None]
     assert survivors == [], f"{len(survivors)} capture children survived the shutdown"
+
+
+def test_the_listener_hands_the_pipeline_a_start_instant_mode_resolver(tmp_path) -> None:
+    """strict-window-close-boundary, t2: the boundary fix is INERT unless the
+    listener supplies ``mode_at``. The pipeline's parameter is optional and
+    silently falls back to decision-time-only resolution, so nothing else
+    would notice the wiring going missing. Assert the real deployment path
+    has it, and that it resolves at the instant it is given rather than now.
+    """
+    listener = make_listener(tmp_path)
+
+    resolver = listener.pipeline._mode_at
+    assert resolver is not None, "listener must pass mode_at or the fix does nothing"
+
+    # A Yom Kippur instant and a plain weekday instant must resolve
+    # differently through the SAME resolver -- proof it reads its argument.
+    strict_at = datetime(2026, 9, 21, 18, 0, tzinfo=timezone.utc).timestamp()
+    weekday_at = datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc).timestamp()
+    assert resolver(strict_at).mode in MODES
+    assert resolver(weekday_at).mode in MODES
+    assert resolver(weekday_at).mode == "weekday"
+
+
+def test_an_injected_mode_provider_is_not_mixed_with_the_hosts_zmanim(tmp_path) -> None:
+    """Qodo #4: the listener honoured an injected mode_provider for the
+    decision-time reading but always built the speech-start resolver from
+    resolve_mode, so one utterance got two readings from different mode,
+    clock and trust policies -- and stricter_mode then refuses what the
+    injected policy permits. An injected provider must govern BOTH instants.
+    """
+    sentinel = mode_module.ResolvedMode(
+        mode="weekday", kinds=(), clock_trusted=True, overridden=False
+    )
+    listener = make_listener(tmp_path, mode_provider=lambda: sentinel)
+
+    # IDENTITY, not equality: a value test passes vacuously whenever the
+    # host's own resolver happens to agree at the chosen instant, which is
+    # most instants. The property is that the injected policy is the one
+    # being consulted -- at BOTH readings of the utterance.
+    assert listener._mode_provider() is sentinel
+    assert listener.pipeline._mode_at(0.0) is sentinel
+    assert listener.pipeline._mode_at(2_000_000_000.0) is sentinel
+
+
+def test_an_explicitly_injected_mode_at_wins_over_both_defaults(tmp_path) -> None:
+    """The seam Qodo asked for: a caller that wants a DIFFERENT historical
+    policy can supply one, and it is used verbatim."""
+    sentinel = mode_module.ResolvedMode(
+        mode="strict", kinds=("yom_kippur",), clock_trusted=True, overridden=False
+    )
+    listener = make_listener(tmp_path, mode_at=lambda at: sentinel)
+
+    assert listener.pipeline._mode_at(0.0) is sentinel
+    assert listener._mode_provider().mode == "weekday"  # untouched
+
+
+def test_speech_received_inside_the_window_keeps_its_receipt_instant(tmp_path) -> None:
+    """Qodo #1: the worker is single-threaded and also runs the decide chain,
+    so a speech-start event can sit in the queue behind a model decision
+    (measured live at ~600 ms). If the wall clock were sampled when the
+    worker finally dispatched the event, speech RECEIVED inside a strict
+    window could be stamped after the window closed -- the very boundary
+    failure this listener exists to prevent.
+
+    The event is queued while the clock reads an instant inside the window,
+    the clock then moves an hour past it, and only then is the item handled.
+    The stamp must be the receipt instant, not the dispatch instant.
+    """
+    listener = make_listener(tmp_path)
+    inside = 1_000_000.0
+    much_later = inside + 3600.0
+
+    with mock.patch.object(listener_module.time, "time", return_value=inside):
+        listener.submit({"type": "input_audio_buffer.speech_started", "at_ms": 0, "item_id": "i1"})
+    item = listener._queue.get_nowait()
+
+    with mock.patch.object(listener_module.time, "time", return_value=much_later):
+        listener._handle(item)
+
+    stamp = listener.pipeline.joiner._chain_start
+    assert stamp is not None, "the speech-start event never reached the joiner"
+    assert stamp.wall_time == inside, (
+        "the utterance was stamped at dispatch, not at receipt: " f"{stamp.wall_time} != {inside}"
+    )

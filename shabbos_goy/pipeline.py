@@ -72,8 +72,9 @@ from .cli._errors import CliError
 from .config import AC_ACTION, Config, validate_ac_argument
 from .decider import NO_DECISION, ContextWindow, Decider, Decision
 from .decider.decision import INTENTS
-from .joiner import TranscriptJoiner
+from .joiner import SpeechStart, TranscriptJoiner
 from .limits import BoundedRing, Clock, DelayTimer, LimitsConfig, RateLimiter, system_clock
+from .mode import stricter_mode
 from .policy import CLASSES, may_act
 
 __all__ = [
@@ -371,6 +372,7 @@ class Pipeline:
         decider: Decider,
         config: Config,
         mode_provider: Callable[[], Any],
+        mode_at: Optional[Callable[[float], Any]] = None,
         pod_id: str,
         pod_alias: str = "ac",
         volume_key: str = "self",
@@ -385,6 +387,7 @@ class Pipeline:
         context: Optional[ContextWindow] = None,
         clock: Clock = system_clock,
         joiner_clock: Optional[Callable[[], float]] = None,
+        joiner_wall_clock: Optional[Callable[[], float]] = None,
         join_gap_ms: Optional[int] = None,
         log: Optional[Callable[[LogRecord], None]] = None,
         apply: bool = False,
@@ -396,6 +399,10 @@ class Pipeline:
         self._decider = decider
         self._config = config
         self._mode_provider = mode_provider
+        # Resolves the mode at a given wall-clock instant (epoch seconds).
+        # Optional: with no provider the pipeline keeps resolving only at
+        # decision time, which is the pre-t2 behaviour.
+        self._mode_at = mode_at
         self._pod_id = pod_id
         self._pod_alias = pod_alias
         self._volume_key = volume_key
@@ -418,6 +425,14 @@ class Pipeline:
         joiner_kwargs: dict[str, Any] = {}
         if joiner_clock is not None:
             joiner_kwargs["clock"] = joiner_clock
+        if joiner_wall_clock is not None:
+            # A public seam for the joiner's WALL clock, separate from its
+            # monotonic receive clock. The listener uses it to stamp an
+            # utterance with the instant the speech-start event was RECEIVED
+            # rather than the instant a busy worker got round to it; a test
+            # uses it to pin that instant. Without the seam a test had to
+            # assign the private attribute.
+            joiner_kwargs["wall_clock"] = joiner_wall_clock
         self.joiner = TranscriptJoiner(
             gap_threshold_ms=gap_ms, on_utterance=self._on_utterance, **joiner_kwargs
         )
@@ -561,9 +576,14 @@ class Pipeline:
         An exception from any adapter is reported as its TYPE NAME only: the
         message can quote the transcript, the pod id or an API response, and
         a log line may carry none of those.
+
+        Reads :attr:`TranscriptJoiner.last_utterance_start` synchronously,
+        right where the joiner set it just before calling us --- the
+        utterance's own speech-start instant, not re-derived here.
         """
+        start = self.joiner.last_utterance_start
         try:
-            self._handle_utterance(text)
+            self._handle_utterance(text, start)
         except Exception as exc:  # noqa: BLE001 - a bug must not deafen the agent
             self._record(
                 LogRecord(
@@ -577,7 +597,18 @@ class Pipeline:
         finally:
             self._chain_suppressed = False
 
-    def _handle_utterance(self, text: str) -> None:
+    def _handle_utterance(self, text: str, start: Optional[SpeechStart] = None) -> None:
+        """One joined utterance in, at most one action out.
+
+        ``start`` is the utterance's speech-start instant, threaded through
+        from the joiner (see :meth:`_on_utterance`). It defaults to
+        ``None`` for a caller that bypasses the joiner entirely, and that
+        default is also what a reconnect-orphaned utterance would carry if
+        one ever reached here. ``start`` is not yet consumed to resolve the
+        mode itself (a later change does that) --- here it only decides
+        whether the STRICTER reading is forced: see ``_treat_as_untrusted``
+        below (t1's acceptance criterion 2).
+        """
         if self._chain_suppressed:
             self._record(
                 LogRecord(
@@ -593,6 +624,28 @@ class Pipeline:
         resolved = self._mode_provider()
         mode = getattr(resolved, "mode", None)
         clock_untrusted = not bool(getattr(resolved, "clock_trusted", True))
+
+        # t2, the window-close boundary: the verdict belongs to the window
+        # in force when SPEECH STARTED, not when the decision completed.
+        # Resolve both and take the stricter -- an utterance that began
+        # inside a holy day is judged by that day even if the decision
+        # lands seconds after tzeit. No margin, sleep or grace period is
+        # introduced anywhere: this is a different TIMESTAMP, not a delay.
+        if start is not None and self._mode_at is not None:
+            at_start = self._mode_at(start.wall_time)
+            mode = stricter_mode(getattr(at_start, "mode", None), mode)
+            clock_untrusted = clock_untrusted or not bool(getattr(at_start, "clock_trusted", True))
+        # Acceptance criterion 2 (t1): an utterance with no speech-start
+        # instant -- a reconnect-orphaned or joiner-bypassed one -- is
+        # judged by the STRICTER of the (unknown) start-time mode and the
+        # decision-time mode. The start-time mode cannot be computed at all
+        # without an instant, so the safe assumption for the unknown side is
+        # "strict" -- exactly the clock-trust rule's own "fail toward the
+        # stricter behaviour, never toward acting" -- which is why this
+        # folds into the same ``clock_untrusted``-style forcing already used
+        # below, rather than a second parallel mechanism.
+        start_instant_missing = start is None
+        treat_as_untrusted = clock_untrusted or start_instant_missing
         ac_state = self._read_ac_state()
 
         started = self._clock()
@@ -644,11 +697,11 @@ class Pipeline:
             self._log_refusal(klass, intent, VERDICT_LOW_CONFIDENCE)
             return
 
-        if not may_act(mode, klass, clock_untrusted=clock_untrusted):
+        if not may_act(mode, klass, clock_untrusted=treat_as_untrusted):
             self._log_refusal(klass, intent, VERDICT_GATE_REFUSED)
             return
 
-        effective_mode = "strict" if clock_untrusted else mode
+        effective_mode = "strict" if treat_as_untrusted else mode
         if intent == "status":
             self._handle_status(klass, intent, effective_mode, ac_state)
             return

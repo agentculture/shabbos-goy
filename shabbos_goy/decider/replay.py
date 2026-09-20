@@ -20,6 +20,59 @@ from .decision import INTENTS, Decision, no_decision
 
 SOURCE = "replay"
 
+#: The marker a recorded, entrance-keyed replay file carries. The shape is
+#: ``{"format": REPLAY_FORMAT, "entrances": {entrance: {utterance: decision}}}``.
+#:
+#: An **explicit marker**, not a structural guess. The nested shape used to be
+#: inferred from the *absence* of a ``"class"`` key in every top-level value,
+#: which a flat file holding one malformed record (``{"x": {"intent": "warm"}}``)
+#: satisfies -- so a localized bad record became a file-wide load failure and
+#: the deliberate per-record fail-closed path (``bad_record`` ->
+#: ``NO_DECISION``) was skipped. A structural test ("the bucket's own values
+#: are dicts") is better but still a guess: ``{"x": {"y": {}}}`` is ambiguous
+#: under it. The marker is decidable in one comparison, and every other
+#: top-level shape is then either a flat file (which loads, and is validated
+#: record by record) or a deterministic, named error.
+REPLAY_FORMAT = "golden-replay/1"
+
+FORMAT_KEY = "format"
+ENTRANCES_KEY = "entrances"
+
+
+def entrance_buckets(data: Any) -> dict[str, Mapping[str, Any]] | None:
+    """Return the entrance buckets of a marked replay payload, else ``None``.
+
+    ``None`` means "this is a flat ``utterance -> decision`` file" -- it is
+    loaded as-is and each record is validated when it is used. A payload that
+    *claims* to be marked but is malformed raises :class:`ValueError` rather
+    than being reinterpreted as something else.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("a replay file must be a JSON object of utterance -> decision")
+    if data.get(FORMAT_KEY) is None and ENTRANCES_KEY not in data:
+        return None
+    marker = data.get(FORMAT_KEY)
+    if marker != REPLAY_FORMAT:
+        raise ValueError(
+            f"replay file declares {FORMAT_KEY}={marker!r}; this build reads {REPLAY_FORMAT!r}"
+        )
+    buckets = data.get(ENTRANCES_KEY)
+    if not isinstance(buckets, dict):
+        raise ValueError(
+            f"a {REPLAY_FORMAT!r} replay file needs {ENTRANCES_KEY!r} to be an object of "
+            "entrance -> utterance -> decision"
+        )
+    for entrance, bucket in buckets.items():
+        if not isinstance(bucket, dict):
+            raise ValueError(f"replay entrance {entrance!r} is not an object of decisions")
+    return buckets
+
+
+def entrances_in(path: str | Path) -> list[str] | None:
+    """The entrances a replay file records, or ``None`` if it is flat."""
+    buckets = entrance_buckets(json.loads(Path(path).read_text(encoding="utf-8")))
+    return None if buckets is None else sorted(buckets)
+
 
 class ReplayDecider:
     """Utterance text -> a recorded decision."""
@@ -28,11 +81,45 @@ class ReplayDecider:
         self._records = dict(records)
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "ReplayDecider":
+    def from_file(cls, path: str | Path, *, entrance: str | None = None) -> "ReplayDecider":
+        """Load a replay file: a marked, entrance-keyed recording, or a flat file.
+
+        A golden-set recording is written as
+        ``{"format": REPLAY_FORMAT, "entrances": {entrance: {utterance: decision}}}``
+        so that one entrance's answer can never overwrite another's for the
+        same transcript string (risk r13). ``entrance`` picks a bucket. With
+        no ``entrance``:
+
+        * a flat ``utterance -> decision`` file loads unchanged;
+        * a recording of exactly **one** entrance loads that entrance, since
+          there is nothing to choose;
+        * a recording of several entrances raises, naming them. Merging the
+          entrances back together is what hid a failing run, so it is refused
+          rather than guessed at.
+        """
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            raise ValueError("a replay file must be a JSON object of utterance -> decision")
-        return cls(data)
+        buckets = entrance_buckets(data)
+        if buckets is None:
+            if entrance is not None:
+                raise ValueError(
+                    f"replay file is flat (not keyed by entrance); cannot select {entrance!r}"
+                )
+            return cls(data)
+        if entrance is None:
+            if not buckets:
+                raise ValueError("replay file records no entrances; re-record it")
+            if len(buckets) == 1:
+                return cls(next(iter(buckets.values())))
+            raise ValueError(
+                "replay file is keyed by entrance and records several "
+                f"({', '.join(sorted(buckets))}); choose one with entrance="
+            )
+        if entrance not in buckets:
+            raise ValueError(
+                f"replay file has no records for entrance {entrance!r} "
+                f"(it has: {', '.join(sorted(buckets)) or 'none'})"
+            )
+        return cls(buckets[entrance])
 
     def __len__(self) -> int:
         return len(self._records)

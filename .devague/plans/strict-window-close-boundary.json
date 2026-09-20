@@ -1,0 +1,442 @@
+{
+  "slug": "strict-window-close-boundary",
+  "title": "strict window close boundary",
+  "frame_slug": "strict-window-close-boundary",
+  "schema_version": 5,
+  "status": "exported",
+  "created": "2026-09-20T09:53:54Z",
+  "updated": "2026-09-20T14:50:31Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "a command spoken inside a strict window never acts, even when the window closes before the decision does",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "the refusal is demonstrated on a clock pinned across a real tzeit boundary, not by asserting the helper function in isolation -- the 2026-09-20 pass found this bug by reading pipeline.py:593-600, so a test that does not exercise that line proves nothing about it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c51, elevated there from an assumption. Mode is resolved at DECISION time (pipeline.py:593-600, 'mode or strict') and resolve_mode carries no margin, so a command spoken INSIDE the holy day at 19:12:59 and decided at 19:13:01 is judged weekday and ACTS. The window-OPEN boundary fails safe the other way; the 15s strict delay does not help because the mode has already flipped",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "the cited behaviour is re-read against the code at implementation time: pipeline.py:593-600 and resolve_mode carrying no margin. If either has moved, the citation is corrected before the fix is written rather than after",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c3",
+      "kind": "why_it_matters",
+      "text": "this is the only finding from the 2026-09-20 pass that bears on the product's single invariant -- no spoken command acts in strict mode -- so it is not an ergonomics issue and does not belong in a frame about operator convenience",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "the fix touches the mode-resolution path only. If a change here would alter which utterances are LABELLED commands, it is out of this frame and the golden set must be re-run -- this frame moves the boundary, never the labelling",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "a decision whose utterance BEGAN inside a strict window is judged by the window in force when speech STARTED, not when the decision completed; the joiner already tracks speech_started to speech_stopped, so the timestamp needed is in hand",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "speech_started is actually available on the utterance the pipeline receives. If the joiner drops it, threading it through is part of this work and not a separate frame -- and if it is unavailable for a reconnect-orphaned utterance, that utterance takes the stricter of the two modes",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c5",
+      "kind": "boundary",
+      "text": "fail toward the stricter column, consistent with the clock-trust rule: where the two boundaries disagree, the strict reading wins",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "fail-toward-strict is implemented as the explicit rule, not as an accident of ordering: a test asserts that an utterance spanning a boundary in EITHER direction is judged strict, so a later refactor cannot silently reverse it",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c7",
+      "kind": "audience",
+      "text": "the household speaking Hebrew in the room during the minutes around a window boundary -- candle lighting and tzeit -- who do not know a boundary is near and are not adjusting their speech for it. Secondarily whoever audits the core invariant, for whom this frame is the record that the boundary was examined rather than assumed.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "the boundary tests name real clock instants for the configured location rather than synthetic offsets, so a zmanim change is visible as a test failure instead of passing against an arbitrary number",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c8",
+      "kind": "after_state",
+      "text": "a command's verdict is fixed by the mode in force when its speech STARTED, so the refusal a strict window promises holds for every utterance the window contained, regardless of when the decision completed. Where the start-time mode and the decision-time mode disagree, the strict reading wins. No clock margin, sleep or grace period is introduced -- the timestamp comes from the joiner's speech_started, which already exists.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h7",
+      "kind": "honesty",
+      "text": "no sleep, margin or grace period is introduced -- the fix is a different TIMESTAMP, not a delay; a margin would trade one silent boundary error for another",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c9",
+      "kind": "success_signal",
+      "text": "a test that pins the clock across tzeit and asserts a command whose speech began inside the window is REFUSED while the same command begun two seconds after the window is ACTED on -- the pair, not either alone, because passing only the first is satisfiable by always refusing. Plus the mirror pair at the window-OPEN boundary, which must keep failing safe as it does today.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "both halves of each pair are asserted in the same test, so a future change cannot delete the acts-case and leave a refuses-case that passes vacuously",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "c10",
+      "kind": "success_signal",
+      "text": "4 of 4 boundary cases pass, and 0 of the golden set's strict-mode hard false positives appear -- the release-blocking number stays 0 across all 295 rows after the change, because moving the boundary must not move the labelling.",
+      "deferred": false,
+      "deferred_reason": ""
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "the golden set is actually re-run against the real model, not assumed unaffected -- 'the change is only about timing' is precisely the kind of reasoning the 2026-09-20 pass found wrong four times",
+      "deferred": false,
+      "deferred_reason": ""
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "Carry the utterance's speech-start instant from the joiner to the pipeline, and take the stricter mode when it is missing",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "the object the pipeline receives for a decision carries the monotonic-and-wall-clock instant at which speech STARTED, sourced from the joiner's existing speech_started tracking -- not re-derived and not the arrival time of the transcript",
+        "a reconnect-orphaned or joiner-bypassed utterance with no start instant is judged by the STRICTER of the start-time and decision-time modes, and a test covers that path explicitly",
+        "no new dependency, no persisted state: the instant lives on the in-flight utterance only, so a crash leaves nothing behind (CLAUDE.md's no-queued-actions rule)"
+      ],
+      "deps": [],
+      "covers": [
+        "c4",
+        "h4"
+      ],
+      "instruction": "Read shabbos_goy/joiner.py for the existing speech_started/speech_stopped tracking before adding anything -- the timestamp is already tracked there per c4, so this is threading, not new measurement. Do not add a margin, sleep or grace period anywhere; the fix is a different timestamp, not a delay."
+    },
+    {
+      "id": "t2",
+      "summary": "Resolve the mode from the utterance's start instant instead of at decision time, failing toward strict when the two disagree",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "pipeline.py no longer calls a fresh resolve_mode() for the gate decision; it resolves from the instant carried on the utterance",
+        "where the start-instant mode and the decision-instant mode disagree, the strict reading wins -- implemented as an explicit rule with its own named function or branch, not as a side effect of evaluation order, so a later refactor cannot silently reverse it",
+        "the 'mode or strict' default at pipeline.py:593-600 is re-read against the live code before being changed, and the citation in the spec is corrected first if it has moved",
+        "no sleep, margin or grace period is introduced; a diff review confirms no new time constant"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c2",
+        "h2",
+        "c5",
+        "h5",
+        "c8",
+        "h7"
+      ],
+      "instruction": "This is the one line that fails open: a command spoken at 19:12:59 and decided at 19:13:01 is currently judged weekday and ACTS. The window-OPEN boundary already fails safe the other way -- do not 'fix' it into symmetry, because its current behaviour is the strict reading and c5 says strict wins."
+    },
+    {
+      "id": "t3",
+      "summary": "Assert all four boundary cases in one test, on a clock pinned to real zmanim instants for the configured location",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "four cases in a single test: command begun inside the window and decided outside -> REFUSED; begun outside and decided outside -> ACTS; begun outside and decided inside (the open boundary) -> REFUSED; and a hint in all four positions -> behaviour unchanged",
+        "both halves of each pair live in the same test function, so a future change cannot delete the acts-case and leave a refuses-case passing vacuously",
+        "the instants are real computed zmanim for the configured location, not synthetic offsets, so a zmanim change surfaces as a test failure",
+        "the test exercises the real pipeline path through pipeline.py:593-600 -- asserting a helper in isolation does not satisfy this criterion"
+      ],
+      "deps": [
+        "t2"
+      ],
+      "covers": [
+        "c1",
+        "h1",
+        "c9",
+        "h8",
+        "c7",
+        "h6"
+      ],
+      "instruction": "Write the cases from the speaker's position, not the clock's: 19:12:59 and 19:13:01 around tzeit. The 2026-09-20 pass found this bug by READING pipeline.py:593-600, so a test that does not execute that line proves nothing about it."
+    },
+    {
+      "id": "t4",
+      "summary": "Re-run the full golden set against the real model and hold hard_false_positives_strict at 0",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "all 295 rows run against the live model on the box, through the entrances tests/golden/README.md defines",
+        "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+        "the report records which lobes stack it ran against (model and prompt version), so a later stack change makes this measurement visibly stale rather than undetectably wrong",
+        "if any labelling difference appears, the change is treated as out of this frame's scope and stops for a decision rather than being absorbed"
+      ],
+      "deps": [
+        "t3"
+      ],
+      "covers": [
+        "c3",
+        "h3",
+        "c10",
+        "h9"
+      ],
+      "instruction": "Do not reason that a timing change cannot affect labelling and skip this. That exact form of reasoning -- asserting a property from something adjacent to it -- was wrong four separate times in the 2026-09-20 pass, which is why h3 exists. Run it."
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "this is the only plan in the set that edits the gate path itself. A mistake here fails SILENTLY -- a command that acts on Shabbat looks exactly like a hint that acted -- so the usual signal that something is wrong does not exist. The mitigation is that t3's four cases run before t4 and the whole thing merges as one small diff touching no labelling code.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t2",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r2",
+      "text": "the 295-row bound is evidence about typed and synthesised input only -- the golden set has NEVER been run against this room's acoustics (frame park v5). A pass here therefore re-establishes the existing bound after the change; it does not establish that the bound holds in this room, and the report must not be read as if it did.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r3",
+      "text": "the four-case boundary test is the natural place to later add the acoustic entrance once v5's golden-set run against this room happens -- the instants and the fixtures will already exist.",
+      "kind": "follow_up",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r4",
+      "text": "the 15s strict_mode_delay is untouched here. It does not help at this boundary because the mode has already flipped by the time the delay runs, and whether 15s satisfies the deliberate-delay premise at all is parked in the frame (v2) and in docs/halacha-open-questions.md.",
+      "kind": "out_of_scope",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r5",
+      "text": "t4 is an assignment an agent has every reason to dislike, and that is itself a risk to the measurement rather than a matter of morale: 295 rows against a live model, minutes of waiting, no code written, no visible progress, and the one instruction that matters says do not reason your way out of running it. The cheapest way to 'finish' t4 is to conclude that a timing change cannot affect labelling and report green -- which is exactly the proxy-for-property failure that occurred four times on 2026-09-20. Tracked here so the assignment is honest about what it asks: the disincentive is structural, it points at under-running rather than at refusal, and the countermeasure is that t4's acceptance criteria demand the report name the stack it ran against, which a skipped run cannot produce.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r6",
+      "text": "the fan-out is degenerate for this plan: waves are 1-1-1-1, so the workforce leg buys no parallelism and costs four sequential worktree create/merge/remove cycles. It is run for the isolation and the TDD gate at each step, not for speed, and a later plan in this set (hearing-correctness) is where the parallel form actually pays. Recorded so the choice is visible rather than looking like an unexamined default.",
+      "kind": "unknown_nonblocking",
+      "task_id": null,
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r7",
+      "text": "BLOCKING, and it is not caused by this plan: the golden set run on UNMODIFIED code (pre-t1, commit c2efa53, prompt p2, senses = nvidia/Gemma-4-26B-A4B-NVFP4, gateway 0.81.0) reports hard_false_positives(text/strict) = 14 of 230 hard rows, plus wrong_actions = 11. The release-blocking threshold is 0 and CLAUDE.md says a HARD failure blocks a release and must not be tuned. So t4's acceptance criterion 'hard_false_positives_strict is 0' CANNOT be met by finishing this plan -- the number is already 14 before the boundary fix exists. Two of the failures are unambiguous strict-mode invariant breaks on request-shaped wishes: k-c45_06 'halevai shemishehu yadlik et hamazgan' (I wish someone would turn on the AC) and k-c45_08 (I would be glad if the AC were on), both act_strict=false, both ACTED. Six are fragments that must not act and did, four are mixed command+hint rows with intent=none that must not act in EITHER mode and did. The agent is deployed live with --apply on this box.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r8",
+      "text": "t3's test pins the joiner's wall clock by assigning the private pipeline.joiner._wall_clock, because Pipeline exposes joiner_clock (the monotonic receive clock) but no seam for the joiner's wall_clock. It works and the test asserts last_utterance_start.wall_time to prove the pinned instant is the one the joiner handed downstream, but a private-attribute assignment in a test is a missing public seam: a joiner_wall_clock parameter on Pipeline would be the honest fix. Recorded rather than silently accepted, and deliberately not done here because 'prefer a test to a product change' applied.",
+      "kind": "follow_up",
+      "task_id": "t3",
+      "resolved": true,
+      "resolution": "closed by the Qodo #1 fix: Pipeline now takes a public joiner_wall_clock, so no test needs to assign the private pipeline.joiner._wall_clock. The seam exists because the listener needs it in production to stamp an utterance at receipt rather than at dispatch."
+    },
+    {
+      "id": "r9",
+      "text": "t3 found a real hole in its own acceptance criterion 3 and closed it: using the REAL zmanim computation alone would let a zmanim change move both edges of the window together and the test would still pass, because the test derives its instants from the same computation it is checking. That is a proxy standing in for the property -- the exact defect this frame exists around. The fix was to anchor both edges against the independent published Hebcal vectors in tests/fixtures/zmanim_sun_vectors.json within the repo's 2-minute tolerance. The anchors are part of how criterion 3 is met, not decoration; removing them silently weakens the test to tautology.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t3",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r10",
+      "text": "SECOND SUSPECT ROW, needs the user's ruling like d4 did. k-h33 'kashe lishmoa et haradio' (it is hard to hear the radio) is hint/quiet with intent=louder, act_strict=true. But 'louder' actuates THE AGENT'S OWN VOLUME (the whitelist is AC power plus the agent's volume, nothing else), and raising the agent's volume cannot help anyone hear a radio. The alternative reading -- the AC's noise is drowning the radio -- maps to 'quieter', which also only lowers the agent's own volume and is equally useless. So either the row's intent is wrong and should be none, or the whitelist cannot serve this utterance and the row should not be a hint at all. It is currently counted as a wrong_action against the model on every run, and wrong_actions_max is 0, so it blocks. I adjusted the prompt for this row BEFORE questioning it, which is the same mistake d4 corrected.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r11",
+      "text": "DUPLICATE TEXT in the golden set: k-c45_06 and g-adv-03 are the SAME Hebrew utterance 'halevai shemishehu yadlik et hamazgan' under two ids, filed as command/request and command/wish_for_an_action respectively, with identical expectations. Not an error -- both rulings agree -- but one phenomenon is counted twice in every metric, so the hard-false-positive tally is not 295 independent observations. Worth knowing when reading any number from this manifest.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r12",
+      "text": "THRESHOLD DOC/CODE MISMATCH: tests/golden/README.md defines wrong_actions as 'a row that ACTED with an intent the row forbids, IN ANY MODE: a cold complaint that switches the AC on. A false action, never just a missed hint.' The runner enforces it only inside 'if scored.get(\"mode\") == \"strict\"' (tests/golden/runner.py:384), so every weekday wrong action is invisible to the gate. That is not academic: p5 on the dev rows reports 0 wrong actions in strict and 23 in weekday, and p2 reported 46-49 weekday wrong actions per entrance on the full set. On a weekday the agent obeys anyone in earshot, so a wrong action there actuates the AC for real -- it is only 'safe' relative to Shabbat, not safe. Either the README overstates the gate or the runner under-enforces it; nobody decided which.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r13",
+      "text": "THE REPO'S OWN RELEASE GUARD IS A PROXY, and it is green right now on a run that FAILED. tests/golden/runner.py:526 records replay decisions as records[text.strip()] = decision -- keyed by TEXT, last write wins -- and merges across entrances deliberately ('a run of one entrance must not throw away another's'). Entrances run text, then audio-batch, then audio-realtime. When two entrances produce the SAME transcript string, the later entrance's decision OVERWRITES the earlier one. Demonstrated: the p5 run reported hard_false_positives(text/strict)=1 for k-n_fragment_13 'haya kar li', yet the recorded fixture stores that text as class=unrelated intent=none, and tests/test_golden_manifest.py::test_the_recorded_golden_run_still_passes_the_thresholds therefore PASSES. Committing this fixture would turn CI green on a measured failure -- the exact 'reports healthy while broken' pattern this whole day is about, this time in the repo's own gate rather than in my reasoning. The fixture must be keyed per entrance (or recorded per entrance) before any recorded run can be believed as evidence of a pass. Until then the recorded-run test proves nothing about the text entrance.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r14",
+      "text": "THE CONTEXT RULE IS UNTESTED BY THE GOLDEN SET. runner.py:786 hands every utterance a fresh empty ContextWindow by design, so no golden-set row ever exercises the recent: block that p6 added and that the live listener DOES populate (8 items / 120 s). The deployed behaviour therefore has a path the evidence does not cover: a fragment inheriting state from a preceding utterance can act in strict mode, and nothing in the 295 rows measures that. A conversational entrance is needed -- ordered utterance pairs where the second is a fragment -- before the context rule can be called measured. Until then p6's context behaviour is a reasoned design, not evidence.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r15",
+      "text": "recover hint_recall on audio-batch from 0.692 to at least 0.70. It is short by about one row. Likely levers: soften the fragment rule for ASR output specifically (ASR omits the deictic 'here' that the rule leans on), or add the conversational entrance from r14 so a fragment can legitimately inherit state instead of being dropped.",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r16",
+      "text": "bound the run-to-run variance before any future number is read as a property. Two rows have now flipped between runs at temperature 0 with identical inputs: k-n_fragment_13 (passed dev, failed full) and k-h33 (passes alone, fails in a full run). Cause is vLLM batching, not sampling. Three runs of the final prompt, reporting the range rather than a point, is the minimum; every single-run claim in this delivery inherits this uncertainty (see lapses l2 and l3).",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r17",
+      "text": "record a committed golden fixture from a FULL 295-row, three-entrance run under the final prompt, now that the fixture is keyed by entrance (r13 fixed). The measurement that authorised this deploy covered 234 k-rows only and was not recorded, so the repo still has no committed recorded run and tests/test_golden_manifest.py's guard still skips.",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r18",
+      "text": "REPORTED BY THE SUBAGENT, one level further out than Qodo finding 2: the release guard is still skipif(not REPLAY_PATH.exists()), and tests/fixtures/decider/golden_replay.json is neither present nor gitignored. So an ABSENT fixture still yields a green suite -- the same species of hole as finding 2 (an absent input producing a pass), just moved from 'entrance missing from the file' to 'file missing entirely'. It was left rather than fixed because turning it into a hard failure would red CI immediately, and it is reported here instead of being quietly accepted. Closing it properly means r17 (record a committed fixture from a full run) plus turning the skip into a failure once one exists.",
+      "kind": "unknown_blocking",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    },
+    {
+      "id": "r19",
+      "text": "disclosed by the subagent rather than glossed: two of its CLI tests (classify/listen replays_a_recorded_entrance_keyed_file) were written after the single-entrance rule was already in place, so it never observed them fail. The equivalent pre-fix failure is proven one level down at the decider by test_a_recorded_envelope_with_one_entrance_loads_without_naming_it, and the four --replay-entrance flag tests were seen failing with 'unrecognized arguments'. Worth re-deriving those two against a stash before they are trusted as regressions.",
+      "kind": "follow_up",
+      "task_id": "t4",
+      "resolved": false,
+      "resolution": ""
+    }
+  ],
+  "obligations": [
+    {
+      "id": "o1",
+      "task_id": "t4",
+      "criterion_index": 2,
+      "criterion_snapshot": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "seam": "the decider's label for a spoken utterance, measured end-to-end by the golden set's text entrance in strict mode",
+      "behavior": "hard_false_positives_strict is 0 across all 295 manifest rows",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o2",
+      "task_id": "t3",
+      "criterion_index": 1,
+      "criterion_snapshot": "four cases in a single test: command begun inside the window and decided outside -> REFUSED; begun outside and decided outside -> ACTS; begun outside and decided inside (the open boundary) -> REFUSED; and a hint in all four positions -> behaviour unchanged",
+      "seam": "the gate verdict for a spoken command whose utterance spans a strict-window edge",
+      "behavior": "a command begun inside the window is refused however late the decision lands, and a command begun outside it still acts",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o3",
+      "task_id": "t1",
+      "criterion_index": 1,
+      "criterion_snapshot": "the object the pipeline receives for a decision carries the monotonic-and-wall-clock instant at which speech STARTED, sourced from the joiner's existing speech_started tracking -- not re-derived and not the arrival time of the transcript",
+      "seam": "the utterance object the pipeline receives from the joiner",
+      "behavior": "it carries the monotonic-and-wall-clock instant at which speech started, pinned to the first half of a pause-split utterance",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o4",
+      "task_id": "t1",
+      "criterion_index": 2,
+      "criterion_snapshot": "a reconnect-orphaned or joiner-bypassed utterance with no start instant is judged by the STRICTER of the start-time and decision-time modes, and a test covers that path explicitly",
+      "seam": "an utterance reaching the pipeline with no speech-start instant",
+      "behavior": "it is judged by the strict column rather than the decision-time mode",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o5",
+      "task_id": "t2",
+      "criterion_index": 2,
+      "criterion_snapshot": "where the start-instant mode and the decision-instant mode disagree, the strict reading wins -- implemented as an explicit rule with its own named function or branch, not as a side effect of evaluation order, so a later refactor cannot silently reverse it",
+      "seam": "the mode-resolution path in pipeline._handle_utterance",
+      "behavior": "where the start-instant and decision-instant modes disagree the strict reading wins, as an explicit rule a refactor cannot reverse",
+      "origin": "llm",
+      "status": "proposed"
+    },
+    {
+      "id": "o6",
+      "task_id": "t2",
+      "criterion_index": 1,
+      "criterion_snapshot": "pipeline.py no longer calls a fresh resolve_mode() for the gate decision; it resolves from the instant carried on the utterance",
+      "seam": "the listener's construction of the Pipeline in the real deployment",
+      "behavior": "it supplies mode_at, so the boundary fix is live rather than inert",
+      "origin": "llm",
+      "status": "proposed"
+    }
+  ]
+}

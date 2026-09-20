@@ -49,13 +49,24 @@ def _build_decider(args: argparse.Namespace):
                 remediation="pass --replay-file PATH pointing at a JSON replay file "
                 "(utterance -> {class, intent, confidence})",
             )
+        entrance = getattr(args, "replay_entrance", None)
         try:
-            return ReplayDecider.from_file(args.replay_file)
-        except (OSError, ValueError) as exc:
+            return ReplayDecider.from_file(args.replay_file, entrance=entrance)
+        except ValueError as exc:
+            # A recorded golden fixture is keyed by entrance. One entrance
+            # loads on its own; several are named, never picked for the
+            # operator, because the entrances disagree by design (risk r13).
+            raise CliError(
+                code=EXIT_USER_ERROR,
+                message=f"could not load replay file {args.replay_file!r}: {exc}",
+                remediation="pass --replay-entrance NAME to choose one recorded entrance, "
+                "or use a flat utterance -> decision file",
+            ) from exc
+        except OSError as exc:
             raise CliError(
                 code=EXIT_ENV_ERROR,
-                message=f"could not load replay file {args.replay_file!r}: {exc}",
-                remediation="check the path and that it is a JSON object",
+                message=f"could not read replay file {args.replay_file!r}: {type(exc).__name__}",
+                remediation="check the path and that it is a readable JSON file",
             ) from exc
 
     try:
@@ -129,6 +140,12 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--replay-file",
         help="A JSON replay file (utterance -> decision); required with --decider replay.",
+    )
+    p.add_argument(
+        "--replay-entrance",
+        help="Which recorded entrance of an entrance-keyed replay file to read "
+        "(text, audio-batch, audio-realtime). Only one recorded entrance: read that one; "
+        "several: this flag is required, and the error names them.",
     )
     p.add_argument(
         "--mode",

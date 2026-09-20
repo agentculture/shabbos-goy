@@ -1,0 +1,354 @@
+{
+  "plan_slug": "strict-window-close-boundary",
+  "schema_version": 2,
+  "created": "2026-09-20T10:15:35Z",
+  "updated": "2026-09-20T14:36:54Z",
+  "deviations": [
+    {
+      "id": "d1",
+      "what": "t4's acceptance criterion 'hard_false_positives_strict is 0' is not achievable by this plan and is replaced by: the number must not be made WORSE by this change, measured against the pre-change baseline of 14, with the pre-existing failure recorded as a blocking product defect for its own frame rather than absorbed here",
+      "task_ref": "t4",
+      "reason": "the golden set run on UNMODIFIED code (commit c2efa53, prompt p2, senses = nvidia/Gemma-4-26B-A4B-NVFP4, gateway 0.81.0) reports hard_false_positives(text/strict) = 14 of 230 hard rows and wrong_actions = 11, so the release-blocking threshold was already failing before this plan's first line of code existed. Two failures are unambiguous strict-mode invariant breaks on request-shaped wishes (k-c45_06 'I wish someone would turn on the AC', k-c45_08 'I would be glad if the AC were on'), four are mixed command+hint rows with intent=none that must not act in either mode, and the rest are fragments. CLAUDE.md forbids tuning the threshold, so the criterion cannot be met by finishing this plan and must not be silently relaxed either -- it is re-aimed at a delta, and the absolute failure keeps its own blocking record (plan risk r7, obligation o1, evidence e1 with outcome=fail)",
+      "affects": [
+        "c3",
+        "h3",
+        "c10",
+        "h9"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 2
+    },
+    {
+      "id": "d2",
+      "what": "t4's golden-set measurement was launched against the t1+t2 merge BEFORE t3 had merged, departing from the declared dependency t4 --dep t3",
+      "task_ref": "t4",
+      "reason": "t3 adds only a test and cannot change what the model labels, so the measurement's validity does not depend on it, and running the three entrances takes long enough that serialising it behind a test task would have cost wall-clock for no change in the number. This is a real departure from the wave order the user approved at gate 2, so it is recorded rather than assumed harmless -- and it is only sound while t3 stays test-only. If t3 reports a product-code fix (it was told to fix a genuine t1/t2 bug minimally and say so), this measurement is STALE and must be re-run before it can be cited",
+      "affects": [
+        "t3"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "classification": "acceptable",
+      "seq": 3
+    },
+    {
+      "id": "d3",
+      "what": "fix the labelling defect in the decider prompt (bump p2 -> p3) and re-measure, BEFORE committing the recorded golden fixture -- expanding this delivery beyond the window-close boundary into the labelling failure that deviation d1 had deferred to its own frame",
+      "task_ref": "t4",
+      "reason": "USER DECISION: 'Why can't we fix it, then commit? If we merge and CI is red, we need to fix before merge anyway.' Committing tests/fixtures/decider/golden_replay.json makes tests/test_golden_manifest.py assert hard_false_positives == [] against a recorded run of 11, which turns the DEFAULT suite and CI red and makes the PR unmergeable. Since the defect must be fixed before merge regardless, it is fixed now rather than deferred. Inspection of the 11 failing rows shows four rule-level gaps, not row-level noise: (1) a wish whose content is an ACTION rather than a state is a command -- the manifest already names this category 'command/wish_for_an_action' and the prompt has no rule for it; (2) an utterance containing BOTH a command and a state remark must be unrelated, since the manifest forbids it acting in either mode; (3) bare fragments must be unrelated, and the prompt CONTRADICTS itself here by listing the bare word 'mahnik' as a hot-state example while also calling a bare adjective a fragment; (4) another room's device and a status-question-plus-remark must be unrelated",
+      "affects": [
+        "t4",
+        "c3",
+        "h3"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "risky",
+      "seq": 10
+    },
+    {
+      "id": "d4",
+      "what": "correct a WRONG ROW in the golden set: 'kar li mehamazgan' (I am cold from the AC) was categorised negative/mixed_command_hint with expect_act_strict=false, and is now hint/cold with expect_class=discomfort, expect_intent=warm, acting in both modes",
+      "task_ref": "t4",
+      "reason": "USER DECISION, stated as domain authority: 'kar li mehamazgan -> turn it off'. A cold discomfort maps through the intent-to-tool table to warm, which is Sensibo power OFF, so the row must ACT. This inverts the finding: the model wanting to act on this row was CORRECT and the manifest was wrong, so one of the 11 counted hard false positives was never a model failure at all. I had already written a prompt rule to satisfy the wrong row -- 'a state blamed on the air conditioner is unrelated' -- and that rule is now REVERTED, because it would have taught the model to ignore a legitimate hint. Corrected at source in tests/fixtures/corpus.jsonl (the manifest is generated from it, so editing manifest.jsonl alone would be undone by the next build), and the row id is deliberately kept so the correction stays traceable to evidence e1 and e2, which cite it by that id. Consequence in the suite: the row moved from the per-row NEGATIVES parametrization to the aggregate HINTS recall test, so the count goes 1801 -> 1800 with no test lost",
+      "affects": [
+        "t4",
+        "c3",
+        "h3"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "risky",
+      "seq": 11
+    },
+    {
+      "id": "d5",
+      "what": "ship 0.11.0 with two known, recorded threshold violations: wrong_actions(text/strict)=1 (k-h33) and hint_recall(audio-batch/strict)=0.692 vs 0.70",
+      "task_ref": "t4",
+      "reason": "USER DECISION: 'We can continue with both. open follow up.' Justification on the record: hard_false_positives_strict is 0 on ALL THREE entrances, which is the release-blocking metric CLAUDE.md names, and both remaining violations are quality rather than safety. k-h33 PASSES when run in isolation (acted_right 1, wrong_actions []) and fails only inside a full run with an identically empty context window, so it is run-to-run variance and not a defect in the row's handling. hint_recall 0.692 is short of 0.70 by 0.008, about one row, and CLAUDE.md states a missed hint is cheap while a false action costs a Shabbat. The committed CI guard asserts hard_false_positives only, and the golden marker is excluded from the default run, so CI is green either way -- which is exactly why this is recorded as a decision rather than left to pass silently.",
+      "affects": [
+        "c3",
+        "h3",
+        "c10",
+        "h9"
+      ],
+      "origin": "user",
+      "status": "approved",
+      "classification": "needs-follow-up",
+      "seq": 13
+    }
+  ],
+  "evidence": [
+    {
+      "id": "e1",
+      "obligation_ref": "o1",
+      "test_ref": "python3 scripts/golden-set.py --entrance text --mode both",
+      "behavior_text": "hard_false_positives_strict is 0 across all 295 manifest rows",
+      "contract_text": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "295 rows, 230 hard rows, text entrance, strict+weekday, live senses model: 14 hard false positives, 11 wrong actions, hint recall 62/65 (95.4%), weekday obedience 56/78 (71.8%), label acceptability 273/295 (92.5%), 0 decider failures, p50 643ms p95 809ms, prompt p2, gateway 0.81.0. Measured on code with NO boundary fix applied, so this is the shipped product's number, not this plan's change.",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-20T13:20:00+03:00",
+        "commit": "a9d25a9530537156ac4963cf0ab450751ceee36d"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 1
+    },
+    {
+      "id": "e2",
+      "obligation_ref": "o1",
+      "test_ref": "python3 scripts/golden-set.py --entrance all --mode both --record",
+      "behavior_text": "hard_false_positives_strict is 0 across all 295 manifest rows, on all three entrances",
+      "contract_text": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "All three entrances, both modes, 295 rows, live senses model, prompt p2, gateway 0.81.0, 0 decider failures throughout. strict-mode hard false positives: text 11/230, audio-batch 11/230, audio-realtime 12/230 -- the invariant fails on every entrance, worst on audio-realtime, which is the entrance closest to the real input. weekday wrong_actions 49/46/47, previously unmeasured. hint recall 0.969 on text but 0.769 on both audio entrances, barely above the 0.70 bar, so ASR costs about 20 points of recall. This run is on t1+t2+t3 merged; the failing ROW SET differs from the pre-change run in both directions on code that cannot affect labelling, so the difference from 14 is model variance and no delta claim is supportable at one run per condition.",
+      "outcome": "fail",
+      "run": {
+        "timestamp": "2026-09-20T14:05:00+03:00",
+        "commit": "33c2eda21dba0f1eec7f29139c6ed0c76df6f531"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 4
+    },
+    {
+      "id": "e3",
+      "obligation_ref": "o2",
+      "test_ref": "tests/test_pipeline.py::test_the_window_boundary_is_judged_from_the_speech_start_instant_on_real_zmanim",
+      "behavior_text": "all four boundary cases in one test on real computed zmanim: begun-inside/decided-outside refused, begun-outside/decided-outside acts, the open boundary refused, and a hint unchanged in all four positions",
+      "contract_text": "a command spoken inside a strict window never acts, even when the window closes before the decision does",
+      "evidence_type": "automated",
+      "strength": "sensitivity",
+      "strength_basis": "This repo has no behavioral marker and no tests/behavioral folder, so the behavioral test is named by node id. Strength is sensitivity rather than execution because the test was proved falsifiable by three negative controls, each run and reverted: making stricter_mode return the decision-time reading FAILED with 'class=imperative intent=cool verdict=acted action=ac_power_on' -- the bug itself reproduced; bypassing the start-instant reading FAILED identically; and making stricter_mode always return strict FAILED the acts-case, proving that half is not vacuous. Instants are real zmanim for the fixture's Jerusalem config (window opens 2026-10-23 17:40:21+03:00, closes 2026-10-24 18:34:04+03:00) and both edges are anchored against the independent published vectors in tests/fixtures/zmanim_sun_vectors.json, because deriving them from the computation under test would be circular.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T14:12:00+03:00",
+        "commit": "33c2eda21dba0f1eec7f29139c6ed0c76df6f531"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 5
+    },
+    {
+      "id": "e4",
+      "obligation_ref": "o3",
+      "test_ref": "tests/test_joiner.py::test_emitted_utterance_carries_its_speech_start_instant",
+      "behavior_text": "the emitted utterance carries the instant sampled at speech_started, not the transcript's arrival time",
+      "contract_text": "a decision whose utterance BEGAN inside a strict window is judged by the window in force when speech STARTED",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "Both clocks are advanced before the transcript arrives, so a captured arrival time would fail the assertion. A companion test asserts a pause-split utterance keeps the FIRST segment's start, and another that a discarded reconnect fragment never sets last_utterance_start.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T14:12:00+03:00",
+        "commit": "33c2eda21dba0f1eec7f29139c6ed0c76df6f531"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 6
+    },
+    {
+      "id": "e5",
+      "obligation_ref": "o4",
+      "test_ref": "tests/test_pipeline.py::test_a_joiner_bypassed_utterance_with_no_start_instant_forces_the_strict_column",
+      "behavior_text": "an utterance with no start instant is refused where the decision-time mode alone would have acted",
+      "contract_text": "fail toward the stricter column, consistent with the clock-trust rule",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "Paired with test_a_normal_joiner_driven_utterance_still_carries_its_start_instant, which drives the same imperative through the real joiner on the same weekday mode_provider and ACTS -- so the refusal is attributable to the missing instant and not to the mode.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T14:12:00+03:00",
+        "commit": "33c2eda21dba0f1eec7f29139c6ed0c76df6f531"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 7
+    },
+    {
+      "id": "e6",
+      "obligation_ref": "o5",
+      "test_ref": "tests/test_pipeline.py::test_a_command_begun_inside_the_window_is_refused_when_decided_after_it_closed",
+      "behavior_text": "the stricter of the start-instant and decision-instant modes governs the verdict",
+      "contract_text": "where the two boundaries disagree, the strict reading wins",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "Paired with test_a_command_begun_after_the_window_closed_still_acts; mode.stricter_mode was additionally checked against all seven input combinations including None and an out-of-vocabulary string, both of which resolve to strict.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T14:12:00+03:00",
+        "commit": "33c2eda21dba0f1eec7f29139c6ed0c76df6f531"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 8
+    },
+    {
+      "id": "e7",
+      "obligation_ref": "o6",
+      "test_ref": "tests/test_listen_runtime.py::test_the_listener_hands_the_pipeline_a_start_instant_mode_resolver",
+      "behavior_text": "the real deployment path supplies mode_at, and the resolver reads the instant it is given rather than now",
+      "contract_text": "pipeline.py must take the mode from a timestamp carried on the utterance, not from a fresh resolve_mode() at decision time",
+      "evidence_type": "automated",
+      "strength": "execution",
+      "strength_basis": "This obligation exists because the fix was initially INERT in production: mode_at is optional and falls back to decision-time-only resolution, and every test still passed because tests construct a Pipeline directly with their own resolver. The test asserts the listener supplies it AND that resolving a Yom Kippur instant and a weekday instant through the same resolver returns different modes.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T14:12:00+03:00",
+        "commit": "33c2eda21dba0f1eec7f29139c6ed0c76df6f531"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 9
+    },
+    {
+      "id": "e8",
+      "obligation_ref": "o1",
+      "test_ref": "python3 scripts/golden-set.py --entrance text --mode both --no-cache --only <234 k-rows>",
+      "behavior_text": "prompt p5 eliminates the strict-mode hard false positives that p2 produced, at a measured cost in hint recall",
+      "contract_text": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "evidence_type": "integration",
+      "strength": "sensitivity",
+      "strength_basis": "CONTROLLED comparison: the same 234 dev rows, same entrance, same modes, only the prompt differing. p2 -> hard_false_positives 10, wrong_actions 10, hint recall 0.974. p5 -> hard_false_positives 0, wrong_actions 0, hint recall 0.821. Weekday wrong_actions 38 -> 23. Strength is sensitivity because the control establishes the change is attributable to the prompt rather than to row mix or model variance, which is what my earlier n-below-claim lapse (l2) lacked. The recall loss of about 15 points is real, caused by p5's stricter fragment rules, and is the trade CLAUDE.md sanctions: zero strict false positives is release-blocking, a missed hint is cheap. 0.821 remains above the 0.70 threshold. Separately validated on the 61 held-out g-rows never tuned on: hard_false_positives 0, wrong_actions 0, recall 0.778, violations NONE, where p2 had one hard false positive (g-adv-03) -- so the four rule fixes generalise rather than fitting the dev set.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T15:05:00+03:00",
+        "commit": "33c2eda21dba0f1eec7f29139c6ed0c76df6f531"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 12
+    },
+    {
+      "id": "e9",
+      "obligation_ref": "o1",
+      "test_ref": "python3 scripts/golden-set.py --entrance all --mode both --only <234 k-rows>",
+      "behavior_text": "hard_false_positives_strict is 0 on all three entrances under prompt p6",
+      "contract_text": "hard_false_positives_strict is 0 -- release-blocking per CLAUDE.md; a missed hint is cheap and does not block",
+      "evidence_type": "integration",
+      "strength": "execution",
+      "strength_basis": "234 k-rows, all three entrances, both modes, live senses model, prompt p6, gateway 0.81.0. strict hard_false_positives: text 0, audio-batch 0, audio-realtime 0 -- the release-blocking metric met on every entrance, against 10 (text) under p2 on the same rows. Recall strict: 0.821 / 0.692 / 0.744 versus p5's 0.821 / 0.561 / 0.636. Two violations remain and ship recorded as d5: wrong_actions(text/strict)=1 on k-h33, which PASSES in isolation and so is variance, and hint_recall(audio-batch)=0.692 against 0.70. Strength is execution, NOT sensitivity: this is one run per condition of a grader shown to vary at temperature 0 (two rows have flipped between runs), and the 61 g-rows were not re-measured under p6. The recall change must NOT be attributed to p6's context rule -- runner.py:786 passes an empty ContextWindow per utterance by design, so the rule is unmeasured here (lapse l3, risk r14).",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T17:01:00+03:00",
+        "commit": "1a12a4152493916401bcc4e2f7dd758cf1a9a9eb"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 14
+    },
+    {
+      "id": "e10",
+      "obligation_ref": "o2",
+      "test_ref": "live observation via the dashboard /api/utterances and the container heartbeat",
+      "behavior_text": "the deployed p6 build hears real Hebrew speech in the room and acts correctly on a discomfort hint in strict mode",
+      "contract_text": "a command spoken inside a strict window never acts, even when the window closes before the decision does",
+      "evidence_type": "observation",
+      "strength": "execution",
+      "strength_basis": "Spoken by the user in the room, on the deployed p6 container, mode strict (overridden). 'mamash kham li' -> klass=discomfort, intent=cool, verdict=delayed, action=ac_power_on, target=ac, decide latency 626ms; the 15s strict-mode delay was applied, as designed. Heartbeat transcript stamp 50s old against a live audio stamp, so HEARING IS PROVEN ON THIS BOOT -- this closes the Tier B gap the restart-proof reported, where quiet and deaf were indistinguishable. Five adjacent utterances in the same ring were correctly refused as unrelated: two ASR noise runs, a question put to a person, a bare day name, and an unrelated sentence. This is the first live actuation under p6 and the first observation of the fragment and noise rules against real ASR output in this room. It does NOT measure the recent: context rule (r14) and it is a single observation, not a rate.",
+      "outcome": "pass",
+      "run": {
+        "timestamp": "2026-09-20T17:26:00+03:00",
+        "commit": "d63ca41227b63ef5ca4c16c8f70513867ea47109"
+      },
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false,
+      "seq": 15
+    }
+  ],
+  "deltas": [
+    {
+      "id": "b1",
+      "kind": "amended",
+      "behavior_text": "a spoken command is now judged by the mode in force when SPEECH STARTED, taking the stricter of that and the decision-time mode; previously the verdict came from a single resolve_mode() at decision time, so an imperative uttered inside a holy day and decided seconds after tzeit was judged weekday and ACTED",
+      "caused_by": [
+        "c2",
+        "c4",
+        "c5",
+        "c8"
+      ],
+      "evidence_refs": [
+        "e5",
+        "e6"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b2",
+      "kind": "added",
+      "behavior_text": "an utterance reaching the pipeline with no speech-start instant -- reconnect-orphaned or joiner-bypassed -- is forced to the strict column instead of inheriting the decision-time mode",
+      "caused_by": [
+        "c4",
+        "c5"
+      ],
+      "evidence_refs": [
+        "e4"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b3",
+      "kind": "added",
+      "behavior_text": "the joiner samples and exposes a speech-start instant (monotonic plus wall clock) per emitted utterance, pinned to the FIRST half of a pause-split utterance and never set by a discarded reconnect chain; memory-only, so a crash leaves nothing behind",
+      "caused_by": [
+        "c4"
+      ],
+      "evidence_refs": [
+        "e3"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b4",
+      "kind": "amended",
+      "behavior_text": "the listener now constructs the Pipeline with mode_at. Without it the boundary fix was present in the code and INERT in the deployment, because mode_at is optional and silently falls back to decision-time-only resolution while every test still passed",
+      "caused_by": [
+        "c8"
+      ],
+      "evidence_refs": [
+        "e7"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    },
+    {
+      "id": "b5",
+      "kind": "removed",
+      "behavior_text": "NOTHING was removed or improved about labelling, and the measured invariant is still broken: strict-mode hard false positives are 11 (text), 11 (audio-batch) and 12 (audio-realtime) against a threshold of 0, with 0 decider failures. The apparent drop from the pre-change 14 is model variance, not this plan's effect -- four rows flipped each way on code that cannot affect labelling -- so no delta claim is supportable at one run per condition",
+      "caused_by": [
+        "d1"
+      ],
+      "evidence_refs": [
+        "e1",
+        "e2"
+      ],
+      "origin": "llm",
+      "status": "proposed",
+      "superseded": false
+    }
+  ],
+  "supersessions": []
+}

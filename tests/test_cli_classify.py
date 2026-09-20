@@ -67,6 +67,108 @@ def test_classify_replay_decider(tmp_path, capsys: pytest.CaptureFixture[str]) -
     assert payload["would_act"] is True
 
 
+def test_classify_replays_a_recorded_entrance_keyed_file(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Finding 3: the recorder writes an entrance-keyed envelope, and
+    ``classify --decider replay`` must be able to read it. One recorded
+    entrance means there is nothing to choose."""
+    replay_file = tmp_path / "golden_replay.json"
+    replay_file.write_text(
+        json.dumps(
+            {
+                "format": "golden-replay/1",
+                "entrances": {
+                    "text": {"חם פה נורא": {"class": "remark", "intent": "cool", "confidence": 0.9}}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    rc = main(
+        [
+            "classify",
+            "חם פה נורא",
+            "--decider",
+            "replay",
+            "--replay-file",
+            str(replay_file),
+            "--mode",
+            "strict",
+            "--json",
+        ]
+    )
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["intent"] == "cool"
+
+
+def _two_entrance_replay(tmp_path) -> "Path":
+    replay_file = tmp_path / "golden_replay.json"
+    replay_file.write_text(
+        json.dumps(
+            {
+                "format": "golden-replay/1",
+                "entrances": {
+                    "text": {
+                        "חם פה נורא": {"class": "remark", "intent": "cool", "confidence": 0.9}
+                    },
+                    "audio-batch": {
+                        "חם פה נורא": {"class": "unrelated", "intent": "none", "confidence": 0.9}
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return replay_file
+
+
+def test_classify_names_the_entrances_instead_of_picking_one(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main(
+        [
+            "classify",
+            "חם פה נורא",
+            "--decider",
+            "replay",
+            "--replay-file",
+            str(_two_entrance_replay(tmp_path)),
+            "--mode",
+            "strict",
+        ]
+    )
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "--replay-entrance" in err
+    # Split per SonarCloud: one assertion per entrance, so a failure says
+    # which entrance the remediation message forgot to list.
+    assert "audio-batch" in err
+    assert "text" in err
+
+
+def test_classify_replay_entrance_selects_the_bucket(
+    tmp_path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main(
+        [
+            "classify",
+            "חם פה נורא",
+            "--decider",
+            "replay",
+            "--replay-file",
+            str(_two_entrance_replay(tmp_path)),
+            "--replay-entrance",
+            "audio-batch",
+            "--mode",
+            "strict",
+            "--json",
+        ]
+    )
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["class"] == "unrelated"
+
+
 def test_classify_replay_requires_replay_file(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["classify", "hello", "--decider", "replay"])
     assert rc == 1

@@ -184,6 +184,60 @@ def test_a_missing_script_file_is_a_user_error(fake_path, tmp_path, capsys) -> N
     assert rc == 1
 
 
+def _entrance_keyed_replay(tmp_path: Path, *, entrances: list[str]) -> Path:
+    flat = json.loads(REPLAY.read_text(encoding="utf-8"))
+    path = tmp_path / "golden_replay.json"
+    path.write_text(
+        json.dumps({"format": "golden-replay/1", "entrances": {name: flat for name in entrances}}),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_listen_replays_a_recorded_entrance_keyed_file(
+    weekday, fake_path, tmp_path, capsys
+) -> None:
+    """Finding 3: ``listen --decider replay`` must read what --record wrote."""
+    rc = _run_script(
+        tmp_path,
+        [HOT],
+        extra=["--replay-file", str(_entrance_keyed_replay(tmp_path, entrances=["text"]))],
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["actions"] == [{"verdict": "dry_run", "action": "ac_power_on", "target": "ac"}]
+
+
+def test_listen_names_the_entrances_instead_of_picking_one(fake_path, tmp_path, capsys) -> None:
+    rc = _run_script(
+        tmp_path,
+        [HOT],
+        extra=[
+            "--replay-file",
+            str(_entrance_keyed_replay(tmp_path, entrances=["text", "audio-batch"])),
+        ],
+    )
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "--replay-entrance" in err
+
+
+def test_listen_replay_entrance_selects_the_bucket(weekday, fake_path, tmp_path, capsys) -> None:
+    rc = _run_script(
+        tmp_path,
+        [HOT],
+        extra=[
+            "--replay-file",
+            str(_entrance_keyed_replay(tmp_path, entrances=["text", "audio-batch"])),
+            "--replay-entrance",
+            "audio-batch",
+        ],
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["utterances"] == 1
+
+
 def test_replay_decider_requires_a_replay_file(fake_path, tmp_path) -> None:
     config = make_config(tmp_path)
     events = write_events_file(tmp_path / "events.jsonl", [HOT])

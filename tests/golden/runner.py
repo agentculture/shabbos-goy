@@ -71,6 +71,12 @@ from shabbos_goy.decider import (  # noqa: E402
     senses_config_from_env,
 )
 from shabbos_goy.decider.gemma import ENV_SENSES_URL  # noqa: E402
+from shabbos_goy.decider.replay import (  # noqa: E402
+    ENTRANCES_KEY,
+    FORMAT_KEY,
+    REPLAY_FORMAT,
+    entrance_buckets,
+)
 from shabbos_goy.joiner import TranscriptJoiner  # noqa: E402
 from shabbos_goy.lobes import LobesClient, LobesConfig, config_from_env  # noqa: E402
 from shabbos_goy.lobes.config import (  # noqa: E402
@@ -505,35 +511,144 @@ def render_table(report: Mapping[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def record_decisions(results: Sequence[RowResult], path: str | Path = REPLAY_PATH) -> int:
-    """Write utterance -> decision so CI can replay the real model's answers.
+def record_decisions(
+    results_by_entrance: Mapping[str, Sequence[RowResult]],
+    path: str | Path = REPLAY_PATH,
+) -> int:
+    """Write ``{format, entrances: {entrance: {utterance: decision}}}``.
 
-    Merges into whatever is already there (a run of one entrance must not
-    throw away another's), and never records a failure: a timeout is not an
-    answer, and replaying it as one would invent evidence.
+    The envelope carries an explicit :data:`REPLAY_FORMAT` marker so no reader
+    has to guess the shape from the presence or absence of a key inside it.
+
+    Keyed BY ENTRANCE, not by text alone. Two entrances routinely produce the
+    same transcript string -- the manifest text and an ASR transcript that
+    happens to match it -- and a flat text key let a later entrance's answer
+    overwrite an earlier one. That silently turned a recorded run that FAILED
+    the text entrance into a fixture that passes (risk r13, 2026-09-20): the
+    run reported hard_false_positives(text/strict)=1 for k-n_fragment_13 while
+    the fixture stored that text as unrelated, because audio-realtime answered
+    second. A gate that cannot see the failure it recorded is not a gate.
+
+    Merges into whatever is already there per entrance, and never records a
+    failure: a timeout is not an answer, and replaying it as one would invent
+    evidence.
     """
     target = Path(path)
     records: dict[str, Any] = {}
     if target.exists():
         existing = json.loads(target.read_text("utf-8"))
-        if isinstance(existing, dict):
-            records = existing
+        buckets = entrance_buckets(existing)
+        if buckets is None:
+            # A pre-marker flat file is read as the text entrance's records,
+            # which is what it mostly was, rather than silently discarded.
+            records = {"text": dict(existing)} if existing else {}
+        else:
+            records = {entrance: dict(bucket) for entrance, bucket in buckets.items()}
     written = 0
-    for result in results:
-        for text, decision in zip(result.transcripts, result.decisions):
-            if not text.strip() or is_decider_failure(decision):
-                continue
-            records[text.strip()] = {
-                "class": decision.klass,
-                "intent": decision.intent,
-                "confidence": round(float(decision.confidence), 3),
-            }
-            written += 1
+    for entrance, results in results_by_entrance.items():
+        bucket = records.setdefault(entrance, {})
+        for result in results:
+            for text, decision in zip(result.transcripts, result.decisions):
+                if not text.strip() or is_decider_failure(decision):
+                    continue
+                bucket[text.strip()] = {
+                    "class": decision.klass,
+                    "intent": decision.intent,
+                    "confidence": round(float(decision.confidence), 3),
+                }
+                written += 1
     target.parent.mkdir(parents=True, exist_ok=True)
+    envelope = {FORMAT_KEY: REPLAY_FORMAT, ENTRANCES_KEY: records}
     target.write_text(
-        json.dumps(records, ensure_ascii=False, indent=2, sort_keys=True) + "\n", "utf-8"
+        json.dumps(envelope, ensure_ascii=False, indent=2, sort_keys=True) + "\n", "utf-8"
     )
     return written
+
+
+@dataclass(frozen=True)
+class RecordedRunReview:
+    """What scoring a recorded (replayed) golden run found.
+
+    ``scored`` names the entrances that were actually measured, and
+    ``problems`` is every reason the recorded run must not be trusted --
+    including an entrance that could not be scored at all. The release guard
+    requires ``problems == []`` **and** ``set(scored) == set(buckets)``: an
+    entrance whose ASR cache is missing, stale or incomplete used to be
+    skipped silently, so a recorded failing entrance could vanish from the
+    gate. An absent input is a failure, never a pass.
+    """
+
+    scored: list[str]
+    problems: list[str]
+    scores: list[dict[str, Any]]
+
+
+def review_recorded_run(
+    rows: Sequence[GoldenRow],
+    buckets: Mapping[str, Mapping[str, Any]],
+    cache: Mapping[str, Mapping[str, Sequence[str]]],
+    *,
+    mode: str = "strict",
+) -> RecordedRunReview:
+    """Score every recorded entrance of a replay file against the manifest.
+
+    The ``text`` entrance maps a recorded transcript back to a manifest row by
+    the row's own text; an audio entrance maps it through the separately
+    maintained ASR cache (``tests/golden/asr_cache.json``). Either mapping can
+    drift, and drift is reported -- naming the entrance and the recorded
+    transcripts nothing matched -- rather than quietly narrowing what is
+    measured.
+    """
+    scored: list[str] = []
+    problems: list[str] = []
+    scores: list[dict[str, Any]] = []
+    for entrance in sorted(buckets):
+        recorded = {str(text).strip() for text in buckets[entrance] if str(text).strip()}
+        if entrance == "text":
+            heard: dict[str, list[str]] = {row.id: [row.text] for row in rows}
+        else:
+            cached = cache.get(entrance) or {}
+            heard = {row.id: [str(t).strip() for t in (cached.get(row.id) or [])] for row in rows}
+            if not any(heard.values()):
+                problems.append(
+                    f"{entrance}: recorded but not scorable -- tests/golden/asr_cache.json has "
+                    f"no transcripts for this entrance, so none of its {len(recorded)} recorded "
+                    "decisions can be mapped to a manifest row. Re-record the entrance (it "
+                    "rewrites the cache) or delete its bucket from the replay file. "
+                    f"Unmatched recorded transcripts: {sorted(recorded)}"
+                )
+                continue
+        matched = {text for texts in heard.values() for text in texts} & recorded
+        unmatched = sorted(recorded - matched)
+        covered = [row for row in rows if any(text in recorded for text in heard.get(row.id, []))]
+        if not covered:
+            problems.append(
+                f"{entrance}: recorded but not scorable -- no manifest row matches any of its "
+                f"{len(recorded)} recorded transcripts. Unmatched recorded transcripts: "
+                f"{unmatched}"
+            )
+            continue
+        if unmatched:
+            problems.append(
+                f"{entrance}: {len(unmatched)} recorded transcript(s) match no manifest row "
+                "(the ASR cache or the manifest has drifted since the recording). "
+                f"Unmatched recorded transcripts: {unmatched}"
+            )
+        results = run_decider(
+            covered,
+            ReplayDecider(buckets[entrance]),
+            mode,
+            lambda row: list(heard.get(row.id, [])),
+        )
+        scoreboard = score(covered, results, mode=mode, entrance=entrance)
+        scores.append(scoreboard)
+        if scoreboard["hard_false_positives"]:
+            problems.append(
+                f"{entrance}/{mode}: the recorded run acts on rows that must never act: "
+                f"{scoreboard['hard_false_positives']}"
+            )
+        scored.append(entrance)
+    return RecordedRunReview(scored=scored, problems=problems, scores=scores)
 
 
 def load_asr_cache(path: str | Path = ASR_CACHE_PATH) -> dict[str, dict[str, list[str]]]:
@@ -1004,15 +1119,32 @@ def _select_rows(rows: Sequence[GoldenRow], args: argparse.Namespace) -> list[Go
     return selected
 
 
-def _build_decider(args: argparse.Namespace, env: Mapping[str, str]) -> tuple[Any, str]:
+def _build_decider(
+    args: argparse.Namespace, env: Mapping[str, str]
+) -> tuple[Callable[[str], Any], str]:
+    """Return ``(decider_for_entrance, model)``.
+
+    Replay is per entrance: a recorded fixture is keyed by entrance (risk
+    r13), so with ``--entrance all`` the runner has to read the bucket of the
+    entrance it is currently running rather than one merged view of them all.
+    A flat replay file serves every entrance, as it always did.
+    """
     if args.decider == "oracle":
         from shabbos_goy.decider.oracle import RuleOracle  # local: tests-only import
 
-        return RuleOracle(), "rule-oracle"
+        oracle = RuleOracle()
+        return (lambda entrance: oracle), "rule-oracle"
     if args.decider == "replay":
-        return ReplayDecider.from_file(args.replay), "replay"
+        if entrance_buckets(json.loads(Path(args.replay).read_text("utf-8"))) is None:
+            flat = ReplayDecider.from_file(args.replay)
+            return (lambda entrance: flat), "replay"
+        return (
+            lambda entrance: ReplayDecider.from_file(args.replay, entrance=entrance),
+            "replay",
+        )
     config = senses_config_from_env(env)
-    return GemmaDecider(config), config.model
+    gemma = GemmaDecider(config)
+    return (lambda entrance: gemma), config.model
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1047,8 +1179,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USER
 
     try:
-        decider, model = _build_decider(args, env)
-    except (LobesConfigError, OSError, ValueError) as exc:
+        decider_for, model = _build_decider(args, env)
+    except (LobesConfigError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"cannot build the decider: {exc}", file=sys.stderr)
         return EXIT_ENVIRONMENT
 
@@ -1068,6 +1200,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     scores: list[dict[str, Any]] = []
     all_results: list[RowResult] = []
+    # Per entrance, so the recorded fixture cannot let one entrance's answer
+    # overwrite another's for the same transcript string (risk r13).
+    recorded_by_entrance: dict[str, list[RowResult]] = {}
     cache: dict[str, dict[str, list[str]]] = {}
     for entrance in entrances:
         if entrance == "tts":
@@ -1075,6 +1210,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             written = synthesize_all(rows, client, args.audio_dir, args.voice)
             print(f"tts: wrote {written} new wav file(s) to {args.audio_dir}", file=sys.stderr)
             continue
+        try:
+            decider = decider_for(entrance)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"cannot build the decider for {entrance}: {exc}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
         for mode in modes:
             if entrance == "text":
                 results = run_decider(rows, decider, mode, lambda row: [row.text])
@@ -1090,6 +1230,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 cache.setdefault(entrance, {}).update(produced)
             all_results.extend(results)
+            recorded_by_entrance.setdefault(entrance, []).extend(results)
             scores.append(score(rows, results, mode=mode, entrance=entrance))
 
     thresholds = load_thresholds(args.thresholds)
@@ -1109,7 +1250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print(render_table(report))
     if args.record:
-        written = record_decisions(all_results, args.record)
+        written = record_decisions(recorded_by_entrance, args.record)
         print(f"recorded {written} decision(s) to {args.record}", file=sys.stderr)
     if cache and not args.no_cache:
         save_asr_cache(ASR_CACHE_PATH, cache)

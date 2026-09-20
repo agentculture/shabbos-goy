@@ -19,7 +19,7 @@ from ..limits import BoundedRing, Clock, system_clock
 from .decision import Decision
 
 DEFAULT_MAX_ITEMS = 8
-DEFAULT_MAX_AGE_SECONDS = 900.0
+DEFAULT_MAX_AGE_SECONDS = 120.0
 DEFAULT_MAX_RENDER_CHARS = 800
 
 

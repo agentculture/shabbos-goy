@@ -1,0 +1,69 @@
+# hearing correctness
+
+> shabbos-goy can tell deaf from quiet, and refuses to report listening when it is not
+> instruction: Every new check must have a negative control that fails on a bogus configured node name.
+
+## Audience
+
+- the operator who asks 'is it listening?' and must get an answer that means it -- and the household on a Shabbat when nobody is available to look. Also the third party running scripts/restart-proof.sh on a different box, for whom every assertion must name a property they can check without this room's history.
+  - instruction: Every assertion must be runnable by a third party on a different box with no value from this room hard-coded.
+
+## Before → After
+
+- After: no surface reports listening while the agent hears nothing. preflight checks the CONFIGURED mic node's existence and its actual pw-record binding rather than the default sink; the healthcheck has a deaf failure code distinct from quiet; a deafness that persists past `deaf_after_seconds` makes the process exit so Compose restarts it; and a host unit republishes the mic node when WirePlumber has dropped it. With `deaf_after_seconds` unset the runtime is byte-identical to the build proven on 2026-09-20.
+  - instruction: Six changes: preflight mic check, deaf failure code, `deaf_after_seconds` exit path, one shared binding oracle, capture refusal with backoff, host WirePlumber unit.
+
+## Why it matters
+
+- on 2026-09-20 the agent was Up (healthy) and deaf for a whole boot: pong and audio ticking while pw-record captured silence from an HDMI monitor. Four independent surfaces reported healthy while broken -- doctor, `lobes_health`, the healthcheck, and the first version of the verifier written to catch it -- each checking a proxy instead of the property. On a Shabbat that is a silent total failure with nobody to notice.
+  - instruction: Name all four healthy-while-broken surfaces in the PR body and state which this frame fixes.
+
+## Requirements
+
+- MIGRATED from qwen-worker-selfsetup/c40. heartbeat.healthcheck() takes max() over pong, audio and transcript and drops None, so a fresh audio stamp alone returns ok -- a listener that hears nothing passes indefinitely and Compose never restarts it. CLAUDE.md's claim that the healthcheck proves transcripts are arriving is false; there is no deaf failure code
+  - instruction: Add a deaf failure code to heartbeat.healthcheck() distinct from stale and `no_activity`, and fix the CLAUDE.md sentence in the same PR.
+  - honesty: the CLAUDE.md sentence claiming the healthcheck proves transcripts are arriving is corrected in the same PR as the code, so the document stops asserting a property the code does not have
+- MIGRATED from qwen-worker-selfsetup/c41 and c68. Capture must refuse an absent `mic_node` rather than let pw-record fall back silently (passing --target is not enough: pw-record accepts an unknown target). The RECOVERY is undecided and must be: on this box recovery needed a host action the container cannot perform, systemctl --user restart wireplumber, and nobody is available to intervene during a window
+  - instruction: Capture refuses an absent `mic_node`: retry with backoff at startup, exit non-zero once the deadline passes. Never crash-loop on a missing device.
+  - honesty: the refusal is distinguishable from a transient: an absent mic node at STARTUP retries with backoff per the stateless-and-self-healing rule, while an absent node that persists past the deadline exits. A missing device must never become a crash loop
+- MIGRATED from qwen-worker-selfsetup/c42. preflight's `audio_node` check reads only the DEFAULT SINK via wpctl, so it passed green while the configured mic was absent and misnamed. It must check the configured mic node's existence and binding
+  - instruction: preflight must resolve the configured `mic_node` in pactl list short sources and compare the pw-record binding, not read the default sink via wpctl.
+  - honesty: the new preflight check is proven by the 2026-09-20 state itself: with the stale suffixed node names restored to config, preflight must report FAIL where it previously reported green
+- the Tier A binding oracle now ships in the package as scripts/restart-proof.sh (vendored during PR #4 review, repo-relative, dashboard URL overridable): pactl list source-outputs resolved to a source NAME and compared to the configured `mic_node` is what actually discriminates deafness, and it must stay in the repo rather than an operator's home directory so a third party can run it
+  - instruction: Keep one binding oracle: preflight and scripts/restart-proof.sh must call the same implementation, not two that agree today.
+  - honesty: the oracle in the package and the oracle in the drill are ONE implementation, not two that agree today -- if preflight and restart-proof.sh can disagree about binding, the frame has shipped the bug it set out to fix
+
+## Honesty conditions
+
+- 'refuses to report listening' is tested by the negative control, not the positive: a bogus `mic_node` in config must make preflight and the restart proof FAIL. A check that only passes when things are fine is the 2026-09-20 bug again
+- a test proves the CONFIGURED Compose deployment actually restarts the listener when deafness fires -- that the process exits and comes back -- rather than only that a health label changed
+- the 12:00 demonstration is reproduced as a test -- a stale transcript stamp against a live audio stamp must return a deaf verdict -- so the evidence stops being a log entry and becomes a regression guard
+- the restart proof runs on this box from a clean checkout with no value from this room hard-coded -- repo-relative paths and an overridable dashboard URL, as PR #4 established
+- byte-identical with the knob unset is verified, not asserted: the default path is exercised by the existing suite and no behaviour changes when `deaf_after_seconds` is absent from config
+- the four healthy-while-broken surfaces are each named in the frame and each either fixed here or explicitly left out, so the list does not shrink by being forgotten
+- the byte-identical claim and the default-OFF claim are the same claim, tested once, not two statements that could drift apart
+
+## Success signals
+
+- MIGRATED from qwen-worker-selfsetup/c66. Demonstrated live at 12:00: transcript stamp 211s old against a 120s window, and listen --healthcheck returned ok at that moment. The room was quiet, which is the point -- the product cannot distinguish quiet from deaf
+  - instruction: Reproduce the 12:00 demonstration as a unit test: stale transcript stamp plus fresh audio stamp must return deaf.
+
+## Scope / boundaries
+
+- this frame changes detection and recovery only -- it never touches labelling, the gate, or what the agent does with an utterance once it has one. With `deaf_after_seconds` unset the runtime stays byte-identical to the build proven on 2026-09-20, so the frame cannot regress the invariant it is protecting.
+  - instruction: Exercise the default path in the existing suite to show nothing changes when the knob is unset.
+
+## Non-goals
+
+- proving that the agent HEARS. No automatic check can: the reSpeaker's AEC cancels anything played through its own speaker, so a loopback proves nothing, and acoustic hearing needs a human to speak (Tier B). This frame bounds the claim to what is mechanically checkable -- the node exists, the capture stream is bound to it, a transcript arrived since this boot -- and is honest that the last of those still needs one spoken phrase.
+  - instruction: Do not attempt an automatic acoustic hearing test; Tier B stays operator-driven.
+
+## Assumptions
+
+- MIGRATED from qwen-worker-selfsetup/c47, and it governs this frame: every check here must name the PROPERTY it asserts, never a proxy. The `deaf_after_seconds` knob is itself vulnerable -- a transcript stamp is a proxy for hearing exactly as an audio stamp was a proxy for sound -- so the knob is a mitigation, not the property, and the binding check is what names it
+
+## Decisions
+
+- MIGRATED from qwen-worker-selfsetup/c48, CORRECTED after PR #4 review. Close the gap with a config-gated `deaf_after_seconds` defaulting to OFF: unset leaves the runtime byte-identical to the build proven on 2026-09-20. When set, deafness must cause the LISTENER PROCESS TO EXIT non-zero via the existing watchdog path (`lobes_stalled` exits 3), NOT merely flip the health label -- docker-compose.yml:39-48 says Compose does not restart a container for being unhealthy, only for the process exiting, so a health-label-only signal recovers nothing. Default-off is deliberate: a long genuine silence in an empty room must not exit the process
+- DEAF RECOVERY IS TWO PIECES, one in the container and one on the host (it resolves the undecided recovery in c5). In the container: `deaf_after_seconds` makes the listener process EXIT non-zero via the `lobes_stalled` watchdog path (c3), because Compose restarts on process exit and never on an unhealthy label. On the host: a systemd user unit restarts WirePlumber when the configured mic node is absent, because on 2026-09-20 recovery needed exactly that and no container can perform it. Only the pair achieves unattended recovery, which is the entire point during a window.
+  - instruction: Ship the container half in this repo (the exit path plus its Compose-restart test). Ship the host half as a documented systemd --user unit under docker/ or scripts/, installed by the operator, whose condition is the configured `mic_node`'s absence from pactl list short sources -- not a timer that restarts WirePlumber unconditionally.

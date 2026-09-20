@@ -193,7 +193,7 @@
 {"id": "n_mixed_command_hint_09", "text": "הלוואי שמישהו ידליק את המזגן חם פה", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
 {"id": "n_mixed_command_hint_10", "text": "חם פה הלוואי שמישהו ידליק את המזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
 {"id": "n_mixed_command_hint_11", "text": "המזגן חם פה", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
-{"id": "n_mixed_command_hint_12", "text": "קר לי מהמזגן", "category": "negative", "subcategory": "mixed_command_hint", "expect_act_strict": false}
+{"id": "n_mixed_command_hint_12", "text": "קר לי מהמזגן", "category": "hint", "subcategory": "cold", "expect_act_strict": true, "expect_class": "discomfort", "expect_intent": "warm"}
 {"id": "n_fragment_01", "text": "חם", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
 {"id": "n_fragment_02", "text": "קר", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}
 {"id": "n_fragment_03", "text": "רועש", "category": "negative", "subcategory": "fragment", "expect_act_strict": false}

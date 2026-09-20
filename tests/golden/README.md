@@ -18,7 +18,7 @@ no actuator import, and no tool call. It measures, prints and exits non-zero.
 | `thresholds.json` | yes | the pass/fail bar the exit code reflects |
 | `asr_cache.json` | yes | what the ASR actually heard, per entrance — this is what lets CI reason about ASR-shaped text with no lobes |
 | `audio/` | **no** (gitignored) | TTS wavs, regenerable; also, the voice weights have no licence to redistribute |
-| `../fixtures/decider/golden_replay.json` | yes, once recorded | utterance → the real model's decision, so CI can replay a real measurement |
+| `../fixtures/decider/golden_replay.json` | yes, once recorded | `{"format": "golden-replay/1", "entrances": {entrance: {utterance → the real model's decision}}}`, so CI can replay a real measurement per entrance |
 
 ## The three entrances
 
@@ -141,7 +141,14 @@ CI never has a gateway, so it runs `tests/test_golden_manifest.py` and
 * the manifest is well-formed — unique ids, a known vocabulary, and every
   `act_strict: false` row in a category that justifies refusing to act;
 * the recorded run (if `golden_replay.json` exists) still passes the thresholds
-  through the same scoring code;
+  through the same scoring code — **every** recorded entrance must be scorable
+  and clean, not just one: an entrance whose `asr_cache.json` entries are
+  missing or stale is a failure naming the entrance and the recorded
+  transcripts nothing matched, because a guard that skips an absent input
+  reports healthy while broken;
+* a replay file is read by its explicit `format` marker, never by guessing at
+  its shape, so a flat file holding one malformed record still loads and still
+  fails closed per record (`bad_record` → `NO_DECISION`);
 * otherwise the manifest is walked through the deterministic rule oracle, which
   exercises the runner end to end without asserting anything about the rules'
   accuracy — they are a test oracle, not the product (deviation d2);

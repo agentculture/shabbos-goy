@@ -5,6 +5,126 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-09-20
+
+Closes the window-close boundary: a spoken command uttered inside a strict
+window no longer acts because the decision happened to land after the window
+shut. This is the first release to change the gate path since the invariant
+was written down.
+
+It also records a **release-blocking defect that predates this work** and is
+not fixed here — see Known failing below. Read that section before shipping.
+
+### Fixed
+
+- **A command begun inside a strict window is refused even when the decision
+  completes after the window closes.** The mode was resolved at *decision*
+  time, so an imperative spoken at 19:12:59 and decided at 19:13:01 was
+  judged weekday and **acted** — a spoken command acting on a holy day, the
+  one thing this project exists to prevent. The mode is now resolved at the
+  utterance's speech-start instant *and* at decision time, and the stricter
+  of the two wins. Clock distrust from either reading applies to both, so an
+  untrusted clock cannot be laundered through the boundary. No margin, sleep
+  or grace period was introduced: the fix is a different timestamp, not a
+  delay. The window-*open* boundary already failed safe and is unchanged.
+- The boundary fix was initially **inert in the real deployment**: the
+  pipeline's `mode_at` is optional and falls back to decision-time-only
+  resolution, and the listener never passed it, while every test still passed
+  because tests construct a `Pipeline` directly with their own resolver. The
+  listener now supplies it, and a test asserts both that it does and that the
+  resolver reads the instant it is given rather than "now".
+
+### Added
+
+- `shabbos_goy.mode.stricter_mode(a, b)` — `strict` beats `weekday`, and an
+  unknown mode counts as strict. Its own named function so a refactor cannot
+  reverse the direction by accident.
+- `shabbos_goy.joiner.SpeechStart(monotonic_ms, wall_time)`, sampled at
+  `speech_started` and pinned to the **first** half of a pause-split
+  utterance, exposed as `TranscriptJoiner.last_utterance_start`. Memory-only:
+  a crash leaves nothing behind.
+- `Pipeline(mode_at=...)` — resolves the mode at a wall-clock instant.
+  Optional, so a caller without it behaves exactly as before.
+- A four-case boundary test on **real computed zmanim** for the configured
+  location, anchored against the independent published vectors in
+  `tests/fixtures/zmanim_sun_vectors.json`. The anchors are load-bearing:
+  deriving the instants from the same computation under test would let a
+  zmanim change move both edges together and still pass.
+- An utterance that reaches the pipeline with **no** speech-start instant —
+  reconnect-orphaned or joiner-bypassed — is forced to the strict column.
+
+### Changed
+
+- **Decider prompt `p2` → `p6`.** Four rule-level gaps closed, each traceable
+  to the manifest's own taxonomy: wishing for an **action** is a request (the
+  manifest already called this `command/wish_for_an_action`); an utterance
+  carrying **two things at once** is unrelated; **bare fragments** are
+  unrelated — where the prompt had *contradicted itself*, listing the bare
+  word "מחניק" as a hot-state example while also calling a bare adjective a
+  fragment; and **another room's device** is unrelated. Plus a collision fix:
+  "audio from a television, a phone or a speaker" was written for *quoted*
+  speech and was swallowing "it is hard to hear the radio". `p6` adds rules
+  for the `recent:` block the model was already being handed and had no
+  instruction about — a fragment may inherit the state of the conversation in
+  progress, and may never inherit a *class*.
+- **The rolling context window is 120 s**, down from 900 s (still config).
+  With `p6` able to let a fragment inherit state, the window length is the
+  blast radius of a wrong inheritance.
+- **A wrong row in the golden set is corrected.** "קר לי מהמזגן" (*I am cold
+  from the AC*) was `negative/mixed_command_hint` and must now act: cold maps
+  to `warm`, which is AC power **off**. The model wanting to act on it was
+  right and the manifest was wrong, so one of the originally counted hard
+  false positives was never a model failure. Corrected at source in
+  `tests/fixtures/corpus.jsonl`, since the manifest is generated.
+- **The recorded golden fixture is keyed by entrance**, not by transcript text
+  alone. A flat key let a later entrance overwrite an earlier one for the same
+  string, so a run that FAILED the text entrance produced a fixture that
+  passed — the release guard reporting healthy while broken. Merging the
+  entrances back together is now refused rather than silently guessed, and the
+  guard scores **every** recorded entrance.
+- Five converged specs exported for the frames split out of the
+  2026-09-20 bundle: `strict-window-close-boundary`, `hearing-correctness`,
+  `actuation-behaviour-decisions`, `weekday-spoken-status`, `readme-refresh`.
+- Four previously-unmade decisions are now recorded: nothing happens to the
+  AC at a window's end; a failed or unconfirmed Sensibo write leaves power
+  **unknown** so the already-in-state gate cannot silently disable the agent
+  for a whole window; room and outdoor temperature stay out of the runtime as
+  an evidence channel only; and deaf recovery is two pieces — the listener
+  process exits non-zero, and a host unit republishes the mic node.
+- `grant` is no longer the container's secret path: `grant` 0.11.0 chmods its
+  store on the read path, so a read-only mount raises `EROFS`. The gitignored
+  env file is the deployment of record.
+
+### Known failing
+
+Two threshold violations ship knowingly, recorded as deviation `d5`. The
+release-blocking metric is met: **`hard_false_positives_strict` is 0 on all
+three entrances** (text, audio-batch, audio-realtime).
+
+- **`wrong_actions(text/strict)` = 1** (`k-h33`). The row passes when run in
+  isolation and fails only inside a full run with an identically empty
+  context window, so this is run-to-run variance, not a defect in the row's
+  handling. Two rows have now flipped between runs at `temperature: 0`
+  (`k-h33`, `k-n_fragment_13`); the cause is vLLM batching, not sampling, and
+  the variance is **not yet bounded** — every single-run number here inherits
+  that uncertainty.
+- **`hint_recall(audio-batch/strict)` = 0.692** against a 0.70 bar, short by
+  about one row. A missed hint means someone stays hot; CLAUDE.md is explicit
+  that a missed hint is cheap and a false action is not.
+
+### Not measured
+
+- **The `recent:` context rule is untested by the golden set.**
+  `tests/golden/runner.py` hands every utterance a fresh, empty
+  `ContextWindow` on purpose — "the golden set measures one utterance at a
+  time, never a conversation that primed the model" — so no row exercises the
+  block that the live listener does populate. The prompt rule is a reasoned
+  design, not evidence. A conversational entrance (ordered pairs whose second
+  utterance is a fragment) is needed before it can be called measured.
+- **No committed recorded run exists.** The measurement that authorised this
+  release covered the 234 `k-` rows and was not recorded, so
+  `test_the_recorded_golden_run_still_passes_the_thresholds` still skips.
+
 ## [0.10.1] - 2026-09-20
 
 Specs and evidence only — **no runtime code changed in this release**. The

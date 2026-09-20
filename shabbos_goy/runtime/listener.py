@@ -80,7 +80,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Optional
+from typing import Any, Callable, Iterable, Mapping, NamedTuple, Optional
 
 from ..audio import pipewire
 from ..config import Config
@@ -103,6 +103,23 @@ __all__ = [
     "read_events_file",
     "wav_audio_source",
 ]
+
+
+class _Received(NamedTuple):
+    """One lobes event plus the WALL-CLOCK instant it was received.
+
+    The worker is single-threaded and also runs the decide -> gate -> actuate
+    chain, so a speech-start event can sit in the queue behind a model
+    decision (measured live at ~600 ms). Sampling the wall clock when the
+    worker finally dispatches the event would let speech received INSIDE a
+    strict window be stamped after the window closed -- reintroducing exactly
+    the boundary failure this listener exists to prevent. The instant is
+    therefore captured on the receiving thread, before the event is queued.
+    """
+
+    event: Any
+    wall: float
+
 
 #: Sentinels on the event queue. Neither is an event and neither can act.
 _TICK = object()
@@ -451,6 +468,7 @@ class Listener:
         source: Callable[["Listener"], None],
         options: Optional[ListenerOptions] = None,
         mode_provider: Optional[Callable[[], Any]] = None,
+        mode_at: Optional[Callable[[float], Any]] = None,
         pod_id: str = "",
         ac_power: Optional[Callable[..., Mapping[str, Any]]] = None,
         ac_status: Optional[Callable[[str], Mapping[str, Any]]] = None,
@@ -486,11 +504,37 @@ class Listener:
         self._mode_provider = mode_provider or (
             lambda: resolve_mode(self._now_provider(), self.config)
         )
+        # The same resolution, at an arbitrary wall-clock instant, so the
+        # pipeline can judge an utterance by the window in force when SPEECH
+        # STARTED rather than when the decision completed. Without this the
+        # window-close fix is inert in the real deployment: the pipeline's
+        # mode_at is optional and falls back to decision-time only.
+        #
+        # INJECTABLE, and it must be: an injected mode_provider that is not
+        # paired with an injected mode_at gives the pipeline two readings of
+        # ONE utterance drawn from different mode, clock and trust policies,
+        # and stricter_mode then refuses an utterance the injected policy
+        # permits. The production default is used only when neither is
+        # supplied, so real calendar and host-clock state cannot leak into an
+        # injected setup.
+        if mode_at is not None:
+            self._mode_at = mode_at
+        elif mode_provider is not None:
+            # A caller who replaced the current-mode policy but said nothing
+            # about history gets its OWN policy at both instants rather than
+            # a silent mix with the host's zmanim.
+            self._mode_at = lambda at: self._mode_provider()
+        else:
+            self._mode_at = lambda at: resolve_mode(
+                datetime.fromtimestamp(at, tz=timezone.utc), self.config
+            )
 
         pipeline_kwargs: dict[str, Any] = {
             "decider": decider,
             "config": config,
             "mode_provider": self._mode_provider,
+            "mode_at": self._mode_at,
+            "joiner_wall_clock": self._speech_wall_clock,
             "pod_id": pod_id,
             "ac_power": self._guarded(ac_power),
             "ac_status": ac_status,
@@ -512,6 +556,9 @@ class Listener:
         )
 
         self._queue: queue.Queue = queue.Queue(maxsize=max(1, self.options.queue_size))
+        # Set by the worker for the duration of one event's dispatch; read by
+        # the joiner through joiner_wall_clock. Worker-only, single-threaded.
+        self._receipt_wall: Optional[float] = None
         self._tick = threading.Event()
         self._stopping = threading.Event()
         self._exit_code = 0
@@ -609,7 +656,7 @@ class Listener:
             # A scripted replay goes through exactly the same state as a live
             # session, so the dashboard reads the same way either way.
             self.connection.handle_event(ev.normalize_event(wire))
-        self._offer(event)
+        self._offer(_Received(event, time.time()))
 
     def submit_drain(self) -> None:
         """Ask the worker to flush the joiner as an end-of-audio would."""
@@ -634,7 +681,7 @@ class Listener:
         kind = getattr(event, "kind", None)
         if kind == ev.KIND_TRANSCRIPT:
             self.heartbeat.mark("transcript")
-        self._offer(event)
+        self._offer(_Received(event, time.time()))
         at_ms = getattr(event, "at_ms", None)
         if isinstance(at_ms, int) and not isinstance(at_ms, bool):
             self._audio_anchor = (at_ms, self._clock())
@@ -923,10 +970,24 @@ class Listener:
             self._handle(item)
 
     def _handle(self, event: Any) -> None:
+        if isinstance(event, _Received):
+            self._receipt_wall = event.wall
+            event = event.event
         try:
             self.pipeline.handle_event(event)
         except Exception as exc:  # noqa: BLE001 - a bug must not deafen us
             self.note("pipeline_error", type(exc).__name__)
+        finally:
+            self._receipt_wall = None
+
+    def _speech_wall_clock(self) -> float:
+        """The instant the event being handled was RECEIVED, not now.
+
+        Falls back to the current time only outside event dispatch (the
+        joiner's own timeout flush), where there is no receipt to honour.
+        """
+        received = self._receipt_wall
+        return float(received) if received is not None else time.time()
 
     def _poll(self, *, drain: bool = False) -> None:
         """Advance the joiner's and the delay timer's clocks.
