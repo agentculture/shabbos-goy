@@ -1,0 +1,86 @@
+{
+  "slug": "strict-window-close-boundary",
+  "title": "strict window close boundary",
+  "schema_version": 6,
+  "status": "drafting",
+  "created": "2026-09-20T09:04:29Z",
+  "updated": "2026-09-20T09:08:06Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "a command spoken inside a strict window never acts, even when the window closes before the decision does",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c51, elevated there from an assumption. Mode is resolved at DECISION time (pipeline.py:593-600, 'mode or strict') and resolve_mode carries no margin, so a command spoken INSIDE the holy day at 19:12:59 and decided at 19:13:01 is judged weekday and ACTS. The window-OPEN boundary fails safe the other way; the 15s strict delay does not help because the mode has already flipped",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "why_it_matters",
+      "text": "this is the only finding from the 2026-09-20 pass that bears on the product's single invariant -- no spoken command acts in strict mode -- so it is not an ergonomics issue and does not belong in a frame about operator convenience",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "a decision whose utterance BEGAN inside a strict window is judged by the window in force when speech STARTED, not when the decision completed; the joiner already tracks speech_started to speech_stopped, so the timestamp needed is in hand",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "boundary",
+      "text": "fail toward the stricter column, consistent with the clock-trust rule: where the two boundaries disagree, the strict reading wins",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "assumption",
+      "text": "the exposure is narrow in time -- seconds around tzeit -- but it is exactly when a household is most likely to be speaking about the AC, so rarity is not a reason to leave it",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [],
+  "scope_entries": [],
+  "lapses": [],
+  "obligations": []
+}

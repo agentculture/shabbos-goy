@@ -1,0 +1,98 @@
+{
+  "slug": "actuation-behaviour-decisions",
+  "title": "actuation behaviour decisions",
+  "schema_version": 6,
+  "status": "drafting",
+  "created": "2026-09-20T09:04:29Z",
+  "updated": "2026-09-20T09:08:06Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "shabbos-goy states what it does at a window's end, when the AC cannot be reached, and what it inherits from the pod",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c2",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c50. There is NO end-of-window state management: nothing restores or powers down the AC when a window closes and nothing establishes a known state when one opens, so a single hint can leave the AC running across a full 25-hour Yom Kippur. This may be correct -- it is what the hint asked for -- but it is currently nobody's decision",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c3",
+      "kind": "assumption",
+      "text": "MIGRATED from qwen-worker-selfsetup/c57. Sensibo is an OPEN-LOOP IR blaster: a command can be sent and the AC may simply not catch it, so no field the cloud could expose is a measurement. Mode is unknowable from the actuation channel by construction, and so is power",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c4",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c58. The already-in-state gate therefore rests on an unverifiable belief -- Sensibo's last requested state. One missed IR silently disables the agent for the rest of a window: every later hint hits the gate and does nothing while nobody can reach the remote. Retry limits retry a failure to REACH Sensibo, never a failure of the AC to obey",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c5",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c59. The ROOM is the only closed loop: ambient temperature over minutes is the sole ground truth, and outdoor temperature from climate-cli is the control that separates the AC's effect from the evening. Sensor context is not an enhancement, it is the only verification channel this system can have",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c6",
+      "kind": "decision",
+      "text": "MIGRATED from qwen-worker-selfsetup/c60. AC state and mode are defined as needed out of band -- the household sets the unit before the window and the agent only switches power -- so excluding --mode from the argv set is correct. What the software owes is honesty in preflight and the README, not control",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    },
+    {
+      "id": "c7",
+      "kind": "requirement",
+      "text": "MIGRATED from qwen-worker-selfsetup/c54 and c37, both still undecided: what the agent does when Sensibo is unreachable for a whole window is unspecified, and the grant read-only mount fails (grant 0.11.0 fs.py:47 chmods on read) with three candidate fixes and none chosen",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": [],
+      "instruction": "",
+      "revisions": []
+    }
+  ],
+  "open_vagueness": [],
+  "scope_entries": [],
+  "lapses": [],
+  "obligations": []
+}

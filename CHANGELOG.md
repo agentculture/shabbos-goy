@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-09-20
+
+Specs and evidence only — **no runtime code changed in this release**. The
+listener, pipeline, decider, actuators and CLI are byte-identical to 0.10.0.
+What changed is what the repository knows about itself after a day of on-box
+work: a first real deployment, two reboot drills, the first live actuation,
+and an independent review that corrected four claims.
+
+### Added
+
+- `docs/specs/2026-09-20-qwen-worker-selfsetup.md` — a converged spec for
+  making the agent operable unaided by a Qwen-backed operator agent, using
+  only `--help`, `explain`, `overview` and `doctor`. 68 claims, 44 scope
+  findings, each citing the file, line or command output behind it.
+- `docs/evidence/2026-09-20-reboot-drills.md` — the frozen drill log: the
+  deployment as tested, both reboots, the live actuation verified thermally,
+  the faults found, how to reproduce, and an explicit **Not established**
+  section.
+- Five further frames splitting the buildable work out of the bundle:
+  `hearing-correctness`, `readme-refresh`, `weekday-spoken-status`,
+  `strict-window-close-boundary`, `actuation-behaviour-decisions`.
+- `docker-compose.override.yml` to `.gitignore` — the deployment-local file
+  where an operator opts into actuation, keeping the tracked Compose dry-run.
+
+### Fixed
+
+- Nothing in code. Three deployment faults were found and are **recorded, not
+  fixed**: the container healthcheck cannot distinguish a deaf listener from a
+  quiet room; `grant` cannot back a container deployment because its read path
+  chmods a read-only mount; and `wpctl` volume control fails in-container.
+
 ## [0.10.0] - 2026-09-19
 
 The first domain release: the repository is no longer a scaffold. The ambient
